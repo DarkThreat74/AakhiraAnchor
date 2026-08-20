@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Embedded skill repos
+.devin/skills/hallmark/
+.devin/skills/*/
