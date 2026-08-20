@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 const navItems = [
   { label: "Today", href: "/", icon: Calendar },
+  { label: "Calendar", href: "/calendar/day", icon: Calendar },
   { label: "Lesson", href: "/lesson", icon: BookOpen },
   { label: "Dhikr", href: "/dhikr", icon: Heart },
   { label: "Settings", href: "/settings", icon: Settings },

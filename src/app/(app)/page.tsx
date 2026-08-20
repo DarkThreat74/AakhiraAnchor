@@ -84,6 +84,27 @@ export default async function AppHome() {
           </span>
         </a>
       </div>
+
+      {/* ── Calendar link ── */}
+      <div className="mt-4">
+        <a
+          href="/calendar/day"
+          className="flex items-center justify-between rounded-2xl border p-5 transition-colors hover:bg-[var(--color-paper-2)]"
+          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+        >
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Open calendar
+            </p>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              Day view with prayer bands and event scheduling
+            </p>
+          </div>
+          <span className="text-sm font-medium" style={{ color: "var(--color-accent)" }}>
+            →
+          </span>
+        </a>
+      </div>
     </div>
   );
 }
