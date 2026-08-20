@@ -66,12 +66,14 @@ export function isHoneypotTripped(fields: Record<string, string | undefined | nu
  * The form embeds a rendered timestamp; if the submission arrives
  * in under `minSeconds`, it's likely a bot.
  *
+ * Missing or invalid renderedAt is treated as suspicious (bot omitted it).
+ *
  * @param renderedAt - timestamp (ms) when the form was rendered, sent from client
  * @param minSeconds - minimum human-readable time expected (default 2s)
  * @returns true if the submission is suspiciously fast
  */
 export function isTimeTrapTripped(renderedAt: number | undefined, minSeconds = 2): boolean {
-  if (!renderedAt || typeof renderedAt !== 'number') return false;
+  if (!renderedAt || typeof renderedAt !== 'number') return true;
   const elapsed = (Date.now() - renderedAt) / 1000;
   return elapsed < minSeconds;
 }

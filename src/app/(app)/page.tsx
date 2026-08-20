@@ -1,4 +1,7 @@
 import { getSession } from "@/lib/auth/session";
+import { db, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { Sun, Sunrise, Sunset, Moon, CloudSun } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +16,15 @@ const prayers = [
 
 export default async function AppHome() {
   const session = await getSession();
+  if (!session) redirect("/login");
+
+  // Gate: redirect to onboarding if not completed
+  const [user] = await db
+    .select({ onboardingCompleted: schema.users.onboardingCompleted })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+  if (user && !user.onboardingCompleted) redirect("/onboarding");
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-8 sm:px-6 sm:py-10 lg:py-12">

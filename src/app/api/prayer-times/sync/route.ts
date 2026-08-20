@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
@@ -63,8 +63,10 @@ export async function POST(request: NextRequest) {
         .select()
         .from(schema.prayerTimesCache)
         .where(
-          eq(schema.prayerTimesCache.userId, session.userId) &&
-          eq(schema.prayerTimesCache.date, isoDate),
+          and(
+            eq(schema.prayerTimesCache.userId, session.userId),
+            eq(schema.prayerTimesCache.date, isoDate),
+          ),
         )
         .limit(1);
 

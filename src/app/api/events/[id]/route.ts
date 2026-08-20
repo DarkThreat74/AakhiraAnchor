@@ -50,6 +50,9 @@ export async function PATCH(
     if (!title.trim()) {
       return NextResponse.json({ error: "Title cannot be empty." }, { status: 400 });
     }
+    if (title.length > 200) {
+      return NextResponse.json({ error: "Title must be 200 characters or less." }, { status: 400 });
+    }
     updates.title = title.trim();
   }
 

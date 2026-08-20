@@ -36,6 +36,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Date and prayer name are required." }, { status: 400 });
   }
 
+  // Validate date format (YYYY-MM-DD)
+  const dateCheck = new Date(date + "T00:00:00");
+  if (isNaN(dateCheck.getTime())) {
+    return NextResponse.json({ error: "Invalid date format." }, { status: 400 });
+  }
+
   const validPrayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
   if (!validPrayers.includes(prayerName)) {
     return NextResponse.json({ error: "Invalid prayer name." }, { status: 400 });

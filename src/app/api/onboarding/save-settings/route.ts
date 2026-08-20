@@ -29,6 +29,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing fields." }, { status: 400 });
   }
 
+  // Validate coordinates
+  const latNum = parseFloat(latitude);
+  const lngNum = parseFloat(longitude);
+  if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+    return NextResponse.json({ error: "Invalid latitude." }, { status: 400 });
+  }
+  if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+    return NextResponse.json({ error: "Invalid longitude." }, { status: 400 });
+  }
+  if (timezone.length > 100) {
+    return NextResponse.json({ error: "Invalid timezone." }, { status: 400 });
+  }
+
   // Upsert prayer settings
   const [existing] = await db
     .select()

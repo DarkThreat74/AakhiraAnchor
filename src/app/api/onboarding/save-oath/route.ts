@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
 
   const { oathAmount } = body as { oathAmount?: number };
 
-  if (!oathAmount || oathAmount < 1) {
-    return NextResponse.json({ error: "Invalid oath amount." }, { status: 400 });
+  if (!oathAmount || oathAmount < 1 || oathAmount > 1000) {
+    return NextResponse.json({ error: "Oath amount must be between $1 and $1000." }, { status: 400 });
   }
 
   // Upsert oath settings

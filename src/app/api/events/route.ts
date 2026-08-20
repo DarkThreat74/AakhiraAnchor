@@ -7,20 +7,52 @@ import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 
 // GET /api/events?date=YYYY-MM-DD — list events for a specific day
+// GET /api/events?from=YYYY-MM-DD&to=YYYY-MM-DD — list events in a date range
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Rate limit: 60 reads per minute per IP
+  const ip = getClientIp(request.headers);
+  if (!checkRateLimit("events-read", ip, 60, 60 * 1000)) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const dateStr = searchParams.get("date");
+  const fromStr = searchParams.get("from");
+  const toStr = searchParams.get("to");
 
+  // Range query (for month view)
+  if (fromStr && toStr) {
+    const fromDate = new Date(fromStr + "T00:00:00");
+    const toDate = new Date(toStr + "T23:59:59.999");
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return NextResponse.json({ error: "Invalid date range." }, { status: 400 });
+    }
+
+    const events = await db
+      .select()
+      .from(schema.events)
+      .where(
+        and(
+          eq(schema.events.userId, session.userId),
+          gte(schema.events.startAt, fromDate),
+          lte(schema.events.startAt, toDate),
+        ),
+      )
+      .orderBy(schema.events.startAt);
+
+    return NextResponse.json(events);
+  }
+
+  // Single day query
   if (!dateStr) {
     return NextResponse.json({ error: "Missing date parameter." }, { status: 400 });
   }
 
-  // Parse date and create range for that day
   const date = new Date(dateStr + "T00:00:00");
   if (isNaN(date.getTime())) {
     return NextResponse.json({ error: "Invalid date." }, { status: 400 });
@@ -78,6 +110,9 @@ export async function POST(request: NextRequest) {
   // Validate required fields
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
+  }
+  if (title.length > 200) {
+    return NextResponse.json({ error: "Title must be 200 characters or less." }, { status: 400 });
   }
   if (!startAt) {
     return NextResponse.json({ error: "Start time is required." }, { status: 400 });

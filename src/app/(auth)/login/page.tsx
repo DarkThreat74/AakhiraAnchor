@@ -48,6 +48,11 @@ export default function LoginForm() {
         return;
       }
 
+      // Clear SW API cache to prevent cross-user data leakage
+      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "CLEAR_API_CACHE" });
+      }
+
       router.push("/");
     } catch {
       setError("Network error. Please try again.");

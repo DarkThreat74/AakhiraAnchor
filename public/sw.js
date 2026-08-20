@@ -318,6 +318,10 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SYNC_OUTBOX") {
     syncOutbox();
   }
+  if (event.data && event.data.type === "CLEAR_API_CACHE") {
+    // Clear API cache to prevent cross-user data leakage
+    caches.delete(API_CACHE).catch(() => {});
+  }
 });
 
 // ─── Push notifications ───
@@ -352,14 +356,16 @@ self.addEventListener("notificationclick", (event) => {
   const targetUrl = event.notification.data.url || "/";
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window" }).then((clientList) => {
-      // Focus existing window if open
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Focus any existing app window and navigate it
       for (const client of clientList) {
-        if (client.url.includes(targetUrl) && "focus" in client) {
-          return client.focus();
+        if ("focus" in client) {
+          client.focus();
+          if ("navigate" in client) client.navigate(targetUrl);
+          return;
         }
       }
-      // Open new window
+      // Open new window if none exist
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }

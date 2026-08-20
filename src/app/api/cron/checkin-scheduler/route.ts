@@ -23,11 +23,14 @@ export async function POST(request: NextRequest) {
   );
 
   const allSettings = await db.select().from(schema.prayerSettings);
-  const today = new Date().toISOString().split("T")[0];
   let notificationsSent = 0;
 
   for (const settings of allSettings) {
-    // Get today's cached prayer times
+    // Get current time in the user's timezone
+    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
+    const today = userNow.toISOString().split("T")[0];
+
+    // Get today's cached prayer times for this user
     const [cached] = await db
       .select()
       .from(schema.prayerTimesCache)
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
       isha: cached.isha,
     };
 
-    const now = new Date();
+    const now = userNow;
     const prayers: Array<"fajr" | "dhuhr" | "asr" | "maghrib" | "isha"> = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
 
     for (const prayerName of prayers) {

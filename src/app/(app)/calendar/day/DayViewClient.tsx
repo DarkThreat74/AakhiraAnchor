@@ -326,8 +326,8 @@ export default function DayViewClient({ date }: { date: string }) {
                 style={{
                   top,
                   height,
-                  left: `calc(3.5rem + ${leftPct}% * (100% - 3.5rem) / 100)`,
-                  width: `calc(${widthPct}% * (100% - 3.5rem) / 100 - 4px)`,
+                  left: `calc(3.5rem + ${leftPct} / 100 * (100% - 3.5rem))`,
+                  width: `calc(${widthPct} / 100 * (100% - 3.5rem) - 4px)`,
                   backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)",
                   borderColor: typeColors[event.type] || "var(--color-accent)",
                   borderLeftWidth: 3,

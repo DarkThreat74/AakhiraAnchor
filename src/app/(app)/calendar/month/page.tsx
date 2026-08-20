@@ -1,4 +1,6 @@
 import { getSession } from "@/lib/auth/session";
+import { db, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import MonthViewClient from "./MonthViewClient";
 
@@ -11,6 +13,14 @@ export default async function MonthPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
+
+  // Gate: redirect to onboarding if not completed
+  const [user] = await db
+    .select({ onboardingCompleted: schema.users.onboardingCompleted })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+  if (user && !user.onboardingCompleted) redirect("/onboarding");
 
   const params = await searchParams;
   const now = new Date();

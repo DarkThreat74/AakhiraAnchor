@@ -31,6 +31,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Validate field lengths to prevent abuse
+  if (endpoint.length > 500 || keys.p256dh.length > 200 || keys.auth.length > 200) {
+    return NextResponse.json(
+      { error: "Invalid subscription data." },
+      { status: 400 },
+    );
+  }
+
   // Check if this endpoint is already registered for this user
   const [existing] = await db
     .select()

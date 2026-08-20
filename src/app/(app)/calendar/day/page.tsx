@@ -1,4 +1,6 @@
 import { getSession } from "@/lib/auth/session";
+import { db, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -9,6 +11,14 @@ export const dynamic = "force-dynamic";
 export default async function DayPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const session = await getSession();
   if (!session) redirect("/login");
+
+  // Gate: redirect to onboarding if not completed
+  const [user] = await db
+    .select({ onboardingCompleted: schema.users.onboardingCompleted })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+  if (user && !user.onboardingCompleted) redirect("/onboarding");
 
   const params = await searchParams;
   const today = new Date().toISOString().split("T")[0];

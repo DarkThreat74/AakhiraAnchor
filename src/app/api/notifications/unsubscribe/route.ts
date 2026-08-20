@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-// POST — remove a push subscription
+// POST — remove a push subscription (scoped to current user)
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -25,10 +25,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing endpoint." }, { status: 400 });
   }
 
+  // Scope deletion to the current user — prevents cross-user deletion
   await db
     .delete(schema.pushSubscriptions)
     .where(
-      eq(schema.pushSubscriptions.endpoint, endpoint),
+      and(
+        eq(schema.pushSubscriptions.userId, session.userId),
+        eq(schema.pushSubscriptions.endpoint, endpoint),
+      ),
     );
 
   return NextResponse.json({ ok: true });

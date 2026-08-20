@@ -13,25 +13,23 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
     (async () => {
       try {
+        // Single range query for the whole month instead of 31 individual calls
+        const fromStr = `${year}-${String(month).padStart(2, "0")}-01`;
         const daysInMonth = new Date(year, month, 0).getDate();
-        const counts: Record<string, number> = {};
+        const toStr = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
 
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          try {
-            const res = await fetch(`/api/events?date=${dateStr}`);
-            if (res.ok) {
-              const events = await res.json();
-              if (events.length > 0) {
-                counts[dateStr] = events.length;
-              }
-            }
-          } catch {
-            // skip
+        const res = await fetch(`/api/events?from=${fromStr}&to=${toStr}`);
+        if (res.ok) {
+          const events = await res.json();
+          const counts: Record<string, number> = {};
+          for (const event of events) {
+            const eventDate = event.startAt.split("T")[0];
+            counts[eventDate] = (counts[eventDate] || 0) + 1;
           }
+          if (!cancelled) setEventCounts(counts);
         }
-
-        if (!cancelled) setEventCounts(counts);
+      } catch {
+        // ignore
       } finally {
         if (!cancelled) setLoading(false);
       }

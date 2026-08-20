@@ -41,11 +41,13 @@ export function getClientIp(headers: Headers): string {
   const realIp = headers.get('x-real-ip');
   if (realIp) return realIp.trim();
 
-  // 3. X-Forwarded-For — take the LAST value (set by trusted proxy)
+  // 3. X-Forwarded-For — take the FIRST value (original client IP)
+  // The first value is the leftmost = original client.
+  // Trusted proxies strip client-provided XFF headers before appending.
   const xff = headers.get('x-forwarded-for');
   if (xff) {
     const parts = xff.split(',').map((s) => s.trim()).filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
+    if (parts.length > 0) return parts[0];
   }
 
   return 'unknown';

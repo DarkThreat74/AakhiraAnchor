@@ -1,16 +1,14 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { db, schema } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
 import LogoutButton from "./logout-button";
-import { Calendar, BookOpen, Heart, Settings } from "lucide-react";
+import { Calendar, BookOpen, Heart, Settings, Home } from "lucide-react";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 // See CODEBASE_PATTERNS.md §7.2
 export const dynamic = "force-dynamic";
 
 const navItems = [
-  { label: "Today", href: "/", icon: Calendar },
+  { label: "Today", href: "/", icon: Home },
   { label: "Calendar", href: "/calendar/day", icon: Calendar },
   { label: "Lesson", href: "/lesson", icon: BookOpen },
   { label: "Dhikr", href: "/dhikr", icon: Heart },
@@ -21,17 +19,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [user] = await db
-    .select({ onboardingCompleted: schema.users.onboardingCompleted })
-    .from(schema.users)
-    .where(eq(schema.users.id, session.userId))
-    .limit(1);
-
-  // Redirect to onboarding if not completed (unless already there)
-  if (user && !user.onboardingCompleted) {
-    // The onboarding page itself is under (app), so we let it through
-    // Other routes get redirected
-  }
+  // Onboarding gate: individual protected pages check onboarding status
+  // and redirect to /onboarding if not completed. The layout just renders.
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "var(--color-paper)" }}>
@@ -96,7 +85,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
 }
 
-function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: typeof Calendar }) {
+function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }) {
   return (
     <a
       href={href}
@@ -109,7 +98,7 @@ function NavItem({ label, href, icon: Icon }: { label: string; href: string; ico
   );
 }
 
-function MobileNavItem({ label, href, icon: Icon }: { label: string; href: string; icon: typeof Calendar }) {
+function MobileNavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }) {
   return (
     <a
       href={href}
