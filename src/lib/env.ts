@@ -1,0 +1,48 @@
+import 'server-only';
+
+/**
+ * Centralized server-side environment variables.
+ * NEVER use process.env directly in any other file — import from here.
+ * See CODEBASE_PATTERNS.md §28 (Environment Variable Management).
+ */
+
+function required(key: string, fallback = ''): string {
+  const val = process.env[key];
+  if (!val && fallback) return fallback;
+  return val ?? '';
+}
+
+export const env = {
+  // Database
+  databaseUrl: required('DATABASE_URL'),
+
+  // Auth
+  sessionSecret: required('SESSION_SECRET'),
+
+  // App
+  appUrl: required('APP_URL', 'http://localhost:3000'),
+  isProduction: process.env.NODE_ENV === 'production',
+
+  // Cron
+  cronSecret: required('CRON_SECRET'),
+
+  // AlAdhan
+  aladhanBaseUrl: required('ALADHAN_BASE_URL', 'https://api.aladhan.com/v1'),
+
+  // Twilio
+  twilioAccountSid: required('TWILIO_ACCOUNT_SID'),
+  twilioAuthToken: required('TWILIO_AUTH_TOKEN'),
+  twilioFromNumber: required('TWILIO_FROM_NUMBER'),
+
+  // Stripe
+  stripeSecretKey: required('STRIPE_SECRET_KEY'),
+  stripeWebhookSecret: required('STRIPE_WEBHOOK_SECRET'),
+
+  // Web Push
+  vapidPublicKey: required('VAPID_PUBLIC_KEY'),
+  vapidPrivateKey: required('VAPID_PRIVATE_KEY'),
+  vapidSubject: required('VAPID_SUBJECT', 'mailto:noreply@example.com'),
+
+  // LLM
+  openRouterApiKey: required('OPENROUTER_API_KEY'),
+} as const;

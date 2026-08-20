@@ -1,69 +1,347 @@
-import Image from "next/image";
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5
+ * Macrostructure: full-bleed hero with Arabic calligraphy background →
+ *   principle band → Arabic quote → letter close → footer
+ * Spectral for editorial Latin text, Amiri for Arabic.
+ * Warm contemplative palette. No gradients. No AI-slop patterns.
+ */
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
-export default function Home() {
+export default function MarketingPage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
+      {/* ── Nav ── */}
+      <header
+        className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md"
+        style={{ backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)" }}
+      >
+        <div className="flex items-center justify-between px-6 py-4 sm:px-10 lg:px-16">
+          <div className="flex items-baseline gap-3">
+            <span className="text-lg font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+              Waqt
+            </span>
+            <span className="text-sm" style={{ color: "var(--color-ink-muted)", fontFamily: "var(--font-amiri)" }} dir="rtl">
+              وقت
+            </span>
+          </div>
+          <nav className="flex items-center gap-8 text-sm">
+            <Link
+              href="/login"
+              className="transition-opacity hover:opacity-60"
+              style={{ color: "var(--color-ink-soft)" }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              Log in
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-full px-5 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
             >
-              Learning
-            </a>{" "}
-            center.
+              Get started
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* ── Hero — full viewport, Arabic calligraphy background ── */}
+      <section className="relative flex min-h-screen items-center overflow-hidden pt-20">
+        {/* Arabic background text — "حيا على الصلاة" (Come to prayer) repeated as a watermark */}
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+          style={{ overflow: "hidden" }}
+        >
+          <div
+            className="select-none whitespace-nowrap text-center"
+            style={{
+              fontFamily: "var(--font-amiri)",
+              fontSize: "clamp(8rem, 22vw, 22rem)",
+              color: "var(--color-accent)",
+              opacity: 0.06,
+              lineHeight: 1,
+              transform: "rotate(-5deg)",
+            }}
+            dir="rtl"
+          >
+            حي على الصلاة
+          </div>
+        </div>
+
+        {/* Secondary Arabic — smaller, positioned top-right */}
+        <div
+          className="absolute right-6 top-32 hidden sm:block lg:right-16"
+          aria-hidden="true"
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-amiri)",
+              fontSize: "clamp(1.5rem, 3vw, 2.5rem)",
+              color: "var(--color-warmth)",
+              opacity: 0.15,
+            }}
+            dir="rtl"
+          >
+            إن الصلاة كانت على المؤمنين كتاباً موقوتاً
+          </span>
+        </div>
+
+        {/* Tertiary Arabic — bottom-left, very faint */}
+        <div
+          className="absolute bottom-24 left-6 hidden sm:block lg:left-16"
+          aria-hidden="true"
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-amiri)",
+              fontSize: "clamp(1.2rem, 2.5vw, 2rem)",
+              color: "var(--color-accent)",
+              opacity: 0.08,
+            }}
+            dir="rtl"
+          >
+            الوقتُ كالسيف
+          </span>
+        </div>
+
+        <div className="relative z-10 w-full px-6 sm:px-10 lg:px-16">
+          <div className="max-w-2xl">
+            <p
+              className="mb-8 text-xs font-medium uppercase tracking-[0.2em]"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Prayer-centered life tracker
+            </p>
+            <h1
+              className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
+              style={{
+                color: "var(--color-ink)",
+                overflowWrap: "anywhere",
+                minWidth: 0,
+              }}
+            >
+              The five prayers
+              <br />
+              are the fixed
+              <br />
+              anchor.
+            </h1>
+            <p
+              className="mt-10 max-w-lg text-lg leading-relaxed"
+              style={{ color: "var(--color-ink-soft)" }}
+            >
+              Everything else fits around them. A calendar that treats
+              prayer times as the structure of your day — not a reminder
+              you dismiss.
+            </p>
+            <div className="mt-12 flex flex-wrap items-center gap-4">
+              <Link
+                href="/signup"
+                className="inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-medium transition-opacity hover:opacity-90"
+                style={{
+                  backgroundColor: "var(--color-ink)",
+                  color: "var(--color-paper)",
+                }}
+              >
+                Start tracking
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/login"
+                className="text-base font-medium underline underline-offset-4 transition-opacity hover:opacity-60"
+                style={{ color: "var(--color-ink-soft)" }}
+              >
+                I have an account
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+          <div
+            className="h-12 w-px"
+            style={{ backgroundColor: "var(--color-ink-muted)", opacity: 0.3 }}
+          />
+        </div>
+      </section>
+
+      {/* ── Principle band — full width, three principles as numbered prose ── */}
+      <section
+        className="border-y px-6 py-24 sm:px-10 sm:py-32 lg:px-16"
+        style={{
+          borderColor: "var(--color-paper-3)",
+          backgroundColor: "var(--color-paper-2)",
+        }}
+      >
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-16 flex items-center gap-4">
+            <p
+              className="text-xs font-medium uppercase tracking-[0.2em]"
+              style={{ color: "var(--color-ink-muted)" }}
+            >
+              How it works
+            </p>
+            <span
+              style={{
+                fontFamily: "var(--font-amiri)",
+                fontSize: "1.5rem",
+                color: "var(--color-accent)",
+                opacity: 0.5,
+              }}
+              dir="rtl"
+            >
+              كيف يعمل
+            </span>
+          </div>
+          <div className="grid gap-16 lg:grid-cols-3 lg:gap-12">
+            <Principle
+              num="01"
+              title="Prayer times become the grid"
+              body="Your day view shows the five prayer windows as background bands. Scheduled events sit on top. Overlaps are permissive — nothing blocks, nothing warns."
+            />
+            <Principle
+              num="02"
+              title="Check in, or let it rest"
+              body="Mark a prayer as prayed when you're ready. If you forget, it resolves quietly as assumed prayed at day's end. No silent penalties, no shame spiral."
+            />
+            <Principle
+              num="03"
+              title="Accountability, not punishment"
+              body="Track an oath ledger and a qadaa backlog on a dedicated page — one deliberate tap away, never on your home screen. The app is a witness, not a collector."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Quote band — full width, Arabic + translation ── */}
+      <section className="px-6 py-24 sm:px-10 sm:py-32 lg:px-16">
+        <div className="mx-auto max-w-4xl text-center">
+          {/* Arabic original */}
+          <p
+            className="mb-8 text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl"
+            style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
+            dir="rtl"
+          >
+            حي على الصلاة
+          </p>
+          {/* Translation */}
+          <p
+            className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl lg:text-4xl"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            &ldquo;Come to prayer.&rdquo;
+          </p>
+          <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            — The call to prayer, heard five times daily
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </section>
+
+      {/* ── Second quote — about prayer being timed ── */}
+      <section
+        className="border-y px-6 py-24 sm:px-10 sm:py-32 lg:px-16"
+        style={{
+          borderColor: "var(--color-paper-3)",
+          backgroundColor: "var(--color-paper-2)",
+        }}
+      >
+        <div className="mx-auto max-w-4xl text-center">
+          <p
+            className="mb-6 text-3xl leading-relaxed sm:text-4xl"
+            style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
+            dir="rtl"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            إن الصلاة كانت على المؤمنين كتاباً موقوتاً
+          </p>
+          <p
+            className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl"
+            style={{ color: "var(--color-ink-soft)" }}
           >
-            Documentation
-          </a>
+            &ldquo;Prayer has been prescribed for the believers at fixed times.&rdquo;
+          </p>
+          <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            — Quran, An-Nisa 4:103
+          </p>
         </div>
-      </main>
+      </section>
+
+      {/* ── Letter close — quiet ending ── */}
+      <section
+        className="border-t px-6 py-24 sm:px-10 sm:py-32 lg:px-16"
+        style={{ borderColor: "var(--color-paper-3)" }}
+      >
+        <div className="mx-auto max-w-2xl">
+          <p
+            className="text-xl leading-relaxed"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            Waqt is being built carefully, one piece at a time. If you want to
+            be part of the first group of users, create an account — you&apos;ll
+            get the calendar and prayer tracking first, with more arriving in
+            steady updates.
+          </p>
+          <div className="mt-10">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 text-base font-medium underline underline-offset-4"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Create your account
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer
+        className="border-t px-6 py-8 text-xs sm:px-10 lg:px-16"
+        style={{
+          borderColor: "var(--color-paper-3)",
+          color: "var(--color-ink-muted)",
+        }}
+      >
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
+          <div className="flex items-baseline gap-2">
+            <span>Waqt — a prayer-centered life tracker.</span>
+            <span style={{ fontFamily: "var(--font-amiri)", opacity: 0.6 }} dir="rtl">
+              وقت
+            </span>
+          </div>
+          <Link
+            href="/admin/login"
+            className="transition-opacity hover:opacity-70"
+            style={{ color: "var(--color-ink-muted)" }}
+          >
+            Admin
+          </Link>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function Principle({ num, title, body }: { num: string; title: string; body: string }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <span
+        className="text-sm font-mono font-medium tabular-nums"
+        style={{ color: "var(--color-accent)" }}
+      >
+        {num}
+      </span>
+      <h2
+        className="text-xl font-semibold tracking-tight"
+        style={{ color: "var(--color-ink)" }}
+      >
+        {title}
+      </h2>
+      <p
+        className="text-base leading-relaxed"
+        style={{ color: "var(--color-ink-soft)" }}
+      >
+        {body}
+      </p>
     </div>
   );
 }

@@ -1,26 +1,130 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+ * Waqt design tokens — warm contemplative palette
+ * Pre-dawn ink, warm paper, deep teal accent.
+ * No pure black/white. No tech blue. No gradients.
+ * Hallmark · pre-emit critique: P5 H4 E5 S4 R5 V5
+ * ───────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Ink — warm near-black, never pure #000 */
+  --color-ink: oklch(0.22 0.02 60);
+  --color-ink-soft: oklch(0.35 0.02 60);
+  --color-ink-muted: oklch(0.55 0.02 60);
+
+  /* Paper — warm off-white, never pure #fff */
+  --color-paper: oklch(0.98 0.01 80);
+  --color-paper-2: oklch(0.95 0.01 80);
+  --color-paper-3: oklch(0.91 0.01 75);
+
+  /* Accent — deep teal, grounded and contemplative */
+  --color-accent: oklch(0.45 0.09 195);
+  --color-accent-soft: oklch(0.65 0.06 195);
+  --color-accent-faint: oklch(0.92 0.02 195);
+
+  /* Warmth — terracotta for subtle highlights */
+  --color-warmth: oklch(0.62 0.08 45);
+  --color-warmth-faint: oklch(0.92 0.02 45);
+
+  /* Semantic */
+  --color-error: oklch(0.55 0.18 25);
+  --color-success: oklch(0.55 0.12 145);
+  --color-focus: oklch(0.45 0.09 195);
+
+  /* Fonts — Spectral for body/editorial, Amiri for Arabic */
+  --font-sans: var(--font-spectral), Georgia, serif;
+  --font-mono: var(--font-geist-mono);
+  --font-arabic: var(--font-amiri), "Noto Naskh Arabic", serif;
+
+  /* Captcha theming — match the warm palette */
+  --clawcap-bg: var(--color-paper);
+  --clawcap-ink: var(--color-ink);
+  --clawcap-muted: var(--color-ink-muted);
+  --clawcap-accent: var(--color-ink);
+  --clawcap-action: oklch(0.55 0.18 25);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-paper: var(--color-paper);
+  --color-paper-2: var(--color-paper-2);
+  --color-paper-3: var(--color-paper-3);
+  --color-accent: var(--color-accent);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-accent-faint: var(--color-accent-faint);
+  --color-warmth: var(--color-warmth);
+  --color-warmth-faint: var(--color-warmth-faint);
+  --color-error: var(--color-error);
+  --color-success: var(--color-success);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* Dark mode — warm dark, not zinc */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-ink: oklch(0.92 0.01 80);
+    --color-ink-soft: oklch(0.78 0.01 75);
+    --color-ink-muted: oklch(0.58 0.01 70);
+    --color-paper: oklch(0.16 0.01 60);
+    --color-paper-2: oklch(0.20 0.01 60);
+    --color-paper-3: oklch(0.25 0.01 60);
+    --color-accent: oklch(0.62 0.08 195);
+    --color-accent-soft: oklch(0.72 0.06 195);
+    --color-accent-faint: oklch(0.28 0.02 195);
+    --color-warmth: oklch(0.68 0.08 45);
+    --color-warmth-faint: oklch(0.28 0.02 45);
   }
 }
 
+html {
+  overflow-x: clip;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overflow-x: clip;
+}
+
+/* Focus rings — visible, accessible, token-driven */
+*:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Honeypot field — hidden from humans, visible to bots */
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── ClawCaptcha responsive scaling ──
+ * The captcha is 440px wide with fixed internal pixel sizes.
+ * On screens narrower than 440px, scale it down proportionally
+ * using CSS transform so nothing gets squished.
+ */
+.clawcap-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+@media (max-width: 480px) {
+  .clawcap {
+    transform: scale(calc(100vw / 440));
+    transform-origin: top center;
+  }
 }

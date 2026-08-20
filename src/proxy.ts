@@ -1,0 +1,46 @@
+import { NextResponse, type NextRequest } from 'next/server';
+
+/**
+ * Proxy (formerly Middleware in Next.js 15 and earlier).
+ * See Next.js 16 docs: middleware is now called "proxy".
+ *
+ * Used for optimistic auth checks — redirect unauthenticated users
+ * away from /app routes. Full session verification happens server-side
+ * in each route/action (defense in depth).
+ */
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const sessionCookie = request.cookies.get('waqt-session')?.value;
+
+  const protectedPaths = ['/calendar', '/accountability', '/huddle', '/lesson', '/dhikr', '/talks', '/settings', '/onboarding'];
+  const authPaths = ['/login', '/signup'];
+
+  const isProtected = protectedPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isAuthPage = authPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+  // Redirect to login if accessing protected route without session
+  if (isProtected && !sessionCookie) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('from', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Redirect to home if accessing auth pages while already logged in
+  if (isAuthPage && sessionCookie) {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all paths except:
+     * - _next/static, _next/image (static assets)
+     * - favicon.ico, robots.txt, manifest, sw.js
+     * - api routes (handled separately)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|manifest.webmanifest|sw.js|api).*)',
+  ],
+};

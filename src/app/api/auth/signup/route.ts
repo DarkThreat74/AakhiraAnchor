@@ -1,0 +1,109 @@
+import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/lib/db/client";
+import { setSessionCookie } from "@/lib/auth/session";
+import { isValidEmail, isHoneypotTripped, isTimeTrapTripped } from "@/lib/validation";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  // ── Rate limit: 5 signup attempts per 15 min per IP ──
+  const ip = getClientIp(request.headers);
+  if (!checkRateLimit("signup", ip, 5, 15 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429 },
+    );
+  }
+
+  // ── Parse body ──
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const { email, password, website, company, renderedAt } = body as {
+    email?: string;
+    password?: string;
+    website?: string;
+    company?: string;
+    renderedAt?: number;
+  };
+
+  // ── Honeypot check — if filled, silently succeed (bot trap) ──
+  if (isHoneypotTripped({ website, company })) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Time-trap — bots submit in <2s ──
+  if (isTimeTrapTripped(renderedAt, 2)) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Validate email ──
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return NextResponse.json(
+      { error: "Please enter a valid email." },
+      { status: 400 },
+    );
+  }
+
+  // ── Validate password ──
+  if (!password || password.length < 8) {
+    return NextResponse.json(
+      { error: "Password must be at least 8 characters." },
+      { status: 400 },
+    );
+  }
+  if (!/[a-zA-Z]/.test(password)) {
+    return NextResponse.json(
+      { error: "Password must contain at least one letter." },
+      { status: 400 },
+    );
+  }
+  if (!/[0-9]/.test(password)) {
+    return NextResponse.json(
+      { error: "Password must contain at least one number." },
+      { status: 400 },
+    );
+  }
+
+  // ── Check if user already exists ──
+  const existing = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.email, normalizedEmail))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return NextResponse.json(
+      { error: "An account with this email already exists." },
+      { status: 409 },
+    );
+  }
+
+  // ── Create user ──
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const [user] = await db
+    .insert(schema.users)
+    .values({ email: normalizedEmail, passwordHash })
+    .returning({ id: schema.users.id, email: schema.users.email });
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "An error occurred while creating your account." },
+      { status: 500 },
+    );
+  }
+
+  // ── Set session ──
+  await setSessionCookie(user);
+
+  return NextResponse.json({ ok: true });
+}
