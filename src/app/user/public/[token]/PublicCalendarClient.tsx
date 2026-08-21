@@ -22,21 +22,47 @@ interface PrayerTimes {
 }
 
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 5 AM to 10 PM
-const HOUR_HEIGHT = 64;
+const HOUR_HEIGHT = 56;
+const TIME_COL = 44;
 
 const PRAYER_NAMES: Array<{
   key: keyof PrayerTimes;
   label: string;
-  arabic: string;
   color: string;
 }> = [
-  { key: "fajr", label: "Fajr", arabic: "الفجر", color: "var(--color-accent)" },
-  { key: "sunrise", label: "Sunrise", arabic: "الشروق", color: "var(--color-warmth)" },
-  { key: "dhuhr", label: "Dhuhr", arabic: "الظهر", color: "var(--color-accent)" },
-  { key: "asr", label: "Asr", arabic: "العصر", color: "var(--color-accent)" },
-  { key: "maghrib", label: "Maghrib", arabic: "المغرب", color: "var(--color-warmth)" },
-  { key: "isha", label: "Isha", arabic: "العشاء", color: "var(--color-accent)" },
+  { key: "fajr", label: "Fajr", color: "var(--color-accent)" },
+  { key: "sunrise", label: "Sunrise", color: "var(--color-warmth)" },
+  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)" },
+  { key: "asr", label: "Asr", color: "var(--color-accent)" },
+  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)" },
+  { key: "isha", label: "Isha", color: "var(--color-accent)" },
 ];
+
+const REMINDER_COLORS = [
+  "#c2410c", "#0e7490", "#7c3aed", "#be185d",
+  "#15803d", "#b45309", "#1e40af", "#9f1239",
+];
+
+function getReminderColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = ((hash << 5) - hash) + title.charCodeAt(i);
+    hash |= 0;
+  }
+  return REMINDER_COLORS[Math.abs(hash) % REMINDER_COLORS.length];
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  block: "var(--color-accent)",
+  task: "var(--color-warmth)",
+  reminder: "var(--color-ink-muted)",
+};
+
+const TYPE_BG: Record<string, string> = {
+  block: "color-mix(in oklab, var(--color-accent) 12%, var(--color-paper))",
+  task: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))",
+  reminder: "transparent",
+};
 
 type View = "day" | "month";
 
@@ -52,6 +78,31 @@ export default function PublicCalendarClient({ token }: { token: string }) {
   function navigateToDay(dateStr: string) {
     setSelectedDate(dateStr);
     setView("day");
+  }
+
+  // Restrict navigation: can't go to past months, can't go more than 3 months ahead
+  const now = new Date();
+  const currentMonthNum = now.getFullYear() * 12 + now.getMonth();
+  const maxMonthNum = currentMonthNum + 3;
+  const viewMonthNum = year * 12 + (month - 1);
+
+  const canGoPrev = viewMonthNum > currentMonthNum;
+  const canGoNext = viewMonthNum < maxMonthNum;
+
+  function handlePrevMonth() {
+    if (!canGoPrev) return;
+    const prevM = month === 1 ? 12 : month - 1;
+    const prevY = month === 1 ? year - 1 : year;
+    setMonth(prevM);
+    setYear(prevY);
+  }
+
+  function handleNextMonth() {
+    if (!canGoNext) return;
+    const nextM = month === 12 ? 1 : month + 1;
+    const nextY = month === 12 ? year + 1 : year;
+    setMonth(nextM);
+    setYear(nextY);
   }
 
   return (
@@ -74,7 +125,7 @@ export default function PublicCalendarClient({ token }: { token: string }) {
                 Shared calendar
               </p>
               <p className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
-                Read-only view
+                Read-only · Current + 3 months
               </p>
             </div>
           </div>
@@ -125,18 +176,10 @@ export default function PublicCalendarClient({ token }: { token: string }) {
             year={year}
             month={month}
             onNavigateToDay={navigateToDay}
-            onPrevMonth={() => {
-              const prevMonth = month === 1 ? 12 : month - 1;
-              const prevYear = month === 1 ? year - 1 : year;
-              setMonth(prevMonth);
-              setYear(prevYear);
-            }}
-            onNextMonth={() => {
-              const nextMonth = month === 12 ? 1 : month + 1;
-              const nextYear = month === 12 ? year + 1 : year;
-              setMonth(nextMonth);
-              setYear(nextYear);
-            }}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            canGoPrev={canGoPrev}
+            canGoNext={canGoNext}
           />
         )}
       </main>
@@ -163,7 +206,12 @@ export default function PublicCalendarClient({ token }: { token: string }) {
 
 // ─── Public Day View (read-only) ───
 
-function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token: string; date: string; onNavigateToMonth: () => void; onDateChange: (date: string) => void }) {
+function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
+  token: string;
+  date: string;
+  onNavigateToMonth: () => void;
+  onDateChange: (date: string) => void;
+}) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [loading, setLoading] = useState(true);
@@ -227,6 +275,20 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
     return `${h}:${m}`;
   }
 
+  function formatTime(time: string): string {
+    if (!time) return "—";
+    const [h, m] = time.split(":").map(Number);
+    const hour = h % 12 || 12;
+    const period = h < 12 ? "AM" : "PM";
+    return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+  }
+
+  function formatHour(hour: number): string {
+    if (hour === 12) return "12p";
+    if (hour > 12) return `${hour - 12}p`;
+    return `${hour}a`;
+  }
+
   function getOverlappingEvents(event: CalendarEvent, allEvents: CalendarEvent[]): CalendarEvent[] {
     const start = timeToMinutes(isoToLocalTime(event.startAt));
     const end = timeToMinutes(isoToLocalTime(event.endAt));
@@ -236,6 +298,10 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
       return eStart < end && eEnd > start;
     });
   }
+
+  // Separate blocks from reminders
+  const blockEvents = events.filter((e) => e.type !== "reminder");
+  const reminderEvents = events.filter((e) => e.type === "reminder");
 
   // Date navigation
   const currentDate = new Date(date + "T00:00:00");
@@ -255,9 +321,9 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
   });
 
   return (
-    <div className="mx-auto max-w-4xl px-4 sm:px-6">
+    <div className="mx-auto max-w-4xl px-2 sm:px-6">
       {/* Date navigation */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between sm:mb-6">
         <button
           onClick={() => onDateChange(prevDateStr)}
           className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
@@ -267,7 +333,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="text-center">
-          <h1 className="text-lg font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+          <h1 className="text-base font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
             {formattedDate}
           </h1>
           <button
@@ -288,31 +354,38 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
         </button>
       </div>
 
-      {/* Prayer times bar (read-only — no check-in buttons) */}
+      {/* Prayer times bar */}
       {prayerTimes && (
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
-          {PRAYER_NAMES.filter((p) => p.key !== "sunrise").map((prayer) => (
-            <div
-              key={prayer.key}
-              className="flex shrink-0 flex-col items-center gap-1 rounded-lg border px-3 py-2"
-              style={{
-                borderColor: "var(--color-paper-3)",
-                backgroundColor: "var(--color-paper)",
-              }}
-            >
-              <span className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
-                {prayer.label}
-              </span>
-              <span className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                {prayerTimes[prayer.key]}
-              </span>
-            </div>
-          ))}
+        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
+          {PRAYER_NAMES.map((prayer) => {
+            const time = prayerTimes[prayer.key];
+            if (!time) return null;
+            return (
+              <div
+                key={prayer.key}
+                className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-2.5 py-1.5 sm:px-3"
+                style={{
+                  borderColor: "var(--color-paper-3)",
+                  backgroundColor: "var(--color-paper)",
+                }}
+              >
+                <span className="text-[11px] font-medium sm:text-xs" style={{ color: prayer.color }}>
+                  {prayer.label}
+                </span>
+                <span className="text-[10px] tabular-nums sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                  {formatTime(time)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Day grid */}
-      <div className="relative overflow-hidden rounded-xl border" style={{ borderColor: "var(--color-paper-3)" }}>
+      <div
+        className="relative overflow-hidden rounded-2xl border"
+        style={{ borderColor: "var(--color-paper-3)" }}
+      >
         <div className="relative" style={{ height: HOURS.length * HOUR_HEIGHT, backgroundColor: "var(--color-paper)" }}>
           {/* Hour lines */}
           {HOURS.map((hour, i) => (
@@ -322,10 +395,10 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
               style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
             >
               <div
-                className="w-14 shrink-0 pt-1 pr-2 text-right text-[10px] font-medium tabular-nums"
-                style={{ color: "var(--color-ink-muted)" }}
+                className="shrink-0 pt-0.5 pr-1.5 text-right text-[10px] font-medium tabular-nums sm:pr-2"
+                style={{ color: "var(--color-ink-muted)", width: TIME_COL }}
               >
-                {hour === 12 ? "12 PM" : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                {formatHour(hour)}
               </div>
               <div
                 className="flex-1 border-t"
@@ -334,7 +407,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
             </div>
           ))}
 
-          {/* Prayer bands */}
+          {/* Prayer time lines */}
           {prayerTimes &&
             PRAYER_NAMES.map((prayer) => {
               const time = prayerTimes[prayer.key];
@@ -345,34 +418,64 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
               return (
                 <div
                   key={prayer.key}
-                  className="absolute left-14 right-0 z-10 flex items-center gap-2"
-                  style={{ top: top - 10 }}
+                  className="absolute z-10 flex items-center"
+                  style={{ top: top - 7, left: TIME_COL, right: 0 }}
                 >
-                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
+                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
                   <span
-                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
                     style={{
-                      backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
+                      backgroundColor: "var(--color-paper)",
                       color: prayer.color,
+                      border: `1px solid ${prayer.color}`,
                     }}
                   >
-                    {prayer.label} · {time}
+                    {prayer.label} {formatTime(time)}
                   </span>
-                  <div className="h-px w-4" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
                 </div>
               );
             })}
 
-          {/* Events (read-only — no delete buttons, no tap-to-add) */}
-          {events.map((event) => {
+          {/* Reminder lines — colored lines, no delete buttons (read-only) */}
+          {reminderEvents.map((event) => {
+            const startStr = isoToLocalTime(event.startAt);
+            const minutes = timeToMinutes(startStr);
+            if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
+            const top = minutesToTop(minutes);
+            const color = getReminderColor(event.title);
+
+            return (
+              <div
+                key={event.id}
+                className="absolute z-15 flex items-center"
+                style={{ top: top - 7, left: TIME_COL, right: 0 }}
+              >
+                <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />
+                <span
+                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                  style={{
+                    backgroundColor: "var(--color-paper)",
+                    color: color,
+                    border: `1px solid ${color}`,
+                  }}
+                >
+                  {event.title} · {formatTime(startStr)}
+                </span>
+                <div className="h-0.5 w-3 sm:w-4" style={{ backgroundColor: color, opacity: 0.7 }} />
+              </div>
+            );
+          })}
+
+          {/* Block events (read-only — no delete buttons) */}
+          {blockEvents.map((event) => {
             const startStr = isoToLocalTime(event.startAt);
             const endStr = isoToLocalTime(event.endAt);
             const startMin = timeToMinutes(startStr);
             const endMin = timeToMinutes(endStr);
             const top = minutesToTop(startMin);
-            const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 24);
+            const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
 
-            const overlapping = getOverlappingEvents(event, events).sort((a, b) => {
+            const overlapping = getOverlappingEvents(event, blockEvents).sort((a, b) => {
               const aStart = timeToMinutes(isoToLocalTime(a.startAt));
               const bStart = timeToMinutes(isoToLocalTime(b.startAt));
               return aStart - bStart;
@@ -381,31 +484,28 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
             const widthPct = 100 / overlapping.length;
             const leftPct = index * widthPct;
 
-            const typeColors: Record<string, string> = {
-              block: "var(--color-accent)",
-              task: "var(--color-warmth)",
-              reminder: "var(--color-ink-muted)",
-            };
+            const borderColor = TYPE_COLORS[event.type] || "var(--color-accent)";
+            const bgColor = TYPE_BG[event.type] || TYPE_BG.block;
 
             return (
               <div
                 key={event.id}
-                className="absolute z-20 overflow-hidden rounded-lg border p-2 text-xs"
+                className="absolute z-20 overflow-hidden rounded-lg border p-1.5 sm:p-2"
                 style={{
                   top,
                   height,
-                  left: `calc(3.5rem + ${leftPct} / 100 * (100% - 3.5rem))`,
-                  width: `calc(${widthPct} / 100 * (100% - 3.5rem) - 4px)`,
-                  backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)",
-                  borderColor: typeColors[event.type] || "var(--color-accent)",
+                  left: `calc(${TIME_COL}px + ${leftPct}% * (100% - ${TIME_COL}px) / 100)`,
+                  width: `calc(${widthPct}% * (100% - ${TIME_COL}px) / 100 - 3px)`,
+                  backgroundColor: bgColor,
+                  borderColor,
                   borderLeftWidth: 3,
                 }}
               >
-                <p className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
+                <p className="truncate text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
                   {event.title}
                 </p>
-                <p className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                  {startStr} – {endStr}
+                <p className="text-[9px] tabular-nums leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                  {formatTime(startStr)}–{formatTime(endStr)}
                 </p>
               </div>
             );
@@ -435,15 +535,17 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: { token
 
 // ─── Public Month View (read-only) ───
 
-function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onNextMonth }: {
+function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onNextMonth, canGoPrev, canGoNext }: {
   token: string;
   year: number;
   month: number;
   onNavigateToDay: (dateStr: string) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  canGoPrev: boolean;
+  canGoNext: boolean;
 }) {
-  const [eventCounts, setEventCounts] = useState<Record<string, number>>({});
+  const [eventsByDate, setEventsByDate] = useState<Record<string, CalendarEvent[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -456,14 +558,18 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
         const toStr = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
 
         const res = await fetch(`/api/public/${token}/events?from=${fromStr}&to=${toStr}`);
-        if (res.ok) {
-          const events = await res.json();
-          const counts: Record<string, number> = {};
+        if (res.ok && !cancelled) {
+          const events: CalendarEvent[] = await res.json();
+          const grouped: Record<string, CalendarEvent[]> = {};
           for (const event of events) {
             const eventDate = event.startAt.split("T")[0];
-            counts[eventDate] = (counts[eventDate] || 0) + 1;
+            if (!grouped[eventDate]) grouped[eventDate] = [];
+            grouped[eventDate].push(event);
           }
-          if (!cancelled) setEventCounts(counts);
+          for (const date of Object.keys(grouped)) {
+            grouped[date].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+          }
+          if (!cancelled) setEventsByDate(grouped);
         }
       } catch {
         // ignore
@@ -485,6 +591,10 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
+  function isDayDone(dateStr: string): boolean {
+    return dateStr < today;
+  }
+
   const cells: Array<{ day: number | null; dateStr: string | null }> = [];
   for (let i = 0; i < firstDay; i++) {
     cells.push({ day: null, dateStr: null });
@@ -494,24 +604,32 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
     cells.push({ day, dateStr });
   }
 
+  const typeColors: Record<string, string> = {
+    block: "var(--color-accent)",
+    task: "var(--color-warmth)",
+    reminder: "var(--color-ink-muted)",
+  };
+
   return (
-    <div className="mx-auto max-w-4xl px-4 sm:px-6">
+    <div className="mx-auto max-w-4xl px-3 sm:px-6">
       {/* Month navigation */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between sm:mb-6">
         <button
           onClick={onPrevMonth}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
+          disabled={!canGoPrev}
+          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)] disabled:opacity-30 disabled:hover:bg-transparent"
           style={{ color: "var(--color-ink-soft)" }}
           aria-label="Previous month"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+        <h1 className="text-base font-semibold tracking-tight sm:text-xl" style={{ color: "var(--color-ink)" }}>
           {monthNames[month - 1]} {year}
         </h1>
         <button
           onClick={onNextMonth}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
+          disabled={!canGoNext}
+          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)] disabled:opacity-30 disabled:hover:bg-transparent"
           style={{ color: "var(--color-ink-soft)" }}
           aria-label="Next month"
         >
@@ -520,7 +638,7 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
       </div>
 
       {/* Day headers */}
-      <div className="mb-2 grid grid-cols-7 gap-1">
+      <div className="mb-1 grid grid-cols-7 gap-0.5 sm:gap-1">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
           <div
             key={day}
@@ -533,36 +651,108 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {cells.map((cell, i) => {
           if (!cell.day) {
-            return <div key={i} />;
+            return <div key={i} className="min-h-[70px] sm:min-h-[100px] lg:min-h-[120px]" />;
           }
 
           const isToday = cell.dateStr === today;
-          const eventCount = cell.dateStr ? eventCounts[cell.dateStr] || 0 : 0;
+          const done = cell.dateStr ? isDayDone(cell.dateStr) : false;
+          const dayEvents = cell.dateStr ? eventsByDate[cell.dateStr] || [] : [];
+          const blockEvents = dayEvents.filter((e) => e.type !== "reminder");
+          const reminderEvents = dayEvents.filter((e) => e.type === "reminder");
 
           return (
             <button
               key={i}
               onClick={() => cell.dateStr && onNavigateToDay(cell.dateStr)}
-              className="flex aspect-square flex-col items-center justify-center rounded-lg border text-sm transition-colors hover:bg-[var(--color-paper)]"
+              className="relative flex min-h-[70px] flex-col rounded-lg border p-1 text-xs transition-colors hover:bg-[var(--color-paper-2)] sm:min-h-[100px] sm:p-1.5 lg:min-h-[120px]"
               style={{
                 borderColor: isToday ? "var(--color-accent)" : "var(--color-paper-3)",
-                backgroundColor: isToday ? "var(--color-accent-faint)" : "var(--color-paper)",
+                backgroundColor: isToday ? "var(--color-accent-faint)" : done ? "var(--color-paper-2)" : "var(--color-paper)",
+                opacity: done ? 0.6 : 1,
               }}
             >
+              {/* Day number */}
               <span
-                className="font-medium"
-                style={{ color: isToday ? "var(--color-accent)" : "var(--color-ink)" }}
+                className="mb-0.5 font-medium tabular-nums"
+                style={{
+                  color: isToday ? "var(--color-accent)" : done ? "var(--color-ink-muted)" : "var(--color-ink)",
+                  fontSize: 11,
+                }}
               >
                 {cell.day}
               </span>
-              {eventCount > 0 && (
-                <span
-                  className="mt-0.5 h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: "var(--color-accent)" }}
-                />
+
+              {/* Event blocks */}
+              <div className="flex flex-col gap-0.5 overflow-hidden">
+                {blockEvents.slice(0, 2).map((event) => {
+                  const time = new Date(event.startAt).toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  });
+                  const color = typeColors[event.type] || "var(--color-accent)";
+                  return (
+                    <div
+                      key={event.id}
+                      className="truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
+                      style={{
+                        backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
+                        color: color,
+                        borderLeft: `2px solid ${color}`,
+                      }}
+                    >
+                      <span className="tabular-nums">{time}</span> {event.title}
+                    </div>
+                  );
+                })}
+                {blockEvents.length > 2 && (
+                  <span
+                    className="px-1 text-[9px] font-medium sm:text-[10px]"
+                    style={{ color: "var(--color-ink-muted)" }}
+                  >
+                    +{blockEvents.length - 2} more
+                  </span>
+                )}
+
+                {/* Reminder indicators — colored dots */}
+                {reminderEvents.length > 0 && (
+                  <div className="mt-0.5 flex flex-wrap gap-0.5">
+                    {reminderEvents.slice(0, 4).map((event) => (
+                      <div
+                        key={event.id}
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: getReminderColor(event.title) }}
+                        title={event.title}
+                      />
+                    ))}
+                    {reminderEvents.length > 4 && (
+                      <span className="text-[8px]" style={{ color: "var(--color-ink-muted)" }}>
+                        +{reminderEvents.length - 4}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* X overlay for done days */}
+              {done && (
+                <div
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                  aria-hidden="true"
+                >
+                  <svg
+                    viewBox="0 0 40 40"
+                    className="h-full w-full"
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{ opacity: 0.15 }}
+                  >
+                    <line x1="8" y1="8" x2="32" y2="32" stroke="var(--color-ink-muted)" strokeWidth="1.5" strokeLinecap="round" />
+                    <line x1="32" y1="8" x2="8" y2="32" stroke="var(--color-ink-muted)" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </div>
               )}
             </button>
           );

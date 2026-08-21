@@ -12,6 +12,21 @@ interface CalendarEvent {
   type: "block" | "task" | "reminder";
 }
 
+// Color palette for reminders — must match DayViewClient
+const REMINDER_COLORS = [
+  "#c2410c", "#0e7490", "#7c3aed", "#be185d",
+  "#15803d", "#b45309", "#1e40af", "#9f1239",
+];
+
+function getReminderColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = ((hash << 5) - hash) + title.charCodeAt(i);
+    hash |= 0;
+  }
+  return REMINDER_COLORS[Math.abs(hash) % REMINDER_COLORS.length];
+}
+
 export default function MonthViewClient({ year, month }: { year: number; month: number }) {
   const [eventsByDate, setEventsByDate] = useState<Record<string, CalendarEvent[]>>({});
   const [loading, setLoading] = useState(true);
@@ -34,7 +49,6 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             if (!grouped[eventDate]) grouped[eventDate] = [];
             grouped[eventDate].push(event);
           }
-          // Sort each day's events by start time
           for (const date of Object.keys(grouped)) {
             grouped[date].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
           }
@@ -60,6 +74,12 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
+  // Determine which days are "done" (past days in the current month)
+  // A day is done if it's before today (in the current month)
+  function isDayDone(dateStr: string): boolean {
+    return dateStr < today;
+  }
+
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
   const nextMonth = month === 12 ? 1 : month + 1;
@@ -67,12 +87,10 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
   const cells: Array<{ day: number | null; dateStr: string | null }> = [];
 
-  // Empty cells before the first day
   for (let i = 0; i < firstDay; i++) {
     cells.push({ day: null, dateStr: null });
   }
 
-  // Days of the month
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     cells.push({ day, dateStr });
@@ -89,7 +107,6 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
       {/* Month header with day/month toggle */}
       <div className="border-b" style={{ borderColor: "var(--color-paper-3)" }}>
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-          {/* Prev month */}
           <Link
             href={`/calendar/month?year=${prevYear}&month=${prevMonth}`}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
@@ -98,13 +115,11 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             <ChevronLeft className="h-5 w-5" />
           </Link>
 
-          {/* Month name + view toggle */}
           <div className="flex flex-1 items-center justify-center gap-4">
             <h1 className="text-base font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
               {monthNames[month - 1]} {year}
             </h1>
 
-            {/* Day/Month toggle */}
             <div
               className="flex rounded-lg border"
               style={{ borderColor: "var(--color-paper-3)" }}
@@ -126,7 +141,6 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             </div>
           </div>
 
-          {/* Next month */}
           <Link
             href={`/calendar/month?year=${nextYear}&month=${nextMonth}`}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
@@ -139,7 +153,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
       <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
         {/* Day headers */}
-        <div className="mb-1 grid grid-cols-7 gap-1">
+        <div className="mb-1 grid grid-cols-7 gap-0.5 sm:gap-1">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
@@ -151,7 +165,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
           ))}
         </div>
 
-        {/* Calendar grid — responsive cell heights */}
+        {/* Calendar grid */}
         <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {cells.map((cell, i) => {
             if (!cell.day) {
@@ -159,23 +173,27 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             }
 
             const isToday = cell.dateStr === today;
+            const done = cell.dateStr ? isDayDone(cell.dateStr) : false;
             const dayEvents = cell.dateStr ? eventsByDate[cell.dateStr] || [] : [];
+            const blockEvents = dayEvents.filter((e) => e.type !== "reminder");
+            const reminderEvents = dayEvents.filter((e) => e.type === "reminder");
 
             return (
               <Link
                 key={i}
                 href={`/calendar/day?date=${cell.dateStr}`}
-                className="flex min-h-[70px] flex-col rounded-lg border p-1 text-xs transition-colors hover:bg-[var(--color-paper-2)] sm:min-h-[100px] sm:p-1.5 lg:min-h-[120px]"
+                className="relative flex min-h-[70px] flex-col rounded-lg border p-1 text-xs transition-colors hover:bg-[var(--color-paper-2)] sm:min-h-[100px] sm:p-1.5 lg:min-h-[120px]"
                 style={{
                   borderColor: isToday ? "var(--color-accent)" : "var(--color-paper-3)",
-                  backgroundColor: isToday ? "var(--color-accent-faint)" : "var(--color-paper)",
+                  backgroundColor: isToday ? "var(--color-accent-faint)" : done ? "var(--color-paper-2)" : "var(--color-paper)",
+                  opacity: done ? 0.6 : 1,
                 }}
               >
                 {/* Day number */}
                 <span
                   className="mb-0.5 font-medium tabular-nums"
                   style={{
-                    color: isToday ? "var(--color-accent)" : "var(--color-ink)",
+                    color: isToday ? "var(--color-accent)" : done ? "var(--color-ink-muted)" : "var(--color-ink)",
                     fontSize: 11,
                   }}
                 >
@@ -184,7 +202,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
                 {/* Event blocks — show up to 2, then "+N more" */}
                 <div className="flex flex-col gap-0.5 overflow-hidden">
-                  {dayEvents.slice(0, 2).map((event) => {
+                  {blockEvents.slice(0, 2).map((event) => {
                     const time = new Date(event.startAt).toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
@@ -205,15 +223,52 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       </div>
                     );
                   })}
-                  {dayEvents.length > 2 && (
+                  {blockEvents.length > 2 && (
                     <span
                       className="px-1 text-[9px] font-medium sm:text-[10px]"
                       style={{ color: "var(--color-ink-muted)" }}
                     >
-                      +{dayEvents.length - 2} more
+                      +{blockEvents.length - 2} more
                     </span>
                   )}
+
+                  {/* Reminder indicators — colored dots */}
+                  {reminderEvents.length > 0 && (
+                    <div className="mt-0.5 flex flex-wrap gap-0.5">
+                      {reminderEvents.slice(0, 4).map((event) => (
+                        <div
+                          key={event.id}
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: getReminderColor(event.title) }}
+                          title={event.title}
+                        />
+                      ))}
+                      {reminderEvents.length > 4 && (
+                        <span className="text-[8px]" style={{ color: "var(--color-ink-muted)" }}>
+                          +{reminderEvents.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* X overlay for done days — nice diagonal X */}
+                {done && (
+                  <div
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 40 40"
+                      className="h-full w-full"
+                      preserveAspectRatio="xMidYMid meet"
+                      style={{ opacity: 0.15 }}
+                    >
+                      <line x1="8" y1="8" x2="32" y2="32" stroke="var(--color-ink-muted)" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="32" y1="8" x2="8" y2="32" stroke="var(--color-ink-muted)" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                )}
               </Link>
             );
           })}

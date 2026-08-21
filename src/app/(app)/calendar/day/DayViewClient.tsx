@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, MapPin } from "lucide-react";
+import { Plus, X, MapPin, Repeat } from "lucide-react";
 import Link from "next/link";
 
 interface CalendarEvent {
@@ -22,7 +22,7 @@ interface PrayerTimes {
 }
 
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 5 AM to 10 PM
-const HOUR_HEIGHT = 56; // px per hour — compact on mobile, still readable
+const HOUR_HEIGHT = 56; // px per hour
 const TIME_COL = 44; // px — time label column
 
 const PRAYER_NAMES: Array<{
@@ -38,6 +38,18 @@ const PRAYER_NAMES: Array<{
   { key: "isha", label: "Isha", color: "var(--color-accent)" },
 ];
 
+// Color palette for reminders — each reminder gets a distinct color
+const REMINDER_COLORS = [
+  "#c2410c", // burnt orange
+  "#0e7490", // teal
+  "#7c3aed", // violet
+  "#be185d", // rose
+  "#15803d", // forest green
+  "#b45309", // amber
+  "#1e40af", // deep blue
+  "#9f1239", // crimson
+];
+
 const TYPE_COLORS: Record<string, string> = {
   block: "var(--color-accent)",
   task: "var(--color-warmth)",
@@ -47,8 +59,18 @@ const TYPE_COLORS: Record<string, string> = {
 const TYPE_BG: Record<string, string> = {
   block: "color-mix(in oklab, var(--color-accent) 12%, var(--color-paper))",
   task: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))",
-  reminder: "color-mix(in oklab, var(--color-ink-muted) 12%, var(--color-paper))",
+  reminder: "transparent",
 };
+
+// Deterministic color assignment for reminders based on title
+function getReminderColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = ((hash << 5) - hash) + title.charCodeAt(i);
+    hash |= 0;
+  }
+  return REMINDER_COLORS[Math.abs(hash) % REMINDER_COLORS.length];
+}
 
 export default function DayViewClient({ date }: { date: string }) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -59,7 +81,10 @@ export default function DayViewClient({ date }: { date: string }) {
   const [newStart, setNewStart] = useState("09:00");
   const [newEnd, setNewEnd] = useState("10:00");
   const [newType, setNewType] = useState<"block" | "task" | "reminder">("block");
+  const [enableRecurrence, setEnableRecurrence] = useState(false);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +108,6 @@ export default function DayViewClient({ date }: { date: string }) {
           if (!cancelled) setPrayerTimes(prayerData);
         } else {
           if (!cancelled) setPrayerTimes(null);
-          // Auto-sync if no cached times
           try {
             const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
             if (syncRes.ok && !cancelled) {
@@ -141,6 +165,10 @@ export default function DayViewClient({ date }: { date: string }) {
     return `${hour}a`;
   }
 
+  // Separate blocks (take time slots) from reminders (lines)
+  const blockEvents = events.filter((e) => e.type !== "reminder");
+  const reminderEvents = events.filter((e) => e.type === "reminder");
+
   function getOverlappingEvents(event: CalendarEvent, allEvents: CalendarEvent[]): CalendarEvent[] {
     const start = timeToMinutes(isoToLocalTime(event.startAt));
     const end = timeToMinutes(isoToLocalTime(event.endAt));
@@ -155,26 +183,61 @@ export default function DayViewClient({ date }: { date: string }) {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    if (timeToMinutes(newEnd) <= timeToMinutes(newStart)) {
+    // For blocks/tasks, validate end > start
+    if (newType !== "reminder" && timeToMinutes(newEnd) <= timeToMinutes(newStart)) {
       setError("End time must be after start time.");
       return;
     }
 
+    // For reminders, end time doesn't matter — set it to start + 1 min
     const startISO = `${date}T${newStart}:00`;
-    const endISO = `${date}T${newEnd}:00`;
+    const endISO = newType === "reminder"
+      ? `${date}T${newStart}:00`
+      : `${date}T${newEnd}:00`;
+
+    // Add recurrence end date if enabled
+    const body: Record<string, string> = {
+      title: newTitle,
+      startAt: startISO,
+      endAt: endISO,
+      type: newType,
+    };
+    if (enableRecurrence && recurrenceEndDate) {
+      body.recurrenceEndDate = recurrenceEndDate;
+    }
 
     try {
       const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle, startAt: startISO, endAt: endISO, type: newType }),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
-        const event = await res.json();
-        setEvents([...events, event]);
+        const data = await res.json();
+        // If recurring, API returns { created, events }
+        if (data.events && Array.isArray(data.events)) {
+          // Refetch events for this date to get the ones that landed on today
+          const refetch = await fetch(`/api/events?date=${date}`);
+          if (refetch.ok) {
+            const refreshed = await refetch.json();
+            setEvents(refreshed);
+          }
+          setSuccessMsg(`Created ${data.created} recurring events.`);
+        } else {
+          // Single event
+          setEvents([...events, data]);
+          setSuccessMsg(null);
+        }
         setShowAddForm(false);
         setNewTitle("");
+        setEnableRecurrence(false);
+        setRecurrenceEndDate("");
+        setError(null);
+        // Clear success message after 3 seconds
+        if (data.events) {
+          setTimeout(() => setSuccessMsg(null), 3000);
+        }
       } else {
         const data = await res.json();
         setError(data.error || "Failed to create event.");
@@ -197,7 +260,7 @@ export default function DayViewClient({ date }: { date: string }) {
 
   return (
     <div className="mx-auto max-w-5xl px-2 py-3 sm:px-6 sm:py-6">
-      {/* Prayer times bar — horizontal scroll on mobile, wrap on desktop */}
+      {/* Prayer times bar */}
       {prayerTimes && (
         <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
           {PRAYER_NAMES.map((prayer) => {
@@ -241,7 +304,17 @@ export default function DayViewClient({ date }: { date: string }) {
         </div>
       )}
 
-      {/* Day grid — no horizontal scroll, fits all screen sizes */}
+      {/* Success message */}
+      {successMsg && (
+        <div
+          className="mb-3 rounded-xl border p-3 text-sm sm:mb-4"
+          style={{ borderColor: "var(--color-success)", backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)", color: "var(--color-success)" }}
+        >
+          {successMsg}
+        </div>
+      )}
+
+      {/* Day grid */}
       <div
         className="relative overflow-hidden rounded-2xl border"
         style={{ borderColor: "var(--color-paper-3)" }}
@@ -296,6 +369,45 @@ export default function DayViewClient({ date }: { date: string }) {
               );
             })}
 
+          {/* Reminder lines — each reminder is a horizontal line with its own color */}
+          {reminderEvents.map((event) => {
+            const startStr = isoToLocalTime(event.startAt);
+            const minutes = timeToMinutes(startStr);
+            if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
+            const top = minutesToTop(minutes);
+            const color = getReminderColor(event.title);
+
+            return (
+              <div
+                key={event.id}
+                className="absolute z-15 flex items-center group"
+                style={{ top: top - 7, left: TIME_COL, right: 0 }}
+              >
+                <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />
+                <span
+                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                  style={{
+                    backgroundColor: "var(--color-paper)",
+                    color: color,
+                    border: `1px solid ${color}`,
+                  }}
+                >
+                  {event.title} · {formatTime(startStr)}
+                </span>
+                <div className="h-0.5 w-3 sm:w-4" style={{ backgroundColor: color, opacity: 0.7 }} />
+                {/* Delete button — appears on hover */}
+                <button
+                  onClick={() => handleDeleteEvent(event.id)}
+                  className="ml-1 hidden shrink-0 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100 sm:block"
+                  aria-label="Delete reminder"
+                  style={{ color: "var(--color-ink-muted)" }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+
           {/* Tap-to-add zones — 44px touch targets */}
           {HOURS.map((hour, i) => (
             <button
@@ -310,6 +422,7 @@ export default function DayViewClient({ date }: { date: string }) {
               onClick={() => {
                 setNewStart(`${String(hour).padStart(2, "0")}:00`);
                 setNewEnd(`${String(hour + 1).padStart(2, "0")}:00`);
+                setNewType("block");
                 setShowAddForm(true);
               }}
               aria-label={`Add event at ${hour}:00`}
@@ -323,8 +436,8 @@ export default function DayViewClient({ date }: { date: string }) {
             </button>
           ))}
 
-          {/* Events */}
-          {events.map((event) => {
+          {/* Block events — take up time slots */}
+          {blockEvents.map((event) => {
             const startStr = isoToLocalTime(event.startAt);
             const endStr = isoToLocalTime(event.endAt);
             const startMin = timeToMinutes(startStr);
@@ -332,7 +445,7 @@ export default function DayViewClient({ date }: { date: string }) {
             const top = minutesToTop(startMin);
             const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
 
-            const overlapping = getOverlappingEvents(event, events).sort((a, b) => {
+            const overlapping = getOverlappingEvents(event, blockEvents).sort((a, b) => {
               const aStart = timeToMinutes(isoToLocalTime(a.startAt));
               const bStart = timeToMinutes(isoToLocalTime(b.startAt));
               return aStart - bStart;
@@ -388,6 +501,9 @@ export default function DayViewClient({ date }: { date: string }) {
           setNewTitle("");
           setNewStart("09:00");
           setNewEnd("10:00");
+          setNewType("block");
+          setEnableRecurrence(false);
+          setRecurrenceEndDate("");
           setShowAddForm(true);
         }}
         className="mt-4 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-opacity hover:opacity-90"
@@ -415,7 +531,7 @@ export default function DayViewClient({ date }: { date: string }) {
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleAddEvent}
-            className="w-full max-w-md rounded-t-2xl border p-5 sm:rounded-2xl sm:p-6"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl border p-5 sm:rounded-2xl sm:p-6"
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
           >
             <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--color-ink)" }}>
@@ -432,9 +548,52 @@ export default function DayViewClient({ date }: { date: string }) {
                 className="rounded-lg border px-3 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
                 style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
               />
+
+              {/* Type toggle: Block vs Reminder */}
+              <div>
+                <label className="mb-1.5 block text-xs" style={{ color: "var(--color-ink-muted)" }}>Type</label>
+                <div
+                  className="flex rounded-lg border overflow-hidden"
+                  style={{ borderColor: "var(--color-paper-3)" }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setNewType("block")}
+                    className="flex-1 px-3 py-2.5 text-sm font-medium transition-colors"
+                    style={{
+                      backgroundColor: newType === "block" ? "var(--color-ink)" : "transparent",
+                      color: newType === "block" ? "var(--color-paper)" : "var(--color-ink-soft)",
+                      minHeight: 44,
+                    }}
+                  >
+                    Block
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewType("reminder")}
+                    className="flex-1 px-3 py-2.5 text-sm font-medium transition-colors"
+                    style={{
+                      backgroundColor: newType === "reminder" ? "var(--color-ink)" : "transparent",
+                      color: newType === "reminder" ? "var(--color-paper)" : "var(--color-ink-soft)",
+                      minHeight: 44,
+                    }}
+                  >
+                    Reminder
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                  {newType === "block"
+                    ? "Takes up a time slot on the calendar."
+                    : "Shows as a colored line — doesn't block time."}
+                </p>
+              </div>
+
+              {/* Time inputs — hide end time for reminders */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Start</label>
+                  <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                    {newType === "reminder" ? "Time" : "Start"}
+                  </label>
                   <input
                     type="time"
                     value={newStart}
@@ -443,34 +602,60 @@ export default function DayViewClient({ date }: { date: string }) {
                     style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
                   />
                 </div>
-                <div className="flex-1">
-                  <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>End</label>
-                  <input
-                    type="time"
-                    value={newEnd}
-                    onChange={(e) => setNewEnd(e.target.value)}
-                    className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
-                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
-                  />
-                </div>
+                {newType !== "reminder" && (
+                  <div className="flex-1">
+                    <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>End</label>
+                    <input
+                      type="time"
+                      value={newEnd}
+                      onChange={(e) => setNewEnd(e.target.value)}
+                      className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
+                    />
+                  </div>
+                )}
               </div>
-              <select
-                value={newType}
-                onChange={(e) => setNewType(e.target.value as "block" | "task" | "reminder")}
-                className="rounded-lg border px-3 py-2.5 text-sm outline-none"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
-              >
-                <option value="block">Block</option>
-                <option value="task">Task</option>
-                <option value="reminder">Reminder</option>
-              </select>
+
+              {/* Recurrence option */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableRecurrence}
+                    onChange={(e) => setEnableRecurrence(e.target.checked)}
+                    className="h-4 w-4 rounded"
+                    style={{ accentColor: "var(--color-accent)" }}
+                  />
+                  <span className="flex items-center gap-1.5 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                    <Repeat className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+                    Repeat weekly
+                  </span>
+                </label>
+                {enableRecurrence && (
+                  <div className="mt-2">
+                    <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Repeat every week until</label>
+                    <input
+                      type="date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      required={enableRecurrence}
+                      className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
+                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
+                    />
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                      Creates this event every {new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" })} until the end date.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <button
                   type="submit"
                   className="flex-1 rounded-lg px-4 py-3 text-sm font-medium"
                   style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
                 >
-                  Add event
+                  {enableRecurrence ? "Add recurring" : "Add"}
                 </button>
                 <button
                   type="button"

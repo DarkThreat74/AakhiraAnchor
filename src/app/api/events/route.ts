@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Rate limit: 60 reads per minute per IP
   const ip = getClientIp(request.headers);
   if (!checkRateLimit("events-read", ip, 60, 60 * 1000)) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 });
@@ -25,7 +24,6 @@ export async function GET(request: NextRequest) {
   const fromStr = searchParams.get("from");
   const toStr = searchParams.get("to");
 
-  // Range query (for month view)
   if (fromStr && toStr) {
     const fromDate = new Date(fromStr + "T00:00:00");
     const toDate = new Date(toStr + "T23:59:59.999");
@@ -48,7 +46,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(events);
   }
 
-  // Single day query
   if (!dateStr) {
     return NextResponse.json({ error: "Missing date parameter." }, { status: 400 });
   }
@@ -79,14 +76,15 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(events);
 }
 
-// POST /api/events — create a new event
+// POST /api/events — create a new event (or recurring series)
+// Body: { title, startAt, endAt, type, recurrenceEndDate? }
+// If recurrenceEndDate is set, creates weekly occurrences from startAt until that date.
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Rate limit: 20 event creates per hour per IP
   const ip = getClientIp(request.headers);
   if (!checkRateLimit("events-create", ip, 20, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 });
@@ -99,15 +97,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { title, startAt, endAt, type, recurrenceRule } = body as {
+  const { title, startAt, endAt, type, recurrenceEndDate } = body as {
     title?: string;
     startAt?: string;
     endAt?: string;
     type?: string;
-    recurrenceRule?: string;
+    recurrenceEndDate?: string;
   };
 
-  // Validate required fields
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
   }
@@ -128,23 +125,81 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date format." }, { status: 400 });
   }
 
-  if (endDate <= startDate) {
-    return NextResponse.json({ error: "End time must be after start time." }, { status: 400 });
-  }
-
-  // Validate type
+  // For reminders, end can equal start (they're instantaneous lines)
+  // For blocks/tasks, end must be after start
   const validTypes = ["block", "task", "reminder"];
   const eventType = validTypes.includes(type || "") ? (type as "block" | "task" | "reminder") : "block";
 
+  if (eventType !== "reminder" && endDate <= startDate) {
+    return NextResponse.json({ error: "End time must be after start time." }, { status: 400 });
+  }
+
+  // For reminders, if end <= start, set end = start + 1 minute (minimal duration for DB)
+  let effectiveEnd = endDate;
+  if (eventType === "reminder" && endDate <= startDate) {
+    effectiveEnd = new Date(startDate.getTime() + 60 * 1000);
+  }
+
+  // Check if this is a recurring event
+  if (recurrenceEndDate) {
+    const recurEnd = new Date(recurrenceEndDate + "T23:59:59");
+    if (isNaN(recurEnd.getTime())) {
+      return NextResponse.json({ error: "Invalid recurrence end date." }, { status: 400 });
+    }
+    if (recurEnd <= startDate) {
+      return NextResponse.json({ error: "Recurrence end date must be after start date." }, { status: 400 });
+    }
+
+    // Generate weekly occurrences from startDate until recurEnd
+    const occurrences: Array<{ startAt: Date; endAt: Date }> = [];
+    const durationMs = effectiveEnd.getTime() - startDate.getTime();
+    let currentStart = new Date(startDate);
+
+    while (currentStart <= recurEnd) {
+      occurrences.push({
+        startAt: new Date(currentStart),
+        endAt: new Date(currentStart.getTime() + durationMs),
+      });
+      // Move to next week (same day of week)
+      currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }
+
+    if (occurrences.length === 0) {
+      return NextResponse.json({ error: "No occurrences generated." }, { status: 400 });
+    }
+
+    // Cap at 52 occurrences (1 year of weekly events) to prevent abuse
+    const capped = occurrences.slice(0, 52);
+
+    // Insert all occurrences
+    const inserted = await db
+      .insert(schema.events)
+      .values(
+        capped.map((occ) => ({
+          userId: session.userId,
+          title: title.trim(),
+          startAt: occ.startAt,
+          endAt: occ.endAt,
+          type: eventType,
+          recurrenceRule: `WEEKLY_UNTIL_${recurrenceEndDate}`,
+          createdVia: "manual" as const,
+        })),
+      )
+      .returning();
+
+    return NextResponse.json({ created: inserted.length, events: inserted }, { status: 201 });
+  }
+
+  // Single event
   const [event] = await db
     .insert(schema.events)
     .values({
       userId: session.userId,
       title: title.trim(),
       startAt: startDate,
-      endAt: endDate,
+      endAt: effectiveEnd,
       type: eventType,
-      recurrenceRule: recurrenceRule?.trim() || null,
+      recurrenceRule: null,
       createdVia: "manual",
     })
     .returning();
