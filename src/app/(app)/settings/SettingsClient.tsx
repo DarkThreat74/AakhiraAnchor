@@ -416,7 +416,7 @@ export default function SettingsClient({
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-3 py-6 sm:px-6 sm:py-10">
+    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
       <h1 className="mb-6 text-xl font-semibold tracking-tight sm:mb-8 sm:text-2xl" style={{ color: "var(--color-ink)" }}>
         Settings
       </h1>
@@ -736,7 +736,7 @@ export default function SettingsClient({
           ) : shareEnabled && shareUrl ? (
             <div className="flex flex-col gap-3">
               <div
-                className="flex items-center gap-2 rounded-lg border px-3 py-2"
+                className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-3 py-2"
                 style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
               >
                 <span

@@ -407,7 +407,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             </div>
           ))}
 
-          {/* Prayer time lines */}
+          {/* Prayer time lines — colored lines only, no labels */}
           {prayerTimes &&
             PRAYER_NAMES.map((prayer) => {
               const time = prayerTimes[prayer.key];
@@ -419,19 +419,9 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
                 <div
                   key={prayer.key}
                   className="absolute z-10 flex items-center"
-                  style={{ top: top - 7, left: TIME_COL, right: 0 }}
+                  style={{ top: top - 0.5, left: TIME_COL, right: 0 }}
                 >
-                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
-                  <span
-                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
-                    style={{
-                      backgroundColor: "var(--color-paper)",
-                      color: prayer.color,
-                      border: `1px solid ${prayer.color}`,
-                    }}
-                  >
-                    {prayer.label} {formatTime(time)}
-                  </span>
+                  <div className="h-px w-full" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
                 </div>
               );
             })}
@@ -501,12 +491,11 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
                   borderLeftWidth: 3,
                 }}
               >
-                <p className="truncate text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
-                  {event.title}
-                </p>
-                <p className="text-[9px] tabular-nums leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
-                  {formatTime(startStr)}–{formatTime(endStr)}
-                </p>
+                <div className="flex h-full items-center">
+                  <p className="min-w-0 flex-1 truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
+                    {event.title}
+                  </p>
+                </div>
               </div>
             );
           })}
