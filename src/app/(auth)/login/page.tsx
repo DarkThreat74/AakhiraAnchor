@@ -54,8 +54,10 @@ export default function LoginForm() {
       }
 
       router.push("/");
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      // Show the actual error so the user knows what happened
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Connection failed: ${msg}. Try refreshing the page.`);
       setPending(false);
     }
   }
