@@ -9,7 +9,7 @@ import { Calendar, BookOpen, Heart, Settings, Home } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 const navItems = [
-  { label: "Today", href: "/", icon: Home },
+  { label: "Today", href: "/today", icon: Home },
   { label: "Calendar", href: "/calendar/day", icon: Calendar },
   { label: "Lesson", href: "/lesson", icon: BookOpen },
   { label: "Dhikr", href: "/dhikr", icon: Heart },

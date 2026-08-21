@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import UnregisterServiceWorker from "@/components/sw-unregister";
@@ -9,7 +8,6 @@ import UnregisterServiceWorker from "@/components/sw-unregister";
 export default function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const router = useRouter();
 
   const [honeypotWebsite, setHoneypotWebsite] = useState("");
   const [honeypotCompany, setHoneypotCompany] = useState("");
@@ -62,7 +60,9 @@ export default function AdminLoginPage() {
         return;
       }
 
-      router.push("/admin");
+      // Hard navigation — not router.push (which fails silently)
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/admin";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("Request timed out. Check your connection and try again.");

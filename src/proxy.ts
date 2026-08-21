@@ -12,7 +12,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get('waqt-session')?.value;
 
-  const protectedPaths = ['/calendar', '/accountability', '/huddle', '/lesson', '/dhikr', '/talks', '/settings', '/onboarding'];
+  const protectedPaths = ['/today', '/calendar', '/accountability', '/huddle', '/lesson', '/dhikr', '/talks', '/settings', '/onboarding'];
   const authPaths = ['/login', '/signup'];
 
   const isProtected = protectedPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -25,9 +25,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect to home if accessing auth pages while already logged in
+  // Redirect to app home if accessing auth pages while already logged in
   if (isAuthPage && sessionCookie) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/today', request.url));
   }
 
   return NextResponse.next();

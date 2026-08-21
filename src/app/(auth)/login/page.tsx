@@ -1,26 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 
 export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const router = useRouter();
-
-  // ── Honeypot fields — hidden from humans, bots fill these ──
-  const [honeypotWebsite, setHoneypotWebsite] = useState("");
-  const [honeypotCompany, setHoneypotCompany] = useState("");
-
-  // ── Time-trap — record when the form rendered ──
-  // Use -1 as sentinel (not 0, which triggers the server's time-trap bot check).
-  // The useEffect sets the real timestamp after mount. If the user submits
-  // before the effect runs, the server sees -1 and treats it as a missing
-  // timestamp (bot-like) — but since we can't call Date.now() during render
-  // (React purity rules), this is the safest approach.
-  const renderedAtRef = useRef<number>(-1);
-  useEffect(() => { renderedAtRef.current = Date.now(); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,10 +15,6 @@ export default function LoginForm() {
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
 
-    // ── Fetch with timeout — prevents the button from getting stuck ──
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -41,49 +22,30 @@ export default function LoginForm() {
         body: JSON.stringify({
           email: formData.get("email"),
           password: formData.get("password"),
-          // Honeypots
-          website: honeypotWebsite,
-          company: honeypotCompany,
-          // Time-trap
-          renderedAt: renderedAtRef.current,
         }),
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
-      // Safely parse JSON — response might be empty if the server crashes
-      let data: { message?: string; error?: string; ok?: boolean } = {};
+      let data: { error?: string; ok?: boolean } = {};
       const text = await res.text();
       if (text) {
-        try {
-          data = JSON.parse(text);
-        } catch {
-          setError(`Server returned an unexpected response (status ${res.status}).`);
-          return;
-        }
+        try { data = JSON.parse(text); } catch { /* empty body */ }
       }
 
       if (!res.ok) {
-        setError(data.message || data.error || `Request failed with status ${res.status}.`);
+        setError(data.error || "Invalid email or password.");
         return;
       }
 
-      // Clear SW API cache to prevent cross-user data leakage
-      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: "CLEAR_API_CACHE" });
-      }
-
-      router.push("/");
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setError("Request timed out. Check your connection and try again.");
-      } else {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(`Connection failed: ${msg}. Try refreshing the page.`);
-      }
+      // HARD NAVIGATION — not router.push().
+      // This does a full page load, which:
+      // 1. Guarantees the browser sends the new session cookie
+      // 2. Avoids any client-side routing issues
+      // 3. Goes to /today which is the actual app home (not the marketing page at /)
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/today";
+    } catch {
+      setError("Network error. Check your connection and try again.");
     } finally {
-      clearTimeout(timeoutId);
       setPending(false);
     }
   }
@@ -96,28 +58,6 @@ export default function LoginForm() {
       <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
         Log in to continue your prayer tracking.
       </p>
-
-      {/* Honeypot fields — invisible to humans */}
-      <div className="honeypot" aria-hidden="true">
-        <label htmlFor="login-website">Website (leave empty)</label>
-        <input
-          id="login-website"
-          type="text"
-          tabIndex={-1}
-          autoComplete="off"
-          value={honeypotWebsite}
-          onChange={(e) => setHoneypotWebsite(e.target.value)}
-        />
-        <label htmlFor="login-company">Company (leave empty)</label>
-        <input
-          id="login-company"
-          type="text"
-          tabIndex={-1}
-          autoComplete="off"
-          value={honeypotCompany}
-          onChange={(e) => setHoneypotCompany(e.target.value)}
-        />
-      </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>

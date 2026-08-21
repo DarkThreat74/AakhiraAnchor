@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 import { ClawCaptcha } from "playcaptcha";
@@ -17,7 +16,6 @@ export default function SignupForm() {
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const router = useRouter();
 
   // ── Honeypot fields — hidden from humans, bots fill these ──
   const [honeypotWebsite, setHoneypotWebsite] = useState("");
@@ -117,8 +115,10 @@ export default function SignupForm() {
         return;
       }
 
-      // Server set the session cookie — redirect to onboarding
-      router.push("/onboarding");
+      // Server set the session cookie — hard navigation to onboarding
+      // (not router.push — that fails silently due to route conflicts)
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/onboarding";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("Request timed out. Check your connection and try again.");

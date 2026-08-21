@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { MapPin, Heart, Bell, ArrowRight, Check, Loader2 } from "lucide-react";
 
 type Step = "location" | "oath" | "notifications" | "done";
@@ -10,7 +10,7 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState<Step>("location");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  // router removed — using window.location.href for reliable hard navigation
 
   // Location state
   const [lat, setLat] = useState<number | null>(null);
@@ -356,7 +356,8 @@ export default function OnboardingWizard() {
             location. Open the calendar to see your day with prayer bands.
           </p>
           <button
-            onClick={() => router.push("/calendar/day")}
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+            onClick={() => { window.location.href = "/calendar/day"; }}
             className="mt-8 inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium transition-opacity hover:opacity-90"
             style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
           >
