@@ -9,11 +9,13 @@
  */
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { FadeIn, StaggerGroup, StaggerItem, ScaleIn, AmbientFade } from "@/components/animations";
+import { FadeIn, StaggerGroup, StaggerItem, ScaleIn } from "@/components/animations";
+import UnregisterServiceWorker from "@/components/sw-unregister";
 
 export default function MarketingPage() {
   return (
     <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
+      <UnregisterServiceWorker />
       {/* ── Nav ── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md"
@@ -48,70 +50,69 @@ export default function MarketingPage() {
       </header>
 
       {/* ── Hero — full viewport, Arabic calligraphy background ── */}
-      <section className="relative flex min-h-screen items-center overflow-hidden pt-20">
-        {/* Arabic background text — "حيا على الصلاة" (Come to prayer) repeated as a watermark */}
-        <AmbientFade delay={0.1} duration={0.6}>
+      <section
+        className="relative flex min-h-screen items-center overflow-hidden pt-20"
+        style={{
+          backgroundColor: "color-mix(in oklab, var(--color-paper) 70%, var(--color-accent-faint))",
+        }}
+      >
+        {/* Arabic background text — "حي على الصلاة" (Come to prayer) as a watermark */}
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+          style={{ overflow: "hidden" }}
+        >
           <div
-            className="absolute inset-0 flex items-center justify-center"
-            aria-hidden="true"
-            style={{ overflow: "hidden" }}
+            className="select-none whitespace-nowrap text-center"
+            style={{
+              fontFamily: "var(--font-amiri)",
+              fontSize: "clamp(8rem, 22vw, 22rem)",
+              color: "var(--color-accent)",
+              opacity: 0.12,
+              lineHeight: 1,
+              transform: "rotate(-5deg)",
+            }}
+            dir="rtl"
           >
-            <div
-              className="select-none whitespace-nowrap text-center"
-              style={{
-                fontFamily: "var(--font-amiri)",
-                fontSize: "clamp(8rem, 22vw, 22rem)",
-                color: "var(--color-accent)",
-                opacity: 0.06,
-                lineHeight: 1,
-                transform: "rotate(-5deg)",
-              }}
-              dir="rtl"
-            >
-              حي على الصلاة
-            </div>
+            حي على الصلاة
           </div>
-        </AmbientFade>
+        </div>
 
         {/* Secondary Arabic — smaller, positioned top-right */}
-        <AmbientFade delay={0.2} duration={0.5}>
-          <div
-            className="absolute right-6 top-32 hidden sm:block lg:right-16"
-            aria-hidden="true"
+        <div
+          className="absolute right-6 top-32 hidden sm:block lg:right-16"
+          aria-hidden="true"
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-amiri)",
+              fontSize: "clamp(1.5rem, 3vw, 2.5rem)",
+              color: "var(--color-warmth)",
+              opacity: 0.22,
+            }}
+            dir="rtl"
           >
-            <span
-              style={{
-                fontFamily: "var(--font-amiri)",
-                fontSize: "clamp(1.5rem, 3vw, 2.5rem)",
-                color: "var(--color-warmth)",
-                opacity: 0.15,
-              }}
-              dir="rtl"
-            >
-              إن الصلاة كانت على المؤمنين كتاباً موقوتاً
-            </span>
-          </div>
-        </AmbientFade>
+            إن الصلاة كانت على المؤمنين كتاباً موقوتاً
+          </span>
+        </div>
 
         {/* Tertiary Arabic — bottom-left, very faint */}
-        <AmbientFade delay={0.3} duration={0.5}>
-          <div
-            className="absolute bottom-24 left-6 hidden sm:block lg:left-16"
-            aria-hidden="true"
+        <div
+          className="absolute bottom-24 left-6 hidden sm:block lg:left-16"
+          aria-hidden="true"
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-amiri)",
+              fontSize: "clamp(1.2rem, 2.5vw, 2rem)",
+              color: "var(--color-accent)",
+              opacity: 0.15,
+            }}
+            dir="rtl"
           >
-            <span
-              style={{
-                fontFamily: "var(--font-amiri)",
-                fontSize: "clamp(1.2rem, 2.5vw, 2rem)",
-                color: "var(--color-accent)",
-                opacity: 0.08,
-              }}
-              dir="rtl"
-            >
-              الوقتُ كالسيف
-            </span>
-          </div>
-        </AmbientFade>
+            الوقتُ كالسيف
+          </span>
+        </div>
 
         <div className="relative z-10 w-full px-6 sm:px-10 lg:px-16">
           <div className="max-w-2xl">

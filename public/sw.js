@@ -20,16 +20,16 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v2";
+const CACHE_VERSION = "waqt-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
 // App shell — the minimal set of files for offline boot
+// NOTE: Public pages (/, /login, /signup) are NOT precached — the SW only
+// controls authenticated app pages. Caching auth pages causes stale login
+// forms and broken navigation.
 const PRECACHE_URLS = [
-  "/",
-  "/login",
-  "/signup",
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
@@ -231,7 +231,22 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/auth") || url.pathname.startsWith("/api/admin") || url.pathname.startsWith("/admin")) return;
 
   // ── Navigation requests: network-first ──
+  // BUT skip public pages (landing, login, signup, admin) — the SW should
+  // only control authenticated app pages. This prevents stale cached versions
+  // of auth pages from being served, and avoids interfering with login/signup.
   if (request.mode === "navigate") {
+    const pathname = url.pathname;
+    // Public pages — don't intercept, let the browser handle normally
+    if (
+      pathname === "/" ||
+      pathname === "/login" ||
+      pathname === "/signup" ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/api/")
+    ) {
+      return; // Let the browser handle it directly — no SW interference
+    }
+
     event.respondWith(
       fetch(request)
         .then((response) => {
