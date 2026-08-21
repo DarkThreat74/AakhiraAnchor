@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v3";
+const CACHE_VERSION = "waqt-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -229,6 +229,9 @@ self.addEventListener("fetch", (event) => {
 
   // Don't intercept auth/captcha/admin — always need fresh
   if (url.pathname.startsWith("/api/auth") || url.pathname.startsWith("/api/admin") || url.pathname.startsWith("/admin")) return;
+
+  // Don't intercept notification endpoints — always need fresh
+  if (url.pathname.startsWith("/api/notifications")) return;
 
   // ── Navigation requests: network-first ──
   // BUT skip public pages (landing, login, signup, admin) — the SW should

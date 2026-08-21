@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { count } from "drizzle-orm";
+import { count, ne } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { requireAdmin, AdminAuthError } from "@/lib/auth/admin";
 
@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin(request);
-    const [userRow] = await db.select({ value: count() }).from(schema.users);
+    // Count only non-admin users — admin accounts are not "users"
+    const [userRow] = await db.select({ value: count() }).from(schema.users).where(ne(schema.users.role, "admin"));
     const [lessonRow] = await db.select({ value: count() }).from(schema.dailyLessons);
     const [dhikrRow] = await db.select({ value: count() }).from(schema.dhikrSequences);
     const [huddleRow] = await db.select({ value: count() }).from(schema.huddleTaskPool);
