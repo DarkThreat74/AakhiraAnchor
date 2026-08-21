@@ -66,7 +66,7 @@ const TYPE_BG: Record<string, string> = {
 
 type View = "day" | "month";
 
-export default function PublicCalendarClient({ token }: { token: string }) {
+export default function PublicCalendarClient({ token, displayName }: { token: string; displayName?: string }) {
   const [view, setView] = useState<View>("day");
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
@@ -122,7 +122,7 @@ export default function PublicCalendarClient({ token }: { token: string }) {
             </div>
             <div>
               <p className="text-sm font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-                Shared calendar
+                {displayName ? `${displayName}'s calendar` : "Shared calendar"}
               </p>
               <p className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
                 Read-only · Current + 3 months

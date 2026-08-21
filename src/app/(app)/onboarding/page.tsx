@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 
-import { MapPin, Heart, Bell, ArrowRight, Check, Loader2 } from "lucide-react";
+import { MapPin, Heart, Bell, ArrowRight, Check, Loader2, User } from "lucide-react";
 
-type Step = "location" | "oath" | "notifications" | "done";
+type Step = "name" | "location" | "oath" | "notifications" | "done";
 
 export default function OnboardingWizard() {
-  const [step, setStep] = useState<Step>("location");
+  const [step, setStep] = useState<Step>("name");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // router removed — using window.location.href for reliable hard navigation
+
+  // Name state
+  const [displayName, setDisplayName] = useState("");
 
   // Location state
   const [lat, setLat] = useState<number | null>(null);
@@ -119,10 +122,11 @@ export default function OnboardingWizard() {
         }),
       });
 
-      // Mark onboarding complete
+      // Mark onboarding complete (and save display name)
       await fetch("/api/onboarding/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName }),
       });
 
       setStep("done");
@@ -133,7 +137,7 @@ export default function OnboardingWizard() {
     }
   }
 
-  const steps: Step[] = ["location", "oath", "notifications", "done"];
+  const steps: Step[] = ["name", "location", "oath", "notifications", "done"];
   const currentIdx = steps.indexOf(step);
 
   return (
@@ -160,7 +164,59 @@ export default function OnboardingWizard() {
         </p>
       )}
 
-      {/* ── Step 1: Location ── */}
+      {/* ── Step 1: Name ── */}
+      {step === "name" && (
+        <div className="flex flex-col items-center text-center">
+          <div
+            className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: "var(--color-accent-faint)" }}
+          >
+            <User className="h-7 w-7" style={{ color: "var(--color-accent)" }} />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--color-ink)" }}>
+            What should we call you?
+          </h1>
+          <p className="mt-4 max-w-md text-base leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
+            Your name appears on your shared calendar so friends and family know whose schedule they&apos;re looking at.
+          </p>
+
+          <div className="mt-8 w-full max-w-sm">
+            <input
+              type="text"
+              placeholder="Your name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoFocus
+              maxLength={50}
+              className="w-full rounded-xl border px-4 py-3.5 text-center text-base outline-none focus:border-[var(--color-accent)]"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 48 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && displayName.trim()) {
+                  setStep("location");
+                }
+              }}
+            />
+            <button
+              onClick={() => {
+                if (!displayName.trim()) {
+                  setError("Please enter your name to continue.");
+                  return;
+                }
+                setError(null);
+                setStep("location");
+              }}
+              disabled={pending}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+            >
+              Continue
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 2: Location ── */}
       {step === "location" && (
         <div className="flex flex-col items-center text-center">
           <div
@@ -229,7 +285,7 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* ── Step 2: Oath ── */}
+      {/* ── Step 3: Oath ── */}
       {step === "oath" && (
         <div className="flex flex-col items-center text-center">
           <div
@@ -292,7 +348,7 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* ── Step 3: Notifications ── */}
+      {/* ── Step 4: Notifications ── */}
       {step === "notifications" && (
         <div className="flex flex-col items-center text-center">
           <div

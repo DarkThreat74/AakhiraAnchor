@@ -58,13 +58,15 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').unique().notNull(),
   passwordHash: text('password_hash').notNull(),
+  // Display name — collected during onboarding, used in public calendar URL and header
+  displayName: text('display_name'),
   phone: text('phone'),
   phoneVerified: boolean('phone_verified').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   subscriptionTier: subscriptionTier('subscription_tier').default('free').notNull(),
   onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
   role: userRole('role').default('user').notNull(),
-  // Public calendar share token — null = sharing disabled, non-null = public read-only calendar at /user/public/[token]
+  // Public calendar share token — null = sharing disabled, non-null = public read-only calendar at /user/[name]/[token]
   publicShareToken: text('public_share_token').unique(),
 });
 

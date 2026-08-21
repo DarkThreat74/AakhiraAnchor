@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { randomInt } from "crypto";
+import { slugifyName } from "@/lib/slugify";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   }
 
+  // Get the user's display name for the URL
+  const [userRow] = await db
+    .select({ displayName: schema.users.displayName })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+
+  const nameSlug = slugifyName(userRow?.displayName || "shared");
+
   // Generate a random 5-digit number (10000–99999)
-  // Retry on collision (extremely unlikely with 90000 possible values)
   let token = String(randomInt(10000, 100000));
   for (let attempt = 0; attempt < 5; attempt++) {
     const [existing] = await db
@@ -38,7 +47,7 @@ export async function POST(request: NextRequest) {
     .set({ publicShareToken: token })
     .where(eq(schema.users.id, session.userId));
 
-  return NextResponse.json({ token, url: `/user/public/${token}` });
+  return NextResponse.json({ token, url: `/user/${nameSlug}/${token}` });
 }
 
 // DELETE /api/share/generate — disable sharing (clears the token)
@@ -64,7 +73,10 @@ export async function GET(request: NextRequest) {
   }
 
   const [user] = await db
-    .select({ publicShareToken: schema.users.publicShareToken })
+    .select({
+      publicShareToken: schema.users.publicShareToken,
+      displayName: schema.users.displayName,
+    })
     .from(schema.users)
     .where(eq(schema.users.id, session.userId))
     .limit(1);
@@ -73,9 +85,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
 
+  const nameSlug = slugifyName(user.displayName || "shared");
+
   return NextResponse.json({
     enabled: !!user.publicShareToken,
     token: user.publicShareToken,
-    url: user.publicShareToken ? `/user/public/${user.publicShareToken}` : null,
+    url: user.publicShareToken ? `/user/${nameSlug}/${user.publicShareToken}` : null,
   });
 }

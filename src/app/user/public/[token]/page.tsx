@@ -1,30 +1,16 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import PublicCalendarClient from "./PublicCalendarClient";
+import { slugifyName } from "@/lib/slugify";
 
 export const dynamic = "force-dynamic";
 
-// Generate metadata for the public calendar page
-export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const [user] = await db
-    .select({ id: schema.users.id })
-    .from(schema.users)
-    .where(eq(schema.users.publicShareToken, token))
-    .limit(1);
-
-  if (!user) {
-    return { title: "Calendar not found — Waqt" };
-  }
-
-  return {
-    title: "Shared calendar — Waqt",
-    description: "A prayer-centered calendar shared publicly. Read-only view.",
-  };
-}
-
-export default async function PublicCalendarPage({ params }: { params: Promise<{ token: string }> }) {
+// Legacy route — redirects to /user/[name]/[token]
+export default async function LegacyPublicCalendarPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
   const { token } = await params;
 
   // 5-digit numeric token
@@ -32,9 +18,9 @@ export default async function PublicCalendarPage({ params }: { params: Promise<{
     notFound();
   }
 
-  // Verify the token exists
+  // Look up the user by token to get their display name for the redirect
   const [user] = await db
-    .select({ id: schema.users.id })
+    .select({ id: schema.users.id, displayName: schema.users.displayName })
     .from(schema.users)
     .where(eq(schema.users.publicShareToken, token))
     .limit(1);
@@ -43,5 +29,7 @@ export default async function PublicCalendarPage({ params }: { params: Promise<{
     notFound();
   }
 
-  return <PublicCalendarClient token={token} />;
+  // Redirect to the new named URL
+  const slug = slugifyName(user.displayName || "shared");
+  redirect(`/user/${slug}/${token}`);
 }

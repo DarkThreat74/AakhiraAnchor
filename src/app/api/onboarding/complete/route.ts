@@ -17,9 +17,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   }
 
+  // Parse body for optional displayName
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+
+  const { displayName } = body as { displayName?: string };
+
+  // Validate and sanitize display name if provided
+  const trimmedName = displayName?.trim();
+  if (trimmedName && trimmedName.length > 50) {
+    return NextResponse.json({ error: "Name must be 50 characters or less." }, { status: 400 });
+  }
+
   await db
     .update(schema.users)
-    .set({ onboardingCompleted: true })
+    .set({
+      onboardingCompleted: true,
+      ...(trimmedName ? { displayName: trimmedName } : {}),
+    })
     .where(eq(schema.users.id, session.userId));
 
   return NextResponse.json({ ok: true });

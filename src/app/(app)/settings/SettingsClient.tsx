@@ -107,8 +107,8 @@ export default function SettingsClient({
       .then((r) => r.json())
       .then((data) => {
         setShareEnabled(data.enabled);
-        if (data.token) {
-          setShareUrl(`${window.location.origin}/user/public/${data.token}`);
+        if (data.url) {
+          setShareUrl(`${window.location.origin}${data.url}`);
         }
       })
       .catch(() => {})
@@ -315,7 +315,7 @@ export default function SettingsClient({
       const data = await res.json();
       if (res.ok && data.token) {
         setShareEnabled(true);
-        setShareUrl(`${window.location.origin}/user/public/${data.token}`);
+        setShareUrl(`${window.location.origin}${data.url}`);
       } else {
         setShareError(data.error || "Failed to generate link.");
       }
