@@ -57,8 +57,8 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const TYPE_BG: Record<string, string> = {
-  block: "color-mix(in oklab, var(--color-accent) 12%, var(--color-paper))",
-  task: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))",
+  block: "color-mix(in oklab, var(--color-accent) 14%, transparent)",
+  task: "color-mix(in oklab, var(--color-warmth) 14%, transparent)",
   reminder: "transparent",
 };
 
@@ -469,8 +469,8 @@ export default function DayViewClient({ date }: { date: string }) {
                 style={{
                   top,
                   height,
-                  left: `calc(${TIME_COL}px + ${leftPct}% * (100% - ${TIME_COL}px) / 100)`,
-                  width: `calc(${widthPct}% * (100% - ${TIME_COL}px) / 100 - 3px)`,
+                  left: `calc(${TIME_COL}px + (100% - ${TIME_COL}px) * ${leftPct / 100})`,
+                  width: `calc((100% - ${TIME_COL}px) * ${widthPct / 100} - 3px)`,
                   backgroundColor: bgColor,
                   borderColor,
                   borderLeftWidth: 3,
