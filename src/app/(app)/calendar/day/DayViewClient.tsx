@@ -103,6 +103,15 @@ export default function DayViewClient({ date }: { date: string }) {
     return h * 60 + m;
   }
 
+  // Format "04:50:00" → "4:50 AM" for display
+  function formatTime(time: string): string {
+    if (!time) return "—";
+    const [h, m] = time.split(":").map(Number);
+    const hour = h % 12 || 12;
+    const period = h < 12 ? "AM" : "PM";
+    return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+  }
+
   function minutesToTop(minutes: number): number {
     const startMinutes = HOURS[0] * 60;
     return ((minutes - startMinutes) / 60) * HOUR_HEIGHT;
@@ -197,7 +206,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   {prayer.label}
                 </span>
                 <span className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                  {time}
+                  {formatTime(time)}
                 </span>
               </div>
             );
@@ -272,7 +281,7 @@ export default function DayViewClient({ date }: { date: string }) {
                         border: `1px solid ${prayer.color}`,
                       }}
                     >
-                      {prayer.label} {time}
+                      {prayer.label} {formatTime(time)}
                     </span>
                   </div>
                 );

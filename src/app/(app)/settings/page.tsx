@@ -39,13 +39,20 @@ export default async function SettingsPage() {
       .limit(1);
 
     if (todayTimes) {
+      // Format times: "04:50:00" → "4:50 AM"
+      const fmt = (t: string) => {
+        const [h, m] = t.split(":").map(Number);
+        const hour = h % 12 || 12;
+        const period = h < 12 ? "AM" : "PM";
+        return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+      };
       todayPrayerTimes = {
-        fajr: todayTimes.fajr,
-        sunrise: todayTimes.sunrise,
-        dhuhr: todayTimes.dhuhr,
-        asr: todayTimes.asr,
-        maghrib: todayTimes.maghrib,
-        isha: todayTimes.isha,
+        fajr: fmt(todayTimes.fajr),
+        sunrise: fmt(todayTimes.sunrise),
+        dhuhr: fmt(todayTimes.dhuhr),
+        asr: fmt(todayTimes.asr),
+        maghrib: fmt(todayTimes.maghrib),
+        isha: fmt(todayTimes.isha),
       };
     }
   }
