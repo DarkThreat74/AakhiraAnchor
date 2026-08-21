@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Lock } from "lucide-react";
+import UnregisterServiceWorker from "@/components/sw-unregister";
 
 export default function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +51,16 @@ export default function AdminLoginPage() {
       }
 
       router.push("/admin");
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Connection failed: ${msg}. Try refreshing the page.`);
       setPending(false);
     }
   }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
+      <UnregisterServiceWorker />
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3">
           <div
