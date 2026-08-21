@@ -101,8 +101,10 @@ export default function SignupForm() {
 
       // Server set the session cookie — redirect to onboarding
       router.push("/onboarding");
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      // Show more specific error info to help debug
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError(`Connection failed: ${msg}. Check your connection and try again.`);
       setPending(false);
     }
   }

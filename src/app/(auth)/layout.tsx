@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import UnregisterServiceWorker from "@/components/sw-unregister";
 
 export const dynamic = "force-dynamic";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-full flex-col">
+      <UnregisterServiceWorker />
       {/* Back button — top left, always visible on auth pages */}
       <div className="px-6 pt-6">
         <Link

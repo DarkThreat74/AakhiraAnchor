@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Spectral, Amiri } from "next/font/google";
 import "./globals.css";
-import ServiceWorkerRegister from "@/components/sw-register";
 
 const spectral = Spectral({
   variable: "--font-spectral",
@@ -52,7 +51,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="min-h-full flex flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
         {children}
-        <ServiceWorkerRegister />
       </body>
     </html>
   );
