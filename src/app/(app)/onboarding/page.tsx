@@ -218,7 +218,9 @@ export default function OnboardingWizard() {
           </div>
 
           <button
-            onClick={() => setStep("oath")}
+            onClick={() => {
+              setError("Location is required to fetch prayer times. Please capture your location to continue.");
+            }}
             className="mt-6 text-sm font-medium transition-opacity hover:opacity-60"
             style={{ color: "var(--color-ink-muted)" }}
           >

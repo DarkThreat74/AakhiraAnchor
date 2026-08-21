@@ -59,31 +59,7 @@ export async function POST(request: NextRequest) {
     for (const prayerName of prayers) {
       const window = getPrayerWindow(prayerName, timings);
 
-      // Check if window has closed → mark as assumed_prayed
-      if (isWindowClosed(window, now)) {
-        const [existingLog] = await db
-          .select()
-          .from(schema.prayerLog)
-          .where(
-            and(
-              eq(schema.prayerLog.userId, settings.userId),
-              eq(schema.prayerLog.date, today),
-              eq(schema.prayerLog.prayerName, prayerName),
-            ),
-          )
-          .limit(1);
-
-        if (existingLog && existingLog.status === "pending") {
-          // Silently mark as assumed_prayed — no ledger charge
-          await db
-            .update(schema.prayerLog)
-            .set({ status: "assumed_prayed" })
-            .where(eq(schema.prayerLog.id, existingLog.id));
-        }
-        continue;
-      }
-
-      // Get current stage
+      // Query existing log ONCE for this prayer
       const [existingLog] = await db
         .select()
         .from(schema.prayerLog)
@@ -96,11 +72,25 @@ export async function POST(request: NextRequest) {
         )
         .limit(1);
 
+      // Check if window has closed → mark as assumed_prayed
+      if (isWindowClosed(window, now)) {
+        if (existingLog && existingLog.status === "pending") {
+          // Silently mark as assumed_prayed — no ledger charge
+          await db
+            .update(schema.prayerLog)
+            .set({ status: "assumed_prayed" })
+            .where(eq(schema.prayerLog.id, existingLog.id));
+        }
+        continue;
+      }
+
+      // Skip if already prayed
+      if (existingLog?.status === "prayed") continue;
+
       const currentStage = existingLog?.checkinStage || STAGES.NONE;
       const dueStage = getCheckinStage(window, now, currentStage);
 
       if (dueStage === STAGES.NONE) continue;
-      if (existingLog?.status === "prayed") continue;
 
       // Update checkin stage
       if (existingLog) {

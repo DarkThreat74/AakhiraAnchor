@@ -103,12 +103,21 @@ export default function DayViewClient({ date }: { date: string }) {
     return ((minutes - startMinutes) / 60) * HOUR_HEIGHT;
   }
 
+  // Convert ISO timestamp to "HH:MM" in local timezone
+  function isoToLocalTime(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "00:00";
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  }
+
   function getOverlappingEvents(event: CalendarEvent, allEvents: CalendarEvent[]): CalendarEvent[] {
-    const start = timeToMinutes(event.startAt.split("T")[1]?.slice(0, 5) || event.startAt.slice(11, 16));
-    const end = timeToMinutes(event.endAt.split("T")[1]?.slice(0, 5) || event.endAt.slice(11, 16));
+    const start = timeToMinutes(isoToLocalTime(event.startAt));
+    const end = timeToMinutes(isoToLocalTime(event.endAt));
     return allEvents.filter((e) => {
-      const eStart = timeToMinutes(e.startAt.split("T")[1]?.slice(0, 5) || e.startAt.slice(11, 16));
-      const eEnd = timeToMinutes(e.endAt.split("T")[1]?.slice(0, 5) || e.endAt.slice(11, 16));
+      const eStart = timeToMinutes(isoToLocalTime(e.startAt));
+      const eEnd = timeToMinutes(isoToLocalTime(e.endAt));
       return eStart < end && eEnd > start;
     });
   }
@@ -116,6 +125,12 @@ export default function DayViewClient({ date }: { date: string }) {
   async function handleAddEvent(e: React.FormEvent) {
     e.preventDefault();
     if (!newTitle.trim()) return;
+
+    // Validate end > start on client
+    if (timeToMinutes(newEnd) <= timeToMinutes(newStart)) {
+      setError("End time must be after start time.");
+      return;
+    }
 
     const startISO = `${date}T${newStart}:00`;
     const endISO = `${date}T${newEnd}:00`;
@@ -300,15 +315,19 @@ export default function DayViewClient({ date }: { date: string }) {
 
           {/* Events */}
           {events.map((event) => {
-            const startStr = event.startAt.split("T")[1]?.slice(0, 5) || event.startAt.slice(11, 16);
-            const endStr = event.endAt.split("T")[1]?.slice(0, 5) || event.endAt.slice(11, 16);
+            const startStr = isoToLocalTime(event.startAt);
+            const endStr = isoToLocalTime(event.endAt);
             const startMin = timeToMinutes(startStr);
             const endMin = timeToMinutes(endStr);
             const top = minutesToTop(startMin);
             const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 24);
 
-            // Calculate width for overlapping events
-            const overlapping = getOverlappingEvents(event, events);
+            // Calculate width for overlapping events — sort by start time for stable column assignment
+            const overlapping = getOverlappingEvents(event, events).sort((a, b) => {
+              const aStart = timeToMinutes(isoToLocalTime(a.startAt));
+              const bStart = timeToMinutes(isoToLocalTime(b.startAt));
+              return aStart - bStart;
+            });
             const index = overlapping.findIndex((e) => e.id === event.id);
             const widthPct = 100 / overlapping.length;
             const leftPct = index * widthPct;

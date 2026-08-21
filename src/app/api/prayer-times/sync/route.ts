@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,12 @@ export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rate limit: 5 syncs per hour per IP (sync fetches a whole month from AlAdhan)
+  const ip = getClientIp(request.headers);
+  if (!checkRateLimit("prayer-times-sync", ip, 5, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many sync requests." }, { status: 429 });
   }
 
   // Get user's prayer settings (location)
@@ -40,14 +47,13 @@ export async function POST(request: NextRequest) {
       settings.calculationMethod,
     );
 
-    // Upsert each day into the cache
-    for (const day of days) {
+    // Batch upsert — single query instead of N+1 select+insert per day
+    const values = days.map((day) => {
       const dateStr = day.date.gregorian.date; // "DD-MM-YYYY"
       const [dayNum, monthNum, yearNum] = dateStr.split("-").map(Number);
       const isoDate = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-
       const timings = day.timings;
-      const values = {
+      return {
         userId: session.userId,
         date: isoDate,
         fajr: parseTime(timings.Fajr),
@@ -57,28 +63,23 @@ export async function POST(request: NextRequest) {
         maghrib: parseTime(timings.Maghrib),
         isha: parseTime(timings.Isha),
       };
+    });
 
-      // Check if entry exists
-      const [existing] = await db
-        .select()
-        .from(schema.prayerTimesCache)
-        .where(
-          and(
-            eq(schema.prayerTimesCache.userId, session.userId),
-            eq(schema.prayerTimesCache.date, isoDate),
-          ),
-        )
-        .limit(1);
-
-      if (existing) {
-        await db
-          .update(schema.prayerTimesCache)
-          .set(values)
-          .where(eq(schema.prayerTimesCache.id, existing.id));
-      } else {
-        await db.insert(schema.prayerTimesCache).values(values);
-      }
-    }
+    await db
+      .insert(schema.prayerTimesCache)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [schema.prayerTimesCache.userId, schema.prayerTimesCache.date],
+        set: {
+          fajr: sql.raw("excluded.fajr"),
+          sunrise: sql.raw("excluded.sunrise"),
+          dhuhr: sql.raw("excluded.dhuhr"),
+          asr: sql.raw("excluded.asr"),
+          maghrib: sql.raw("excluded.maghrib"),
+          isha: sql.raw("excluded.isha"),
+          fetchedAt: new Date(),
+        },
+      });
 
     return NextResponse.json({ ok: true, daysCached: days.length });
   } catch (err) {

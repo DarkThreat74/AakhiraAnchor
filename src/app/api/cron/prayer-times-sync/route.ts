@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { verifyCronAuth } from "@/lib/cronAuth";
 import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
@@ -30,13 +30,13 @@ export async function POST(request: NextRequest) {
         settings.calculationMethod,
       );
 
-      for (const day of days) {
+      // Batch upsert — single query per user instead of N+1
+      const values = days.map((day) => {
         const dateStr = day.date.gregorian.date;
         const [dayNum, monthNum, yearNum] = dateStr.split("-").map(Number);
         const isoDate = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-
         const timings = day.timings;
-        const values = {
+        return {
           userId: settings.userId,
           date: isoDate,
           fajr: parseTime(timings.Fajr),
@@ -46,27 +46,24 @@ export async function POST(request: NextRequest) {
           maghrib: parseTime(timings.Maghrib),
           isha: parseTime(timings.Isha),
         };
+      });
 
-        const [existing] = await db
-          .select()
-          .from(schema.prayerTimesCache)
-          .where(
-            and(
-              eq(schema.prayerTimesCache.userId, settings.userId),
-              eq(schema.prayerTimesCache.date, isoDate),
-            ),
-          )
-          .limit(1);
+      await db
+        .insert(schema.prayerTimesCache)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [schema.prayerTimesCache.userId, schema.prayerTimesCache.date],
+          set: {
+            fajr: sql.raw("excluded.fajr"),
+            sunrise: sql.raw("excluded.sunrise"),
+            dhuhr: sql.raw("excluded.dhuhr"),
+            asr: sql.raw("excluded.asr"),
+            maghrib: sql.raw("excluded.maghrib"),
+            isha: sql.raw("excluded.isha"),
+            fetchedAt: new Date(),
+          },
+        });
 
-        if (existing) {
-          await db
-            .update(schema.prayerTimesCache)
-            .set(values)
-            .where(eq(schema.prayerTimesCache.id, existing.id));
-        } else {
-          await db.insert(schema.prayerTimesCache).values(values);
-        }
-      }
       successCount++;
     } catch {
       failCount++;

@@ -1,18 +1,20 @@
 import { getSession } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Sun, Sunrise, Sunset, Moon, CloudSun } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const prayers = [
-  { name: "Fajr", time: "—", icon: Sunrise, status: "pending" },
-  { name: "Dhuhr", time: "—", icon: Sun, status: "pending" },
-  { name: "Asr", time: "—", icon: CloudSun, status: "pending" },
-  { name: "Maghrib", time: "—", icon: Sunset, status: "pending" },
-  { name: "Isha", time: "—", icon: Moon, status: "pending" },
-];
+const PRAYER_ICONS = {
+  Fajr: Sunrise,
+  Dhuhr: Sun,
+  Asr: CloudSun,
+  Maghrib: Sunset,
+  Isha: Moon,
+} as const;
+
+const PRAYER_ORDER = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"] as const;
 
 export default async function AppHome() {
   const session = await getSession();
@@ -26,12 +28,63 @@ export default async function AppHome() {
     .limit(1);
   if (user && !user.onboardingCompleted) redirect("/onboarding");
 
+  // Get user's timezone from prayer settings
+  const [settings] = await db
+    .select({ timezone: schema.prayerSettings.timezone })
+    .from(schema.prayerSettings)
+    .where(eq(schema.prayerSettings.userId, session.userId))
+    .limit(1);
+
+  const userTimezone = settings?.timezone || "UTC";
+
+  // Get today's date in user's timezone
+  const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: userTimezone }));
+  const today = userNow.toISOString().split("T")[0];
+
+  // Fetch today's prayer times and prayer log in parallel
+  const [cachedTimes, prayerLogs] = await Promise.all([
+    db
+      .select()
+      .from(schema.prayerTimesCache)
+      .where(
+        and(
+          eq(schema.prayerTimesCache.userId, session.userId),
+          eq(schema.prayerTimesCache.date, today),
+        ),
+      )
+      .limit(1),
+    db
+      .select()
+      .from(schema.prayerLog)
+      .where(
+        and(
+          eq(schema.prayerLog.userId, session.userId),
+          eq(schema.prayerLog.date, today),
+        ),
+      ),
+  ]);
+
+  const prayerTimes = cachedTimes[0] || null;
+  const logMap = new Map(prayerLogs.map((l) => [l.prayerName, l.status]));
+
+  const prayers = PRAYER_ORDER.map((name) => {
+    const key = name.toLowerCase() as "fajr" | "dhuhr" | "asr" | "maghrib" | "isha";
+    const time = prayerTimes ? prayerTimes[key] : null;
+    const status = logMap.get(key) || "pending";
+    return {
+      name,
+      time: time || "—",
+      icon: PRAYER_ICONS[name],
+      status,
+    };
+  });
+
   return (
     <div className="mx-auto max-w-2xl px-5 py-8 sm:px-6 sm:py-10 lg:py-12">
       {/* ── Greeting ── */}
       <div className="mb-8">
         <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-          {greeting()}
+          {greeting(userNow.getHours())}
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--color-ink)" }}>
           {session?.email?.split("@")[0] ?? "Friend"}
@@ -51,7 +104,7 @@ export default async function AppHome() {
             Today&apos;s Prayers
           </h2>
           <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
-            Set location to see times
+            {prayerTimes ? new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "Set location to see times"}
           </span>
         </div>
 
@@ -61,41 +114,6 @@ export default async function AppHome() {
           ))}
         </div>
       </section>
-
-      {/* ── Coming next ── */}
-      <section className="mt-6 rounded-2xl border p-5 sm:p-6" style={{ borderColor: "var(--color-paper-3)" }}>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-          What&apos;s coming
-        </h2>
-        <div className="flex flex-col gap-3 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-          <ComingItem text="Calendar with prayer-time bands as the grid" />
-          <ComingItem text="Tap-to-add events with side-by-side overlap stacking" />
-          <ComingItem text="Prayer check-in state machine with reminders" />
-          <ComingItem text="Oath ledger and qadaa tracking" />
-          <ComingItem text="Daily lessons, dhikr counter, and talks library" />
-        </div>
-      </section>
-
-      {/* ── Onboarding prompt ── */}
-      <div className="mt-6">
-        <a
-          href="/onboarding"
-          className="flex items-center justify-between rounded-2xl border p-5 transition-colors hover:bg-[var(--color-paper-2)]"
-          style={{ borderColor: "var(--color-accent)", backgroundColor: "var(--color-accent-faint)" }}
-        >
-          <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-              Complete onboarding
-            </p>
-            <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              Set your location, oath amount, and preferences
-            </p>
-          </div>
-          <span className="text-sm font-medium" style={{ color: "var(--color-accent)" }}>
-            Start →
-          </span>
-        </a>
-      </div>
 
       {/* ── Calendar link ── */}
       <div className="mt-4">
@@ -117,12 +135,32 @@ export default async function AppHome() {
           </span>
         </a>
       </div>
+
+      {/* ── Month view link ── */}
+      <div className="mt-4">
+        <a
+          href="/calendar/month"
+          className="flex items-center justify-between rounded-2xl border p-5 transition-colors hover:bg-[var(--color-paper-2)]"
+          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+        >
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Month view
+            </p>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              Overview of the whole month
+            </p>
+          </div>
+          <span className="text-sm font-medium" style={{ color: "var(--color-accent)" }}>
+            →
+          </span>
+        </a>
+      </div>
     </div>
   );
 }
 
-function greeting() {
-  const hour = new Date().getHours();
+function greeting(hour: number): string {
   if (hour < 5) return "The night is quiet";
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
@@ -141,7 +179,29 @@ function PrayerRow({
   icon: typeof Sun;
   status: string;
 }) {
-  const isPending = status === "pending";
+  const isPrayed = status === "prayed";
+  const isAssumed = status === "assumed_prayed";
+  const isMissed = status === "missed";
+
+  const statusLabel = isPrayed
+    ? "Prayed"
+    : isAssumed
+      ? "Assumed prayed"
+      : isMissed
+        ? "Missed"
+        : "Pending";
+
+  const statusColor = isPrayed
+    ? "var(--color-success)"
+    : isMissed
+      ? "var(--color-error)"
+      : isAssumed
+        ? "var(--color-ink-muted)"
+        : "var(--color-ink-muted)";
+
+  const statusBg = isPrayed
+    ? "var(--color-accent-faint)"
+    : "var(--color-paper-3)";
 
   return (
     <div
@@ -159,7 +219,7 @@ function PrayerRow({
           <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
             {name}
           </p>
-          <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+          <p className="text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
             {time}
           </p>
         </div>
@@ -168,24 +228,12 @@ function PrayerRow({
       <span
         className="rounded-full px-3 py-1 text-xs font-medium"
         style={{
-          backgroundColor: isPending ? "var(--color-paper-3)" : "var(--color-accent-faint)",
-          color: isPending ? "var(--color-ink-muted)" : "var(--color-accent)",
+          backgroundColor: statusBg,
+          color: statusColor,
         }}
       >
-        {isPending ? "Pending" : "Prayed"}
+        {statusLabel}
       </span>
-    </div>
-  );
-}
-
-function ComingItem({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ backgroundColor: "var(--color-accent)" }}
-      />
-      {text}
     </div>
   );
 }

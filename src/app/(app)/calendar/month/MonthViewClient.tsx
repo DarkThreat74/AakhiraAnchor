@@ -45,7 +45,9 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month - 1, 1).getDay();
-  const today = new Date().toISOString().split("T")[0];
+  // Use local date, not UTC (toISOString returns UTC which can be off by a day)
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
