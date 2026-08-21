@@ -8,11 +8,17 @@
  * Arabic background text, scale-in for focal elements.
  */
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { FadeIn, StaggerGroup, StaggerItem, ScaleIn } from "@/components/animations";
 import UnregisterServiceWorker from "@/components/sw-unregister";
+import { getSession } from "@/lib/auth/session";
 
-export default function MarketingPage() {
+export default async function MarketingPage() {
+  // If already logged in, skip the marketing page and go straight to the calendar
+  const session = await getSession();
+  if (session) redirect("/calendar/day");
+
   return (
     <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
       <UnregisterServiceWorker />

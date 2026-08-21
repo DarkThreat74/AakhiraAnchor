@@ -151,11 +151,11 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
           ))}
         </div>
 
-        {/* Calendar grid — taller cells on desktop to fit event titles */}
-        <div className="grid grid-cols-7 gap-1">
+        {/* Calendar grid — responsive cell heights */}
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {cells.map((cell, i) => {
             if (!cell.day) {
-              return <div key={i} className="min-h-[60px] sm:min-h-[90px]" />;
+              return <div key={i} className="min-h-[70px] sm:min-h-[100px] lg:min-h-[120px]" />;
             }
 
             const isToday = cell.dateStr === today;
@@ -165,7 +165,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
               <Link
                 key={i}
                 href={`/calendar/day?date=${cell.dateStr}`}
-                className="flex min-h-[60px] flex-col rounded-lg border p-1 text-xs transition-colors hover:bg-[var(--color-paper-2)] sm:min-h-[90px] sm:p-1.5"
+                className="flex min-h-[70px] flex-col rounded-lg border p-1 text-xs transition-colors hover:bg-[var(--color-paper-2)] sm:min-h-[100px] sm:p-1.5 lg:min-h-[120px]"
                 style={{
                   borderColor: isToday ? "var(--color-accent)" : "var(--color-paper-3)",
                   backgroundColor: isToday ? "var(--color-accent-faint)" : "var(--color-paper)",
@@ -190,13 +190,15 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       minute: "2-digit",
                       hour12: true,
                     });
+                    const color = typeColors[event.type] || "var(--color-accent)";
                     return (
                       <div
                         key={event.id}
                         className="truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
                         style={{
-                          backgroundColor: `color-mix(in oklab, ${typeColors[event.type] || "var(--color-accent)"} 15%, transparent)`,
-                          color: typeColors[event.type] || "var(--color-accent)",
+                          backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
+                          color: color,
+                          borderLeft: `2px solid ${color}`,
                         }}
                       >
                         <span className="tabular-nums">{time}</span> {event.title}

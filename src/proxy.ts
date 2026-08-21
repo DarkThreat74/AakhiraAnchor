@@ -29,6 +29,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/calendar/day', request.url));
   }
 
+  // Redirect to calendar if accessing the marketing page while already logged in
+  if (pathname === '/' && sessionCookie) {
+    return NextResponse.redirect(new URL('/calendar/day', request.url));
+  }
+
   return NextResponse.next();
 }
 
