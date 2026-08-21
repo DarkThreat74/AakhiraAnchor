@@ -39,7 +39,7 @@ export default function LoginForm() {
       // HARD NAVIGATION — full page load guarantees the browser sends
       // the new session cookie and avoids client-side routing issues.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/today";
+      window.location.href = "/calendar/day";
     } catch {
       setError("Network error. Check your connection and try again.");
     } finally {

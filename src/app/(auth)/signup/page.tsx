@@ -115,10 +115,9 @@ export default function SignupForm() {
         return;
       }
 
-      // Server set the session cookie — hard navigation to onboarding
-      // (not router.push — that fails silently due to route conflicts)
+      // Server set the session cookie — hard navigation to calendar
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/onboarding";
+      window.location.href = "/calendar/day";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("Request timed out. Check your connection and try again.");

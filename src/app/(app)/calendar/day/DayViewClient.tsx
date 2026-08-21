@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, X, MapPin } from "lucide-react";
+import Link from "next/link";
 
 interface CalendarEvent {
   id: string;
@@ -20,35 +21,29 @@ interface PrayerTimes {
   isha: string;
 }
 
-interface PrayerLogEntry {
-  prayerName: "fajr" | "dhuhr" | "asr" | "maghrib" | "isha";
-  status: "prayed" | "missed" | "pending" | "assumed_prayed";
-}
-
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 5 AM to 10 PM
 const HOUR_HEIGHT = 64; // px per hour
+const LEFT_COL = 48; // px — time label column width
 
 const PRAYER_NAMES: Array<{
   key: keyof PrayerTimes;
   label: string;
-  arabic: string;
   color: string;
 }> = [
-  { key: "fajr", label: "Fajr", arabic: "الفجر", color: "var(--color-accent)" },
-  { key: "sunrise", label: "Sunrise", arabic: "الشروق", color: "var(--color-warmth)" },
-  { key: "dhuhr", label: "Dhuhr", arabic: "الظهر", color: "var(--color-accent)" },
-  { key: "asr", label: "Asr", arabic: "العصر", color: "var(--color-accent)" },
-  { key: "maghrib", label: "Maghrib", arabic: "المغرب", color: "var(--color-warmth)" },
-  { key: "isha", label: "Isha", arabic: "العشاء", color: "var(--color-accent)" },
+  { key: "fajr", label: "Fajr", color: "var(--color-accent)" },
+  { key: "sunrise", label: "Sunrise", color: "var(--color-warmth)" },
+  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)" },
+  { key: "asr", label: "Asr", color: "var(--color-accent)" },
+  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)" },
+  { key: "isha", label: "Isha", color: "var(--color-accent)" },
 ];
 
 export default function DayViewClient({ date }: { date: string }) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
-  const [prayerLog, setPrayerLog] = useState<PrayerLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [, setAddSlot] = useState<{ hour: number } | null>(null);
+  const [addSlot, setAddSlot] = useState<{ hour: number } | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newStart, setNewStart] = useState("09:00");
   const [newEnd, setNewEnd] = useState("10:00");
@@ -60,10 +55,9 @@ export default function DayViewClient({ date }: { date: string }) {
 
     (async () => {
       try {
-        const [eventsRes, prayerRes, logRes] = await Promise.all([
+        const [eventsRes, prayerRes] = await Promise.all([
           fetch(`/api/events?date=${date}`),
           fetch(`/api/prayer-times?date=${date}`).catch(() => null),
-          fetch(`/api/prayer-log?date=${date}`).catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -72,16 +66,16 @@ export default function DayViewClient({ date }: { date: string }) {
           const eventsData = await eventsRes.json();
           if (!cancelled) setEvents(eventsData);
         }
+
         if (prayerRes?.ok) {
           const prayerData = await prayerRes.json();
           if (!cancelled) setPrayerTimes(prayerData);
         } else {
-          // No cached prayer times for this date — try auto-syncing
+          // No cached prayer times — try auto-syncing
           if (!cancelled) setPrayerTimes(null);
           try {
             const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
             if (syncRes.ok && !cancelled) {
-              // Re-fetch prayer times after sync
               const retryRes = await fetch(`/api/prayer-times?date=${date}`);
               if (retryRes.ok) {
                 const retryData = await retryRes.json();
@@ -89,13 +83,10 @@ export default function DayViewClient({ date }: { date: string }) {
               }
             }
           } catch {
-            // Sync failed silently — user can retry from settings
+            // Sync failed — user needs to set location in settings
           }
         }
-        if (logRes?.ok) {
-          const logData = await logRes.json();
-          if (!cancelled) setPrayerLog(logData);
-        }
+
         if (!cancelled) setError(null);
       } catch {
         if (!cancelled) setError("Failed to load calendar data.");
@@ -140,7 +131,6 @@ export default function DayViewClient({ date }: { date: string }) {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    // Validate end > start on client
     if (timeToMinutes(newEnd) <= timeToMinutes(newStart)) {
       setError("End time must be after start time.");
       return;
@@ -182,82 +172,64 @@ export default function DayViewClient({ date }: { date: string }) {
     }
   }
 
-  async function handlePrayerCheckin(prayerName: PrayerLogEntry["prayerName"]) {
-    try {
-      const res = await fetch("/api/prayer-log/checkin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, prayerName, status: "prayed" }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setPrayerLog((prev) => {
-          const filtered = prev.filter((p) => p.prayerName !== updated.prayerName);
-          return [...filtered, updated];
-        });
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  function getPrayerStatus(name: string): string {
-    const entry = prayerLog.find((p) => p.prayerName === name);
-    return entry?.status || "pending";
-  }
+  // The content area width = 100% - LEFT_COL px
+  // For positioning events: left = LEFT_COL + (index/total) * remaining
+  // We use calc with px and percentages
 
   return (
-    <div className="mx-auto max-w-4xl px-3 py-4 sm:px-6 sm:py-6">
-      {/* Prayer status bar */}
+    <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
+      {/* Prayer times bar — only show if we have them */}
       {prayerTimes && (
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
-          {PRAYER_NAMES.filter((p) => p.key !== "sunrise").map((prayer) => {
-            const status = getPrayerStatus(prayer.key);
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+          {PRAYER_NAMES.map((prayer) => {
+            const time = prayerTimes[prayer.key];
+            if (!time) return null;
             return (
-              <button
+              <div
                 key={prayer.key}
-                onClick={() => handlePrayerCheckin(prayer.key as PrayerLogEntry["prayerName"])}
-                className="flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors hover:bg-[var(--color-paper-2)]"
+                className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-3 py-1.5"
                 style={{
-                  borderColor: status === "prayed" ? "var(--color-success)" : "var(--color-paper-3)",
-                  backgroundColor: status === "prayed" ? "var(--color-accent-faint)" : "var(--color-paper)",
+                  borderColor: "var(--color-paper-3)",
+                  backgroundColor: "var(--color-paper)",
                 }}
               >
-                <span className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                <span className="text-xs font-medium" style={{ color: prayer.color }}>
                   {prayer.label}
                 </span>
                 <span className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                  {prayerTimes[prayer.key]}
+                  {time}
                 </span>
-                <span
-                  className="text-[10px] font-medium"
-                  style={{
-                    color: status === "prayed" ? "var(--color-success)" : "var(--color-ink-muted)",
-                  }}
-                >
-                  {status === "prayed" ? "✓ Prayed" : "Tap to mark"}
-                </span>
-              </button>
+              </div>
             );
           })}
         </div>
       )}
 
-      {!prayerTimes && (
+      {/* No location message — link to settings */}
+      {!prayerTimes && !loading && (
         <div
-          className="mb-6 flex items-center gap-2 rounded-xl border p-4 text-sm"
+          className="mb-4 flex items-center gap-2 rounded-xl border p-3 text-sm"
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-soft)" }}
         >
           <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
-          Set your location in onboarding to see prayer times on the calendar.
+          <span>
+            Set your location in{" "}
+            <Link href="/settings" className="font-medium underline underline-offset-2" style={{ color: "var(--color-accent)" }}>
+              Settings
+            </Link>{" "}
+            to see prayer times.
+          </span>
         </div>
       )}
 
-      {/* Day grid — horizontally scrollable on mobile to prevent overflow */}
+      {/* Day grid */}
       <div className="overflow-x-auto">
-        <div className="relative overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", minWidth: 320 }}>
+        <div
+          className="relative overflow-hidden rounded-2xl border"
+          style={{ borderColor: "var(--color-paper-3)", minWidth: 300 }}
+        >
           <div className="relative" style={{ height: HOURS.length * HOUR_HEIGHT }}>
-            {/* Hour lines */}
+            {/* Hour lines + labels */}
             {HOURS.map((hour, i) => (
               <div
                 key={hour}
@@ -265,10 +237,10 @@ export default function DayViewClient({ date }: { date: string }) {
                 style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
               >
                 <div
-                  className="w-12 shrink-0 pt-1 pr-2 text-right text-[10px] font-medium tabular-nums sm:w-14"
-                  style={{ color: "var(--color-ink-muted)" }}
+                  className="shrink-0 pt-1 pr-2 text-right text-[10px] font-medium tabular-nums"
+                  style={{ color: "var(--color-ink-muted)", width: LEFT_COL }}
                 >
-                  {hour === 12 ? "12P" : hour > 12 ? `${hour - 12}P` : `${hour}A`}
+                  {hour === 12 ? "12p" : hour > 12 ? `${hour - 12}p` : `${hour}a`}
                 </div>
                 <div
                   className="flex-1 border-t"
@@ -277,7 +249,7 @@ export default function DayViewClient({ date }: { date: string }) {
               </div>
             ))}
 
-            {/* Prayer bands */}
+            {/* Prayer time lines — horizontal lines across the grid */}
             {prayerTimes &&
               PRAYER_NAMES.map((prayer) => {
                 const time = prayerTimes[prayer.key];
@@ -288,20 +260,20 @@ export default function DayViewClient({ date }: { date: string }) {
                 return (
                   <div
                     key={prayer.key}
-                    className="absolute z-10 flex items-center gap-1 sm:gap-2"
-                    style={{ top: top - 10, left: "3rem", right: 0 }}
+                    className="absolute z-10 flex items-center"
+                    style={{ top: top - 8, left: LEFT_COL, right: 0 }}
                   >
-                    <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
+                    <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
                     <span
-                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium sm:text-[10px]"
                       style={{
-                        backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
+                        backgroundColor: "var(--color-paper)",
                         color: prayer.color,
+                        border: `1px solid ${prayer.color}`,
                       }}
                     >
-                      {prayer.label} · {time}
+                      {prayer.label} {time}
                     </span>
-                    <div className="h-px w-3 sm:w-4" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
                   </div>
                 );
               })}
@@ -311,7 +283,7 @@ export default function DayViewClient({ date }: { date: string }) {
               <button
                 key={`add-${hour}`}
                 className="absolute flex items-center justify-center opacity-0 transition-opacity hover:opacity-100"
-                style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 - 12, height: 24, left: "3rem", right: 0 }}
+                style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 - 12, height: 24, left: LEFT_COL, right: 0 }}
                 onClick={() => {
                   setAddSlot({ hour });
                   setNewStart(`${String(hour).padStart(2, "0")}:00`);
@@ -328,7 +300,7 @@ export default function DayViewClient({ date }: { date: string }) {
               </button>
             ))}
 
-            {/* Events */}
+            {/* Events — positioned absolutely on the grid */}
             {events.map((event) => {
               const startStr = isoToLocalTime(event.startAt);
               const endStr = isoToLocalTime(event.endAt);
@@ -337,6 +309,7 @@ export default function DayViewClient({ date }: { date: string }) {
               const top = minutesToTop(startMin);
               const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 24);
 
+              // Calculate width for overlapping events
               const overlapping = getOverlappingEvents(event, events).sort((a, b) => {
                 const aStart = timeToMinutes(isoToLocalTime(a.startAt));
                 const bStart = timeToMinutes(isoToLocalTime(b.startAt));
@@ -352,6 +325,8 @@ export default function DayViewClient({ date }: { date: string }) {
                 reminder: "var(--color-ink-muted)",
               };
 
+              const borderColor = typeColors[event.type] || "var(--color-accent)";
+
               return (
                 <div
                   key={event.id}
@@ -359,10 +334,10 @@ export default function DayViewClient({ date }: { date: string }) {
                   style={{
                     top,
                     height,
-                    left: `calc(3rem + ${leftPct}% * (100% - 3rem) / 100)`,
-                    width: `calc(${widthPct}% * (100% - 3rem) / 100 - 4px)`,
-                    backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)",
-                    borderColor: typeColors[event.type] || "var(--color-accent)",
+                    left: `calc(${LEFT_COL}px + ${leftPct}% * (100% - ${LEFT_COL}px) / 100)`,
+                    width: `calc(${widthPct}% * (100% - ${LEFT_COL}px) / 100 - 4px)`,
+                    backgroundColor: "var(--color-paper)",
+                    borderColor,
                     borderLeftWidth: 3,
                   }}
                 >
@@ -377,7 +352,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     </div>
                     <button
                       onClick={() => handleDeleteEvent(event.id)}
-                      className="shrink-0 opacity-50 transition-opacity hover:opacity-100"
+                      className="shrink-0 opacity-40 transition-opacity hover:opacity-100"
                       aria-label="Delete event"
                     >
                       <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
@@ -389,6 +364,22 @@ export default function DayViewClient({ date }: { date: string }) {
           </div>
         </div>
       </div>
+
+      {/* Add event button — always visible */}
+      <button
+        onClick={() => {
+          setAddSlot(null);
+          setNewTitle("");
+          setNewStart("09:00");
+          setNewEnd("10:00");
+          setShowAddForm(true);
+        }}
+        className="mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
+        style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+      >
+        <Plus className="h-4 w-4" />
+        Add event
+      </button>
 
       {loading && (
         <p className="mt-4 text-sm" style={{ color: "var(--color-ink-muted)" }}>
@@ -412,7 +403,7 @@ export default function DayViewClient({ date }: { date: string }) {
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
           >
             <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--color-ink)" }}>
-              New event
+              {addSlot ? `Add event at ${addSlot.hour}:00` : "New event"}
             </h2>
             <div className="flex flex-col gap-3">
               <input

@@ -1,17 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import LogoutButton from "./logout-button";
-import { Calendar, BookOpen, Heart, Settings, Home } from "lucide-react";
+import { Calendar, Settings } from "lucide-react";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
-// See CODEBASE_PATTERNS.md §7.2
 export const dynamic = "force-dynamic";
 
 const navItems = [
-  { label: "Today", href: "/today", icon: Home },
   { label: "Calendar", href: "/calendar/day", icon: Calendar },
-  { label: "Lesson", href: "/lesson", icon: BookOpen },
-  { label: "Dhikr", href: "/dhikr", icon: Heart },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -19,14 +14,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // Onboarding gate: individual protected pages check onboarding status
-  // and redirect to /onboarding if not completed. The layout just renders.
-
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "var(--color-paper)" }}>
       {/* ── Desktop sidebar ── */}
       <aside
-        className="fixed left-0 top-0 bottom-0 hidden w-60 flex-col border-r lg:flex"
+        className="fixed left-0 top-0 bottom-0 hidden w-56 flex-col border-r lg:flex"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
       >
         <div className="flex items-center px-6 py-6">
@@ -40,14 +32,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavItem key={item.href} {...item} />
           ))}
         </nav>
-
-        <div className="border-t px-3 py-4" style={{ borderColor: "var(--color-paper-3)" }}>
-          <LogoutButton />
-        </div>
       </aside>
 
       {/* ── Main content area ── */}
-      <div className="flex flex-1 flex-col lg:pl-60">
+      <div className="flex flex-1 flex-col lg:pl-56">
         {/* Mobile top bar */}
         <header
           className="sticky top-0 z-40 flex items-center justify-between border-b px-5 py-3 lg:hidden backdrop-blur-md"
@@ -59,11 +47,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span className="text-base font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
             Waqt
           </span>
-          <LogoutButton />
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-x-hidden pb-20 lg:pb-0">
+        <main className="flex-1 overflow-x-hidden pb-16 lg:pb-0">
           {children}
         </main>
       </div>
@@ -81,8 +68,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileNavItem key={item.href} {...item} />
         ))}
       </nav>
-
-      {/* Service worker removed — was causing login/navigation interference */}
     </div>
   );
 }

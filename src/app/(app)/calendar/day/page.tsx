@@ -1,6 +1,4 @@
 import { getSession } from "@/lib/auth/session";
-import { db, schema } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -11,14 +9,6 @@ export const dynamic = "force-dynamic";
 export default async function DayPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const session = await getSession();
   if (!session) redirect("/login");
-
-  // Gate: redirect to onboarding if not completed
-  const [user] = await db
-    .select({ onboardingCompleted: schema.users.onboardingCompleted })
-    .from(schema.users)
-    .where(eq(schema.users.id, session.userId))
-    .limit(1);
-  if (user && !user.onboardingCompleted) redirect("/onboarding");
 
   const params = await searchParams;
   const today = new Date().toISOString().split("T")[0];
@@ -42,27 +32,55 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div>
-      {/* Date header */}
+      {/* Date header with day/month toggle */}
       <div className="border-b" style={{ borderColor: "var(--color-paper-3)" }}>
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+          {/* Prev day */}
           <Link
             href={`/calendar/day?date=${prevStr}`}
-            className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
-          <div className="text-center">
-            <h1 className="text-lg font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-              {formattedDate}
-            </h1>
-            {date === today && (
-              <p className="text-xs" style={{ color: "var(--color-accent)" }}>Today</p>
-            )}
+
+          {/* Date + view toggle */}
+          <div className="flex flex-1 items-center justify-center gap-4">
+            <div className="text-center">
+              <h1 className="text-base font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
+                {formattedDate}
+              </h1>
+              {date === today && (
+                <p className="text-xs" style={{ color: "var(--color-accent)" }}>Today</p>
+              )}
+            </div>
+
+            {/* Day/Month toggle — visible on all screen sizes */}
+            <div
+              className="flex rounded-lg border"
+              style={{ borderColor: "var(--color-paper-3)" }}
+            >
+              <Link
+                href={`/calendar/day?date=${date}`}
+                className="rounded-l-lg px-3 py-1.5 text-xs font-medium"
+                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+              >
+                Day
+              </Link>
+              <Link
+                href={`/calendar/month?year=${dateObj.getFullYear()}&month=${dateObj.getMonth() + 1}`}
+                className="rounded-r-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ color: "var(--color-ink-soft)" }}
+              >
+                Month
+              </Link>
+            </div>
           </div>
+
+          {/* Next day */}
           <Link
             href={`/calendar/day?date=${nextStr}`}
-            className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
           >
             <ChevronRight className="h-5 w-5" />

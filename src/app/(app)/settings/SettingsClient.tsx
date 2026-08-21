@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Bell, RefreshCw, Check, AlertCircle } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2 } from "lucide-react";
 
 interface PrayerSettings {
   latitude: string;
@@ -11,254 +11,23 @@ interface PrayerSettings {
   madhab: string | null;
 }
 
-interface NotificationPrefs {
-  prayerEarlyMid: string;
-  prayerFinal: string;
-  otherReminders: string;
+interface PrayerTimes {
+  fajr: string;
+  sunrise: string;
+  dhuhr: string;
+  asr: string;
+  maghrib: string;
+  isha: string;
 }
 
-export default function SettingsClient({
-  prayerSettings,
-  notificationPrefs,
-}: {
-  prayerSettings: PrayerSettings | null;
-  notificationPrefs: NotificationPrefs | null;
-}) {
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [savingNotif, setSavingNotif] = useState(false);
-  const [notifResult, setNotifResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(
-    notificationPrefs || {
-      prayerEarlyMid: "push",
-      prayerFinal: "push",
-      otherReminders: "push",
-    },
-  );
-
-  async function handleSyncPrayerTimes() {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await fetch("/api/prayer-times/sync", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        setSyncResult({ ok: true, message: `Synced ${data.daysCached} days of prayer times.` });
-      } else {
-        setSyncResult({ ok: false, message: data.error || "Sync failed." });
-      }
-    } catch {
-      setSyncResult({ ok: false, message: "Network error." });
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  async function handleSaveNotifs() {
-    setSavingNotif(true);
-    setNotifResult(null);
-    try {
-      const res = await fetch("/api/onboarding/save-notifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(notifPrefs),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setNotifResult({ ok: true, message: "Notification preferences saved." });
-      } else {
-        setNotifResult({ ok: false, message: data.error || "Save failed." });
-      }
-    } catch {
-      setNotifResult({ ok: false, message: "Network error." });
-    } finally {
-      setSavingNotif(false);
-    }
-  }
-
-  return (
-    <div className="mx-auto max-w-2xl px-5 py-8 sm:px-6 sm:py-10">
-      <h1 className="mb-8 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-        Settings
-      </h1>
-
-      {/* ── Prayer Settings ── */}
-      <section
-        className="mb-6 rounded-2xl border p-5 sm:p-6"
-        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
-      >
-        <div className="mb-4 flex items-center gap-2">
-          <MapPin className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-            Prayer Location
-          </h2>
-        </div>
-
-        {prayerSettings ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Coordinates</span>
-              <span className="text-sm tabular-nums" style={{ color: "var(--color-ink)" }}>
-                {prayerSettings.latitude}, {prayerSettings.longitude}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Timezone</span>
-              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
-                {prayerSettings.timezone}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Calculation Method</span>
-              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
-                {METHOD_LABELS[prayerSettings.calculationMethod] || `Method ${prayerSettings.calculationMethod}`}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Madhab</span>
-              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
-                {prayerSettings.madhab === "hanafi" ? "Hanafi" : "Standard (Shafi'i)"}
-              </span>
-            </div>
-
-            {/* Sync button */}
-            <div className="mt-3">
-              <button
-                onClick={handleSyncPrayerTimes}
-                disabled={syncing}
-                className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
-              >
-                <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Syncing..." : "Sync prayer times"}
-              </button>
-              {syncResult && (
-                <p
-                  className="mt-2 flex items-center gap-1.5 text-xs"
-                  style={{ color: syncResult.ok ? "var(--color-success)" : "var(--color-error)" }}
-                >
-                  {syncResult.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-                  {syncResult.message}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            No location set. Complete onboarding to configure prayer times.
-          </p>
-        )}
-      </section>
-
-      {/* ── Notification Preferences ── */}
-      <section
-        className="mb-6 rounded-2xl border p-5 sm:p-6"
-        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
-      >
-        <div className="mb-4 flex items-center gap-2">
-          <Bell className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-            Notifications
-          </h2>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          {/* Early/Mid prayer reminders */}
-          <div>
-            <label className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-              Prayer reminders (early & mid)
-            </label>
-            <p className="mb-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              How you want to be reminded when a prayer window opens.
-            </p>
-            <select
-              value={notifPrefs.prayerEarlyMid}
-              onChange={(e) => setNotifPrefs({ ...notifPrefs, prayerEarlyMid: e.target.value })}
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              style={{
-                borderColor: "var(--color-paper-3)",
-                backgroundColor: "var(--color-paper)",
-                color: "var(--color-ink)",
-              }}
-            >
-              <option value="push">Push notification</option>
-              <option value="push_sms">Push + SMS</option>
-              <option value="sms">SMS only</option>
-            </select>
-          </div>
-
-          {/* Final prayer reminder */}
-          <div>
-            <label className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-              Final prayer reminder
-            </label>
-            <p className="mb-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              Last-call reminder before the prayer window closes.
-            </p>
-            <select
-              value={notifPrefs.prayerFinal}
-              onChange={(e) => setNotifPrefs({ ...notifPrefs, prayerFinal: e.target.value })}
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              style={{
-                borderColor: "var(--color-paper-3)",
-                backgroundColor: "var(--color-paper)",
-                color: "var(--color-ink)",
-              }}
-            >
-              <option value="push">Push notification</option>
-              <option value="push_sms">Push + SMS</option>
-              <option value="sms">SMS only</option>
-            </select>
-          </div>
-
-          {/* Other reminders */}
-          <div>
-            <label className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-              Other reminders
-            </label>
-            <p className="mb-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              Calendar events, huddle tasks, etc. Push only — no SMS.
-            </p>
-            <select
-              value={notifPrefs.otherReminders}
-              onChange={(e) => setNotifPrefs({ ...notifPrefs, otherReminders: e.target.value })}
-              disabled
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none opacity-70"
-              style={{
-                borderColor: "var(--color-paper-3)",
-                backgroundColor: "var(--color-paper)",
-                color: "var(--color-ink)",
-              }}
-            >
-              <option value="push">Push notification</option>
-            </select>
-          </div>
-
-          {/* Save button */}
-          <div>
-            <button
-              onClick={handleSaveNotifs}
-              disabled={savingNotif}
-              className="rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
-            >
-              {savingNotif ? "Saving..." : "Save notifications"}
-            </button>
-            {notifResult && (
-              <p
-                className="mt-2 flex items-center gap-1.5 text-xs"
-                style={{ color: notifResult.ok ? "var(--color-success)" : "var(--color-error)" }}
-              >
-                {notifResult.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-                {notifResult.message}
-              </p>
-            )}
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
+const PRAYER_LABELS: Array<{ key: keyof PrayerTimes; label: string }> = [
+  { key: "fajr", label: "Fajr" },
+  { key: "sunrise", label: "Sunrise" },
+  { key: "dhuhr", label: "Dhuhr" },
+  { key: "asr", label: "Asr" },
+  { key: "maghrib", label: "Maghrib" },
+  { key: "isha", label: "Isha" },
+];
 
 const METHOD_LABELS: Record<number, string> = {
   1: "University of Islamic Sciences, Karachi",
@@ -284,3 +53,481 @@ const METHOD_LABELS: Record<number, string> = {
   22: "Communauté Islamique de Genève",
   23: "Spiritual Administration of Muslims of Russia",
 };
+
+export default function SettingsClient({
+  prayerSettings,
+  todayPrayerTimes,
+}: {
+  prayerSettings: PrayerSettings | null;
+  todayPrayerTimes: PrayerTimes | null;
+}) {
+  // Location state
+  const [cityQuery, setCityQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [locationResult, setLocationResult] = useState<{
+    lat: string;
+    lng: string;
+    timezone: string;
+    displayName: string;
+  } | null>(null);
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [locationMsg, setLocationMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Prayer times sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Share link state
+  const [shareEnabled, setShareEnabled] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(true);
+  const [shareGenerating, setShareGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  // Logout state
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // Load share link status on mount
+  useState(() => {
+    fetch("/api/share/generate")
+      .then((r) => r.json())
+      .then((data) => {
+        setShareEnabled(data.enabled);
+        if (data.token) {
+          setShareUrl(`${window.location.origin}/user/public/${data.token}`);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setShareLoading(false));
+  });
+
+  // Search for a city using OpenStreetMap Nominatim (free, no API key)
+  async function handleCitySearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cityQuery.trim()) return;
+
+    setSearching(true);
+    setLocationResult(null);
+    setLocationMsg(null);
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityQuery)}&limit=1`,
+        { headers: { Accept: "application/json" } },
+      );
+      if (res.ok) {
+        const results = await res.json();
+        if (results.length > 0) {
+          const result = results[0];
+          // Get timezone from coordinates using a simple approach
+          // We'll use the browser's Intl API to guess timezone, or just use UTC
+          // The AlAdhan API doesn't need timezone — it calculates based on lat/lng
+          // We store timezone for display purposes
+          let timezone = "UTC";
+          try {
+            timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          } catch {
+            // keep UTC
+          }
+
+          setLocationResult({
+            lat: result.lat,
+            lng: result.lon,
+            timezone,
+            displayName: result.display_name,
+          });
+        } else {
+          setLocationMsg({ ok: false, text: "No results found. Try a different search." });
+        }
+      } else {
+        setLocationMsg({ ok: false, text: "Search failed. Try again." });
+      }
+    } catch {
+      setLocationMsg({ ok: false, text: "Network error. Try again." });
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  // Save location to DB
+  async function handleSaveLocation() {
+    if (!locationResult) return;
+    setSavingLocation(true);
+    setLocationMsg(null);
+
+    try {
+      const res = await fetch("/api/onboarding/save-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: locationResult.lat,
+          longitude: locationResult.lng,
+          timezone: locationResult.timezone,
+        }),
+      });
+
+      if (res.ok) {
+        setLocationMsg({ ok: true, text: "Location saved. Syncing prayer times..." });
+        // Auto-sync prayer times after saving location
+        const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          setLocationMsg({ ok: true, text: `Location saved. Prayer times synced (${syncData.daysCached} days).` });
+        } else {
+          setLocationMsg({ ok: true, text: "Location saved. Click 'Sync prayer times' to fetch times." });
+        }
+      } else {
+        const data = await res.json();
+        setLocationMsg({ ok: false, text: data.error || "Failed to save location." });
+      }
+    } catch {
+      setLocationMsg({ ok: false, text: "Network error." });
+    } finally {
+      setSavingLocation(false);
+    }
+  }
+
+  // Sync prayer times
+  async function handleSyncPrayerTimes() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/prayer-times/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncMsg({ ok: true, text: `Synced ${data.daysCached} days of prayer times.` });
+      } else {
+        setSyncMsg({ ok: false, text: data.error || "Sync failed." });
+      }
+    } catch {
+      setSyncMsg({ ok: false, text: "Network error." });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  // Share link handlers
+  async function handleGenerateShare() {
+    setShareGenerating(true);
+    setShareError(null);
+    try {
+      const res = await fetch("/api/share/generate", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        setShareEnabled(true);
+        setShareUrl(`${window.location.origin}/user/public/${data.token}`);
+      } else {
+        setShareError(data.error || "Failed to generate link.");
+      }
+    } catch {
+      setShareError("Network error.");
+    } finally {
+      setShareGenerating(false);
+    }
+  }
+
+  async function handleDisableShare() {
+    setShareError(null);
+    try {
+      const res = await fetch("/api/share/generate", { method: "DELETE" });
+      if (res.ok) {
+        setShareEnabled(false);
+        setShareUrl(null);
+      } else {
+        const data = await res.json();
+        setShareError(data.error || "Failed to disable sharing.");
+      }
+    } catch {
+      setShareError("Network error.");
+    }
+  }
+
+  async function handleCopy() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Logout
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/login";
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl px-5 py-8 sm:px-6 sm:py-10">
+      <h1 className="mb-8 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+        Settings
+      </h1>
+
+      {/* ── Location ── */}
+      <section
+        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="mb-4 flex items-center gap-2">
+          <MapPin className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
+          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+            Location
+          </h2>
+        </div>
+
+        {prayerSettings ? (
+          <div className="mb-4 flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Current coordinates</span>
+              <span className="text-sm tabular-nums" style={{ color: "var(--color-ink)" }}>
+                {prayerSettings.latitude}, {prayerSettings.longitude}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Timezone</span>
+              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
+                {prayerSettings.timezone}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Calculation Method</span>
+              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
+                {METHOD_LABELS[prayerSettings.calculationMethod] || `Method ${prayerSettings.calculationMethod}`}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="mb-4 text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            No location set. Search for your city to get prayer times.
+          </p>
+        )}
+
+        {/* City search */}
+        <form onSubmit={handleCitySearch} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Search for your city..."
+            value={cityQuery}
+            onChange={(e) => setCityQuery(e.target.value)}
+            className="flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+            style={{
+              borderColor: "var(--color-paper-3)",
+              backgroundColor: "var(--color-paper)",
+              color: "var(--color-ink)",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={searching}
+            className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+          >
+            {searching ? "Searching..." : "Search"}
+          </button>
+        </form>
+
+        {/* Search result */}
+        {locationResult && (
+          <div className="mt-3 rounded-lg border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+              {locationResult.displayName}
+            </p>
+            <p className="mt-1 text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+              {locationResult.lat}, {locationResult.lng} · {locationResult.timezone}
+            </p>
+            <button
+              onClick={handleSaveLocation}
+              disabled={savingLocation}
+              className="mt-3 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+            >
+              {savingLocation ? "Saving..." : "Save this location"}
+            </button>
+          </div>
+        )}
+
+        {locationMsg && (
+          <p
+            className="mt-3 flex items-center gap-1.5 text-xs"
+            style={{ color: locationMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+          >
+            {locationMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+            {locationMsg.text}
+          </p>
+        )}
+      </section>
+
+      {/* ── Today's Prayer Times ── */}
+      <section
+        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Today&apos;s Prayer Times
+            </h2>
+          </div>
+          <button
+            onClick={handleSyncPrayerTimes}
+            disabled={syncing || !prayerSettings}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+          >
+            <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Sync"}
+          </button>
+        </div>
+
+        {todayPrayerTimes ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {PRAYER_LABELS.map((prayer) => (
+              <div
+                key={prayer.key}
+                className="flex flex-col items-center gap-1 rounded-lg border p-3"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+              >
+                <span className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                  {prayer.label}
+                </span>
+                <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-accent)" }}>
+                  {todayPrayerTimes[prayer.key]}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            {prayerSettings
+              ? "No prayer times cached. Click Sync to fetch them."
+              : "Set your location above to get prayer times."}
+          </p>
+        )}
+
+        {syncMsg && (
+          <p
+            className="mt-3 flex items-center gap-1.5 text-xs"
+            style={{ color: syncMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+          >
+            {syncMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+            {syncMsg.text}
+          </p>
+        )}
+      </section>
+
+      {/* ── Public Calendar Link ── */}
+      <section
+        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <Link2 className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
+          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+            Public Calendar Link
+          </h2>
+        </div>
+
+        <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+          Share a read-only view of your calendar. Anyone with the link can see your schedule and prayer times — no editing, no account needed.
+        </p>
+
+        {shareLoading ? (
+          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>Loading...</p>
+        ) : shareEnabled && shareUrl ? (
+          <div className="flex flex-col gap-3">
+            <div
+              className="flex items-center gap-2 rounded-lg border px-3 py-2"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+            >
+              <span
+                className="min-w-0 flex-1 truncate text-xs"
+                style={{ color: "var(--color-ink-soft)" }}
+              >
+                {shareUrl}
+              </span>
+              <button
+                onClick={handleCopy}
+                className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--color-paper-3)]"
+                style={{ color: "var(--color-ink-soft)" }}
+              >
+                {copied ? (
+                  <><Check className="h-3 w-3" style={{ color: "var(--color-success)" }} /> Copied</>
+                ) : (
+                  <><Copy className="h-3 w-3" /> Copy</>
+                )}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <a
+                href={shareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)]"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open
+              </a>
+              <button
+                onClick={handleGenerateShare}
+                disabled={shareGenerating}
+                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+              >
+                <Link2 className="h-3 w-3" />
+                {shareGenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+              <button
+                onClick={handleDisableShare}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: "var(--color-error)" }}
+              >
+                <Trash2 className="h-3 w-3" />
+                Disable
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={handleGenerateShare}
+            disabled={shareGenerating}
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+          >
+            <Link2 className="h-4 w-4" />
+            {shareGenerating ? "Creating link..." : "Create public link"}
+          </button>
+        )}
+
+        {shareError && (
+          <p className="mt-3 text-xs" style={{ color: "var(--color-error)" }}>{shareError}</p>
+        )}
+      </section>
+
+      {/* ── Logout ── */}
+      <section
+        className="rounded-2xl border p-5 sm:p-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-error)" }}
+        >
+          <LogOut className="h-4 w-4" />
+          {loggingOut ? "Logging out..." : "Log out"}
+        </button>
+      </section>
+    </div>
+  );
+}

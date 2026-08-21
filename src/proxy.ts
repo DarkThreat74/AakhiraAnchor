@@ -2,17 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 /**
  * Proxy (formerly Middleware in Next.js 15 and earlier).
- * See Next.js 16 docs: middleware is now called "proxy".
  *
  * Used for optimistic auth checks — redirect unauthenticated users
- * away from /app routes. Full session verification happens server-side
+ * away from app routes. Full session verification happens server-side
  * in each route/action (defense in depth).
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get('waqt-session')?.value;
 
-  const protectedPaths = ['/today', '/calendar', '/accountability', '/huddle', '/lesson', '/dhikr', '/talks', '/settings', '/onboarding'];
+  const protectedPaths = ['/calendar', '/settings', '/onboarding'];
   const authPaths = ['/login', '/signup'];
 
   const isProtected = protectedPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -25,9 +24,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect to app home if accessing auth pages while already logged in
+  // Redirect to calendar if accessing auth pages while already logged in
   if (isAuthPage && sessionCookie) {
-    return NextResponse.redirect(new URL('/today', request.url));
+    return NextResponse.redirect(new URL('/calendar/day', request.url));
   }
 
   return NextResponse.next();
