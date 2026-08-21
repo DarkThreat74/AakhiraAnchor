@@ -14,8 +14,8 @@ import UnregisterServiceWorker from "@/components/sw-unregister";
 
 export default function MarketingPage() {
   return (
-    <UnregisterServiceWorker>
-      <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
+    <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
+      <UnregisterServiceWorker />
       {/* ── Nav ── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md"
@@ -371,7 +371,6 @@ export default function MarketingPage() {
         </div>
       </footer>
     </div>
-    </UnregisterServiceWorker>
   );
 }
 

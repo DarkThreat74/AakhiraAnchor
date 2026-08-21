@@ -1,44 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 /**
  * Unregisters any existing service worker on public pages.
  * The SW controls all pages with scope "/", so even though we don't
  * register it on public pages, a previously registered SW still intercepts
- * requests until it's unregistered and the page reloads.
+ * requests until it's unregistered.
  *
- * This component BLOCKS rendering of children until the SW check is complete.
- * This prevents the reload from interrupting form submission — if the user
- * starts filling out a form and the SW cleanup triggers a reload, the form
- * state would be lost. By blocking rendering, we ensure the user never sees
- * the form until the SW is fully cleared.
+ * This component runs cleanup in the BACKGROUND — it does NOT block page
+ * rendering. The SW itself already skips public pages (see sw.js), so
+ * even if the old SW is still registered for a moment, it won't interfere
+ * with navigation. This component just ensures the SW gets cleaned up.
  *
  * This component is used on: landing page, login, signup, admin login.
  */
-export default function UnregisterServiceWorker({ children }: { children: React.ReactNode }) {
-  // Start as null (checking), then become true (ready) once SW cleanup is done.
-  const [ready, setReady] = useState<boolean | null>(null);
-
+export default function UnregisterServiceWorker() {
   useEffect(() => {
-    // If no SW support, we're immediately ready — but defer the setState
-    // to a microtask to avoid the synchronous-in-effect lint rule.
-    if (!("serviceWorker" in navigator)) {
-      const id = window.setTimeout(() => setReady(true), 0);
-      return () => window.clearTimeout(id);
-    }
+    if (!("serviceWorker" in navigator)) return;
 
     let cancelled = false;
 
     async function cleanup() {
       try {
         const registrations = await navigator.serviceWorker.getRegistrations();
-        if (cancelled) return;
-
-        if (registrations.length === 0) {
-          setReady(true);
-          return;
-        }
+        if (cancelled || registrations.length === 0) return;
 
         // Unregister all SWs
         await Promise.all(
@@ -50,22 +36,8 @@ export default function UnregisterServiceWorker({ children }: { children: React.
           const names = await caches.keys();
           await Promise.all(names.map((n) => caches.delete(n)));
         }
-
-        if (cancelled) return;
-
-        // Reload once to fully detach the SW — use a flag to prevent loops
-        const flagKey = "waqt-sw-reloaded";
-        if (!sessionStorage.getItem(flagKey)) {
-          sessionStorage.setItem(flagKey, "1");
-          window.location.reload();
-        } else {
-          // Already reloaded once — clear the flag and proceed
-          sessionStorage.removeItem(flagKey);
-          setReady(true);
-        }
       } catch {
-        // If anything fails, just render — the SW might not be interfering
-        setReady(true);
+        // Ignore — SW cleanup is best-effort
       }
     }
 
@@ -74,14 +46,5 @@ export default function UnregisterServiceWorker({ children }: { children: React.
     return () => { cancelled = true; };
   }, []);
 
-  // Don't render children until SW check is complete
-  if (ready === null) {
-    return <div style={{ minHeight: "100vh", backgroundColor: "var(--color-paper)" }} />;
-  }
-
-  if (!ready) {
-    return null;
-  }
-
-  return <>{children}</>;
+  return null;
 }

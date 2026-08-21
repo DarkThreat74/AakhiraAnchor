@@ -77,8 +77,8 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <UnregisterServiceWorker>
-      <div className="flex min-h-screen flex-col overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
+    <div className="flex min-h-screen flex-col overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
+      <UnregisterServiceWorker />
       {/* ── Left rail — brand mark + access note ── */}
       <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-6">
         <div className="w-full max-w-sm">
@@ -220,7 +220,6 @@ export default function AdminLoginPage() {
           </div>
         </div>
       </div>
-      </div>
-    </UnregisterServiceWorker>
+    </div>
   );
 }
