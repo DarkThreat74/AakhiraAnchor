@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2 } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User } from "lucide-react";
 
 interface PrayerSettings {
   latitude: string;
@@ -59,15 +59,24 @@ function methodLabel(value: number): string {
 }
 
 export default function SettingsClient({
+  displayName: initialDisplayName,
   prayerSettings: initialSettings,
   todayPrayerTimes: initialTimes,
 }: {
+  displayName: string | null;
   prayerSettings: PrayerSettings | null;
   todayPrayerTimes: PrayerTimes | null;
 }) {
   // Track prayer settings in client state so they update after save
   const [prayerSettings, setPrayerSettings] = useState<PrayerSettings | null>(initialSettings);
   const [todayPrayerTimes, setTodayPrayerTimes] = useState<PrayerTimes | null>(initialTimes);
+
+  // Display name state
+  const [displayName, setDisplayName] = useState(initialDisplayName || "");
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(initialDisplayName || "");
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Location search state
   const [cityQuery, setCityQuery] = useState("");
@@ -365,320 +374,453 @@ export default function SettingsClient({
     window.location.href = "/login";
   }
 
+  // Save display name
+  async function handleSaveName() {
+    if (!nameInput.trim()) {
+      setNameMsg({ ok: false, text: "Name is required." });
+      return;
+    }
+    setSavingName(true);
+    setNameMsg(null);
+    try {
+      const res = await fetch("/api/settings/name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: nameInput }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDisplayName(data.displayName);
+        setEditingName(false);
+        setNameMsg({ ok: true, text: "Name updated." });
+        // Update share URL if sharing is enabled
+        if (shareEnabled) {
+          const shareRes = await fetch("/api/share/generate");
+          if (shareRes.ok) {
+            const shareData = await shareRes.json();
+            if (shareData.url) {
+              setShareUrl(`${window.location.origin}${shareData.url}`);
+            }
+          }
+        }
+        setTimeout(() => setNameMsg(null), 3000);
+      } else {
+        const data = await res.json();
+        setNameMsg({ ok: false, text: data.error || "Failed to save name." });
+      }
+    } catch {
+      setNameMsg({ ok: false, text: "Network error." });
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-2xl px-5 py-8 sm:px-6 sm:py-10">
-      <h1 className="mb-8 text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+    <div className="mx-auto max-w-2xl px-3 py-6 sm:px-6 sm:py-10">
+      <h1 className="mb-6 text-xl font-semibold tracking-tight sm:mb-8 sm:text-2xl" style={{ color: "var(--color-ink)" }}>
         Settings
       </h1>
 
-      {/* ── Location ── */}
+      {/* ── Name ── */}
       <section
-        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
       >
-        <div className="mb-4 flex items-center gap-2">
-          <MapPin className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-            Location
-          </h2>
-        </div>
-
-        {prayerSettings ? (
-          <div className="mb-4 flex flex-col gap-2">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Current coordinates</span>
-              <span className="text-sm tabular-nums" style={{ color: "var(--color-ink)" }}>
-                {prayerSettings.latitude}, {prayerSettings.longitude}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Timezone</span>
-              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
-                {prayerSettings.timezone}
-              </span>
-            </div>
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <User className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent)" }} />
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Name
+            </h2>
           </div>
-        ) : (
-          <p className="mb-4 text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            No location set. Search for your city to get prayer times.
+
+          <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+            This appears on your public calendar so people know whose schedule they&apos;re viewing.
           </p>
-        )}
 
-        {/* City search */}
-        <form onSubmit={handleCitySearch} className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Search for your city..."
-            value={cityQuery}
-            onChange={(e) => setCityQuery(e.target.value)}
-            className="flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
-            style={{
-              borderColor: "var(--color-paper-3)",
-              backgroundColor: "var(--color-paper)",
-              color: "var(--color-ink)",
-              minHeight: 44,
-            }}
-          />
-          <button
-            type="submit"
-            disabled={searching}
-            className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
-          >
-            {searching ? "Searching..." : "Search"}
-          </button>
-        </form>
+          {!editingName ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                {displayName || "Not set"}
+              </span>
+              <button
+                onClick={() => {
+                  setNameInput(displayName);
+                  setEditingName(true);
+                  setNameMsg(null);
+                }}
+                className="shrink-0 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)]"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 36 }}
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                autoFocus
+                maxLength={50}
+                placeholder="Your name"
+                className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveName();
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveName}
+                  disabled={savingName || !nameInput.trim()}
+                  className="rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
+                >
+                  {savingName ? "Saving..." : "Save"}
+                </button>
+                <button
+                  onClick={() => { setEditingName(false); setNameMsg(null); }}
+                  className="rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)]"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
-        {/* Search result */}
-        {locationResult && (
-          <div className="mt-3 rounded-lg border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-              {locationResult.displayName}
-            </p>
-            <p className="mt-1 text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-              {locationResult.lat}, {locationResult.lng} · {locationResult.timezone}
-            </p>
-            <button
-              onClick={handleSaveLocation}
-              disabled={savingLocation}
-              className="mt-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
+          {nameMsg && (
+            <p
+              className="mt-2 flex items-center gap-1.5 text-xs"
+              style={{ color: nameMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
             >
-              {savingLocation ? "Saving..." : "Save this location"}
-            </button>
-          </div>
-        )}
+              {nameMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+              {nameMsg.text}
+            </p>
+          )}
+        </div>
+      </section>
 
-        {locationMsg && (
-          <p
-            className="mt-3 flex items-center gap-1.5 text-xs"
-            style={{ color: locationMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
-          >
-            {locationMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-            {locationMsg.text}
-          </p>
-        )}
+      {/* ── Location ── */}
+      <section
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent)" }} />
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Location
+            </h2>
+          </div>
+
+          {prayerSettings ? (
+            <div className="mb-3 flex flex-col gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Coordinates</span>
+                <span className="break-all text-sm tabular-nums" style={{ color: "var(--color-ink)" }}>
+                  {prayerSettings.latitude}, {prayerSettings.longitude}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Timezone</span>
+                <span className="break-all text-sm" style={{ color: "var(--color-ink)" }}>
+                  {prayerSettings.timezone}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="mb-3 text-sm" style={{ color: "var(--color-ink-muted)" }}>
+              No location set. Search for your city to get prayer times.
+            </p>
+          )}
+
+          {/* City search */}
+          <form onSubmit={handleCitySearch} className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              placeholder="Search for your city..."
+              value={cityQuery}
+              onChange={(e) => setCityQuery(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                backgroundColor: "var(--color-paper)",
+                color: "var(--color-ink)",
+                minHeight: 44,
+              }}
+            />
+            <button
+              type="submit"
+              disabled={searching}
+              className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+            >
+              {searching ? "..." : "Search"}
+            </button>
+          </form>
+
+          {/* Search result */}
+          {locationResult && (
+            <div className="mt-3 rounded-lg border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+              <p className="break-words text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                {locationResult.displayName}
+              </p>
+              <p className="mt-1 break-all text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                {locationResult.lat}, {locationResult.lng} · {locationResult.timezone}
+              </p>
+              <button
+                onClick={handleSaveLocation}
+                disabled={savingLocation}
+                className="mt-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
+              >
+                {savingLocation ? "Saving..." : "Save this location"}
+              </button>
+            </div>
+          )}
+
+          {locationMsg && (
+            <p
+              className="mt-3 flex items-start gap-1.5 text-xs"
+              style={{ color: locationMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+            >
+              {locationMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
+              <span>{locationMsg.text}</span>
+            </p>
+          )}
+        </div>
       </section>
 
       {/* ── Calculation Method ── */}
       <section
-        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
       >
-        <div className="mb-4 flex items-center gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-            Calculation Method
-          </h2>
-        </div>
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Calculation Method
+            </h2>
+          </div>
 
-        <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-          Determines how prayer times are calculated for your location. ISNA is the default for North America.
-        </p>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <select
-            value={selectedMethod}
-            onChange={(e) => setSelectedMethod(parseInt(e.target.value, 10))}
-            className="flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
-            style={{
-              borderColor: "var(--color-paper-3)",
-              backgroundColor: "var(--color-paper)",
-              color: "var(--color-ink)",
-              minHeight: 44,
-            }}
-          >
-            {METHOD_OPTIONS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleSaveMethod}
-            disabled={savingMethod || !prayerSettings || selectedMethod === prayerSettings?.calculationMethod}
-            className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
-          >
-            {savingMethod ? "Saving..." : "Save method"}
-          </button>
-        </div>
-
-        {prayerSettings && (
-          <p className="mt-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-            Current: {methodLabel(prayerSettings.calculationMethod)}
+          <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+            Determines how prayer times are calculated. ISNA is the default for North America.
           </p>
-        )}
 
-        {methodMsg && (
-          <p
-            className="mt-3 flex items-center gap-1.5 text-xs"
-            style={{ color: methodMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
-          >
-            {methodMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-            {methodMsg.text}
-          </p>
-        )}
+          <div className="flex flex-col gap-2">
+            <select
+              value={selectedMethod}
+              onChange={(e) => setSelectedMethod(parseInt(e.target.value, 10))}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                backgroundColor: "var(--color-paper)",
+                color: "var(--color-ink)",
+                minHeight: 44,
+              }}
+            >
+              {METHOD_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleSaveMethod}
+              disabled={savingMethod || !prayerSettings || selectedMethod === prayerSettings?.calculationMethod}
+              className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-40 sm:w-auto sm:self-start"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+            >
+              {savingMethod ? "Saving..." : "Save method"}
+            </button>
+          </div>
+
+          {prayerSettings && (
+            <p className="mt-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              Current: {methodLabel(prayerSettings.calculationMethod)}
+            </p>
+          )}
+
+          {methodMsg && (
+            <p
+              className="mt-3 flex items-start gap-1.5 text-xs"
+              style={{ color: methodMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+            >
+              {methodMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
+              <span>{methodMsg.text}</span>
+            </p>
+          )}
+        </div>
       </section>
 
       {/* ── Today's Prayer Times ── */}
       <section
-        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-            Today&apos;s Prayer Times
-          </h2>
-          <button
-            onClick={handleSyncPrayerTimes}
-            disabled={syncing || !prayerSettings}
-            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
-          >
-            <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing..." : "Sync"}
-          </button>
-        </div>
-
-        {todayPrayerTimes ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {PRAYER_LABELS.map((prayer) => (
-              <div
-                key={prayer.key}
-                className="flex flex-col items-center gap-1 rounded-lg border p-3"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
-              >
-                <span className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
-                  {prayer.label}
-                </span>
-                <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-accent)" }}>
-                  {todayPrayerTimes[prayer.key]}
-                </span>
-              </div>
-            ))}
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Today&apos;s Prayer Times
+            </h2>
+            <button
+              onClick={handleSyncPrayerTimes}
+              disabled={syncing || !prayerSettings}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+            >
+              <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "..." : "Sync"}
+            </button>
           </div>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            {prayerSettings
-              ? "No prayer times cached. Click Sync to fetch them."
-              : "Set your location above to get prayer times."}
-          </p>
-        )}
 
-        {syncMsg && (
-          <p
-            className="mt-3 flex items-center gap-1.5 text-xs"
-            style={{ color: syncMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
-          >
-            {syncMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-            {syncMsg.text}
-          </p>
-        )}
+          {todayPrayerTimes ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {PRAYER_LABELS.map((prayer) => (
+                <div
+                  key={prayer.key}
+                  className="flex flex-col items-center gap-1 rounded-lg border p-2.5 sm:p-3"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+                >
+                  <span className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                    {prayer.label}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--color-accent)" }}>
+                    {todayPrayerTimes[prayer.key]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
+              {prayerSettings
+                ? "No prayer times cached. Click Sync to fetch them."
+                : "Set your location above to get prayer times."}
+            </p>
+          )}
+
+          {syncMsg && (
+            <p
+              className="mt-3 flex items-start gap-1.5 text-xs"
+              style={{ color: syncMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+            >
+              {syncMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
+              <span>{syncMsg.text}</span>
+            </p>
+          )}
+        </div>
       </section>
 
       {/* ── Public Calendar Link ── */}
       <section
-        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
       >
-        <div className="mb-3 flex items-center gap-2">
-          <Link2 className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
-          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-            Public Calendar Link
-          </h2>
-        </div>
-
-        <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-          Share a read-only view of your calendar. Anyone with the link can see your schedule and prayer times — no editing, no account needed.
-        </p>
-
-        {shareLoading ? (
-          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>Loading...</p>
-        ) : shareEnabled && shareUrl ? (
-          <div className="flex flex-col gap-3">
-            <div
-              className="flex items-center gap-2 rounded-lg border px-3 py-2"
-              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
-            >
-              <span
-                className="min-w-0 flex-1 truncate text-xs"
-                style={{ color: "var(--color-ink-soft)" }}
-              >
-                {shareUrl}
-              </span>
-              <button
-                onClick={handleCopy}
-                className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--color-paper-3)]"
-                style={{ color: "var(--color-ink-soft)" }}
-              >
-                {copied ? (
-                  <><Check className="h-3 w-3" style={{ color: "var(--color-success)" }} /> Copied</>
-                ) : (
-                  <><Copy className="h-3 w-3" /> Copy</>
-                )}
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <a
-                href={shareUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)]"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
-              >
-                <ExternalLink className="h-3 w-3" />
-                Open
-              </a>
-              <button
-                onClick={handleGenerateShare}
-                disabled={shareGenerating}
-                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
-              >
-                <Link2 className="h-3 w-3" />
-                {shareGenerating ? "Regenerating..." : "Regenerate"}
-              </button>
-              <button
-                onClick={handleDisableShare}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:opacity-80"
-                style={{ color: "var(--color-error)" }}
-              >
-                <Trash2 className="h-3 w-3" />
-                Disable
-              </button>
-            </div>
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Link2 className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent)" }} />
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Public Calendar Link
+            </h2>
           </div>
-        ) : (
-          <button
-            onClick={handleGenerateShare}
-            disabled={shareGenerating}
-            className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
-          >
-            <Link2 className="h-4 w-4" />
-            {shareGenerating ? "Creating link..." : "Create public link"}
-          </button>
-        )}
 
-        {shareError && (
-          <p className="mt-3 text-xs" style={{ color: "var(--color-error)" }}>{shareError}</p>
-        )}
+          <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+            Share a read-only view of your calendar. Anyone with the link can see your schedule and prayer times — no editing, no account needed.
+          </p>
+
+          {shareLoading ? (
+            <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>Loading...</p>
+          ) : shareEnabled && shareUrl ? (
+            <div className="flex flex-col gap-3">
+              <div
+                className="flex items-center gap-2 rounded-lg border px-3 py-2"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+              >
+                <span
+                  className="min-w-0 flex-1 truncate text-xs"
+                  style={{ color: "var(--color-ink-soft)" }}
+                >
+                  {shareUrl}
+                </span>
+                <button
+                  onClick={handleCopy}
+                  className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--color-paper-3)]"
+                  style={{ color: "var(--color-ink-soft)" }}
+                >
+                  {copied ? (
+                    <><Check className="h-3 w-3" style={{ color: "var(--color-success)" }} /> Copied</>
+                  ) : (
+                    <><Copy className="h-3 w-3" /> Copy</>
+                  )}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={shareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)]"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open
+                </a>
+                <button
+                  onClick={handleGenerateShare}
+                  disabled={shareGenerating}
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+                >
+                  <Link2 className="h-3 w-3" />
+                  {shareGenerating ? "..." : "Regenerate"}
+                </button>
+                <button
+                  onClick={handleDisableShare}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors hover:opacity-80"
+                  style={{ color: "var(--color-error)" }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Disable
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={handleGenerateShare}
+              disabled={shareGenerating}
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+            >
+              <Link2 className="h-4 w-4" />
+              {shareGenerating ? "Creating link..." : "Create public link"}
+            </button>
+          )}
+
+          {shareError && (
+            <p className="mt-3 text-xs" style={{ color: "var(--color-error)" }}>{shareError}</p>
+          )}
+        </div>
       </section>
 
       {/* ── Logout ── */}
       <section
-        className="rounded-2xl border p-5 sm:p-6"
+        className="overflow-hidden rounded-2xl border"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
       >
-        <button
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-error)" }}
-        >
-          <LogOut className="h-4 w-4" />
-          {loggingOut ? "Logging out..." : "Log out"}
-        </button>
+        <div className="p-4 sm:p-6">
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-error)" }}
+          >
+            <LogOut className="h-4 w-4" />
+            {loggingOut ? "Logging out..." : "Log out"}
+          </button>
+        </div>
       </section>
     </div>
   );

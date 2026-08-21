@@ -10,6 +10,13 @@ export default async function SettingsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
+  // Fetch user's display name
+  const [userRow] = await db
+    .select({ displayName: schema.users.displayName })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+
   // Fetch prayer settings
   const [prayerSettings] = await db
     .select()
@@ -59,6 +66,7 @@ export default async function SettingsPage() {
 
   return (
     <SettingsClient
+      displayName={userRow?.displayName || null}
       prayerSettings={prayerSettings || null}
       todayPrayerTimes={todayPrayerTimes}
     />
