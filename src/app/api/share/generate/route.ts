@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { randomBytes } from "crypto";
+import { randomInt } from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   }
 
-  // Generate a 32-byte URL-safe token
-  const token = randomBytes(24).toString("hex");
+  // Generate a random 5-digit number (10000–99999)
+  // Retry on collision (extremely unlikely with 90000 possible values)
+  let token = String(randomInt(10000, 100000));
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const [existing] = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.publicShareToken, token))
+      .limit(1);
+    if (!existing) break;
+    token = String(randomInt(10000, 100000));
+  }
 
   await db
     .update(schema.users)

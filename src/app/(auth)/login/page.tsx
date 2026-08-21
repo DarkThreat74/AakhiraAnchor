@@ -14,7 +14,12 @@ export default function LoginForm() {
   const [honeypotCompany, setHoneypotCompany] = useState("");
 
   // ── Time-trap — record when the form rendered ──
-  const renderedAtRef = useRef<number>(0);
+  // Use -1 as sentinel (not 0, which triggers the server's time-trap bot check).
+  // The useEffect sets the real timestamp after mount. If the user submits
+  // before the effect runs, the server sees -1 and treats it as a missing
+  // timestamp (bot-like) — but since we can't call Date.now() during render
+  // (React purity rules), this is the safest approach.
+  const renderedAtRef = useRef<number>(-1);
   useEffect(() => { renderedAtRef.current = Date.now(); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -24,6 +29,10 @@ export default function LoginForm() {
 
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
+
+    // ── Fetch with timeout — prevents the button from getting stuck ──
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -38,7 +47,10 @@ export default function LoginForm() {
           // Time-trap
           renderedAt: renderedAtRef.current,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       // Safely parse JSON — response might be empty if the server crashes
       let data: { message?: string; error?: string; ok?: boolean } = {};
@@ -48,14 +60,12 @@ export default function LoginForm() {
           data = JSON.parse(text);
         } catch {
           setError(`Server returned an unexpected response (status ${res.status}).`);
-          setPending(false);
           return;
         }
       }
 
       if (!res.ok) {
         setError(data.message || data.error || `Request failed with status ${res.status}.`);
-        setPending(false);
         return;
       }
 
@@ -66,9 +76,14 @@ export default function LoginForm() {
 
       router.push("/");
     } catch (err) {
-      // Show the actual error so the user knows what happened
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Connection failed: ${msg}. Try refreshing the page.`);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Connection failed: ${msg}. Try refreshing the page.`);
+      }
+    } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }

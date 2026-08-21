@@ -18,7 +18,8 @@ export async function GET(
   }
 
   const { token } = await params;
-  if (!token || token.length < 16) {
+  // 5-digit numeric token
+  if (!token || !/^\d{5}$/.test(token)) {
     return NextResponse.json({ error: "Invalid link." }, { status: 400 });
   }
 

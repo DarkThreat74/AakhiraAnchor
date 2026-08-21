@@ -24,7 +24,9 @@ export default function SignupForm() {
   const [honeypotCompany, setHoneypotCompany] = useState("");
 
   // ── Time-trap — record when the form rendered ──
-  const renderedAtRef = useRef<number>(0);
+  // Use -1 as sentinel (not 0, which triggers the server's time-trap bot check).
+  // The useEffect sets the real timestamp after mount.
+  const renderedAtRef = useRef<number>(-1);
   useEffect(() => { renderedAtRef.current = Date.now(); }, []);
 
   // ── Step 1: email ──
@@ -76,6 +78,10 @@ export default function SignupForm() {
 
     setPending(true);
 
+    // ── Fetch with timeout — prevents the button from getting stuck ──
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
@@ -89,7 +95,10 @@ export default function SignupForm() {
           // Time-trap
           renderedAt: renderedAtRef.current,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       // Safely parse JSON — response might be empty if the server crashes
       let data: { message?: string; error?: string; ok?: boolean } = {};
@@ -99,23 +108,26 @@ export default function SignupForm() {
           data = JSON.parse(text);
         } catch {
           setError(`Server returned an unexpected response (status ${res.status}).`);
-          setPending(false);
           return;
         }
       }
 
       if (!res.ok) {
         setError(data.message || data.error || `Request failed with status ${res.status}.`);
-        setPending(false);
         return;
       }
 
       // Server set the session cookie — redirect to onboarding
       router.push("/onboarding");
     } catch (err) {
-      // Show more specific error info to help debug
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      setError(`Connection failed: ${msg}. Check your connection and try again.`);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setError(`Connection failed: ${msg}. Check your connection and try again.`);
+      }
+    } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }

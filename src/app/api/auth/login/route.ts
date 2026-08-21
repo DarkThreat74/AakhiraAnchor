@@ -32,14 +32,22 @@ export async function POST(request: NextRequest) {
     website?: string; company?: string; renderedAt?: number;
   };
 
-  // ── Honeypot check — if filled, silently pretend success (bot trap) ──
+  // ── Honeypot check — if filled, reject as bot ──
   if (isHoneypotTripped({ website, company })) {
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(
+      { error: "Invalid email or password." },
+      { status: 401 },
+    );
   }
 
   // ── Time-trap — bots submit in <2s ──
-  if (isTimeTrapTripped(renderedAt, 2)) {
-    return NextResponse.json({ ok: true });
+  // Note: renderedAt = -1 means the client hasn't mounted yet (useEffect hasn't run).
+  // Treat -1 as valid (not a bot) to avoid false positives on fast connections.
+  if (renderedAt !== undefined && renderedAt !== -1 && isTimeTrapTripped(renderedAt, 2)) {
+    return NextResponse.json(
+      { error: "Invalid email or password." },
+      { status: 401 },
+    );
   }
 
   const normalizedEmail = email?.trim().toLowerCase();

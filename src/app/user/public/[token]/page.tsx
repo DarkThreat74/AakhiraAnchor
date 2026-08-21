@@ -27,7 +27,8 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
 export default async function PublicCalendarPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  if (!token || token.length < 16) {
+  // 5-digit numeric token
+  if (!token || !/^\d{5}$/.test(token)) {
     notFound();
   }
 

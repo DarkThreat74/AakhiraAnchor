@@ -14,7 +14,9 @@ export default function AdminLoginPage() {
   const [honeypotWebsite, setHoneypotWebsite] = useState("");
   const [honeypotCompany, setHoneypotCompany] = useState("");
 
-  const renderedAtRef = useRef<number>(0);
+  // Use -1 as sentinel (not 0, which triggers the server's time-trap bot check).
+  // The useEffect sets the real timestamp after mount.
+  const renderedAtRef = useRef<number>(-1);
   useEffect(() => { renderedAtRef.current = Date.now(); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -24,6 +26,9 @@ export default function AdminLoginPage() {
 
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const res = await fetch("/api/admin/auth", {
@@ -36,7 +41,10 @@ export default function AdminLoginPage() {
           company: honeypotCompany,
           renderedAt: renderedAtRef.current,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       let data: { error?: string; ok?: boolean } = {};
       const text = await res.text();
@@ -45,29 +53,32 @@ export default function AdminLoginPage() {
           data = JSON.parse(text);
         } catch {
           setError(`Server returned an unexpected response (status ${res.status}). Check that environment variables are set on Vercel.`);
-          setPending(false);
           return;
         }
       }
 
       if (!res.ok) {
         setError(data.error || `Request failed with status ${res.status}.`);
-        setPending(false);
         return;
       }
 
       router.push("/admin");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Connection failed: ${msg}. Try refreshing the page.`);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Connection failed: ${msg}. Try refreshing the page.`);
+      }
+    } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
-      <UnregisterServiceWorker />
-
+    <UnregisterServiceWorker>
+      <div className="flex min-h-screen flex-col overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
       {/* ── Left rail — brand mark + access note ── */}
       <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-6">
         <div className="w-full max-w-sm">
@@ -209,6 +220,7 @@ export default function AdminLoginPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </UnregisterServiceWorker>
   );
 }
