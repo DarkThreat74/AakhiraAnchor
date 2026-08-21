@@ -97,12 +97,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { title, startAt, endAt, type, recurrenceEndDate } = body as {
+  const { title, startAt, endAt, type, recurrenceEndDate, recurrenceDays } = body as {
     title?: string;
     startAt?: string;
     endAt?: string;
     type?: string;
     recurrenceEndDate?: string;
+    recurrenceDays?: number[];
   };
 
   if (!title?.trim()) {
@@ -150,26 +151,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Recurrence end date must be after start date." }, { status: 400 });
     }
 
-    // Generate weekly occurrences from startDate until recurEnd
+    // Determine which days of the week to repeat on
+    // recurrenceDays: array of 0-6 (0=Sunday, 6=Saturday)
+    // If not provided, default to the day of the start date
+    const startDayOfWeek = startDate.getDay();
+    const daysToRepeat = recurrenceDays && recurrenceDays.length > 0
+      ? [...new Set(recurrenceDays)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b)
+      : [startDayOfWeek];
+
+    if (daysToRepeat.length === 0) {
+      return NextResponse.json({ error: "Select at least one day to repeat on." }, { status: 400 });
+    }
+
+    // Generate occurrences: iterate day by day from startDate until recurEnd
+    // For each day, check if its day-of-week is in daysToRepeat
     const occurrences: Array<{ startAt: Date; endAt: Date }> = [];
     const durationMs = effectiveEnd.getTime() - startDate.getTime();
-    let currentStart = new Date(startDate);
+    const timeOfDayMs = (startDate.getHours() * 60 + startDate.getMinutes()) * 60 * 1000;
 
-    while (currentStart <= recurEnd) {
-      occurrences.push({
-        startAt: new Date(currentStart),
-        endAt: new Date(currentStart.getTime() + durationMs),
-      });
-      // Move to next week (same day of week)
-      currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // Start from the first day of the recurrence (the start date itself)
+    let currentDate = new Date(startDate);
+    currentDate.setHours(0, 0, 0, 0);
+
+    while (currentDate <= recurEnd) {
+      const dow = currentDate.getDay();
+      if (daysToRepeat.includes(dow)) {
+        // Create the event at the same time of day as the original
+        const occStart = new Date(currentDate.getTime() + timeOfDayMs);
+        // Don't create events before the original start date
+        if (occStart >= startDate) {
+          occurrences.push({
+            startAt: occStart,
+            endAt: new Date(occStart.getTime() + durationMs),
+          });
+        }
+      }
+      // Move to next day
+      currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
     }
 
     if (occurrences.length === 0) {
-      return NextResponse.json({ error: "No occurrences generated." }, { status: 400 });
+      return NextResponse.json({ error: "No occurrences generated before the end date." }, { status: 400 });
     }
 
-    // Cap at 52 occurrences (1 year of weekly events) to prevent abuse
-    const capped = occurrences.slice(0, 52);
+    // Cap at 365 occurrences to prevent abuse
+    const capped = occurrences.slice(0, 365);
 
     // Insert all occurrences
     const inserted = await db
@@ -181,7 +207,7 @@ export async function POST(request: NextRequest) {
           startAt: occ.startAt,
           endAt: occ.endAt,
           type: eventType,
-          recurrenceRule: `WEEKLY_UNTIL_${recurrenceEndDate}`,
+          recurrenceRule: `WEEKLY_${daysToRepeat.join(",")}_UNTIL_${recurrenceEndDate}`,
           createdVia: "manual" as const,
         })),
       )

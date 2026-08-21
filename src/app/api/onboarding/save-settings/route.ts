@@ -6,7 +6,7 @@ import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-// POST — save prayer settings (location, timezone)
+// POST — save prayer settings (location, timezone, calculation method)
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -25,10 +25,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { latitude, longitude, timezone } = body as {
+  const { latitude, longitude, timezone, calculationMethod } = body as {
     latitude?: string;
     longitude?: string;
     timezone?: string;
+    calculationMethod?: number;
   };
 
   if (!latitude || !longitude || !timezone) {
@@ -48,6 +49,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid timezone." }, { status: 400 });
   }
 
+  // Validate calculation method (AlAdhan method IDs)
+  const validMethods = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+  const method = calculationMethod && validMethods.includes(calculationMethod) ? calculationMethod : 2;
+
   // Upsert prayer settings
   const [existing] = await db
     .select()
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
   if (existing) {
     await db
       .update(schema.prayerSettings)
-      .set({ latitude, longitude, timezone, updatedAt: new Date() })
+      .set({ latitude, longitude, timezone, calculationMethod: method, updatedAt: new Date() })
       .where(eq(schema.prayerSettings.userId, session.userId));
   } else {
     await db.insert(schema.prayerSettings).values({
@@ -66,8 +71,9 @@ export async function POST(request: NextRequest) {
       latitude,
       longitude,
       timezone,
+      calculationMethod: method,
     });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, calculationMethod: method });
 }

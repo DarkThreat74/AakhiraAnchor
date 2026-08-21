@@ -83,6 +83,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [newType, setNewType] = useState<"block" | "task" | "reminder">("block");
   const [enableRecurrence, setEnableRecurrence] = useState(false);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
+  const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -196,7 +197,7 @@ export default function DayViewClient({ date }: { date: string }) {
       : `${date}T${newEnd}:00`;
 
     // Add recurrence end date if enabled
-    const body: Record<string, string> = {
+    const body: Record<string, unknown> = {
       title: newTitle,
       startAt: startISO,
       endAt: endISO,
@@ -204,6 +205,9 @@ export default function DayViewClient({ date }: { date: string }) {
     };
     if (enableRecurrence && recurrenceEndDate) {
       body.recurrenceEndDate = recurrenceEndDate;
+      if (recurrenceDays.length > 0) {
+        body.recurrenceDays = recurrenceDays;
+      }
     }
 
     try {
@@ -233,6 +237,7 @@ export default function DayViewClient({ date }: { date: string }) {
         setNewTitle("");
         setEnableRecurrence(false);
         setRecurrenceEndDate("");
+        setRecurrenceDays([]);
         setError(null);
         // Clear success message after 3 seconds
         if (data.events) {
@@ -504,6 +509,7 @@ export default function DayViewClient({ date }: { date: string }) {
           setNewType("block");
           setEnableRecurrence(false);
           setRecurrenceEndDate("");
+          setRecurrenceDays([]);
           setShowAddForm(true);
         }}
         className="mt-4 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-opacity hover:opacity-90"
@@ -525,142 +531,224 @@ export default function DayViewClient({ date }: { date: string }) {
       {/* Add event form — bottom sheet on mobile, centered modal on desktop */}
       {showAddForm && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
           onClick={() => setShowAddForm(false)}
         >
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleAddEvent}
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl border p-5 sm:rounded-2xl sm:p-6"
+            className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-t-3xl border p-5 sm:rounded-3xl sm:p-7"
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
           >
-            <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--color-ink)" }}>
+            {/* Drag handle on mobile */}
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full sm:hidden" style={{ backgroundColor: "var(--color-paper-3)" }} />
+
+            <h2 className="mb-5 text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
               New event
             </h2>
-            <div className="flex flex-col gap-3">
-              <input
-                type="text"
-                placeholder="Event title"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                autoFocus
-                required
-                className="rounded-lg border px-3 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
-              />
+
+            <div className="flex flex-col gap-4">
+              {/* Title */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                  Title
+                </label>
+                <input
+                  type="text"
+                  placeholder="What's this about?"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  autoFocus
+                  required
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
+                />
+              </div>
 
               {/* Type toggle: Block vs Reminder */}
               <div>
-                <label className="mb-1.5 block text-xs" style={{ color: "var(--color-ink-muted)" }}>Type</label>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                  Type
+                </label>
                 <div
-                  className="flex rounded-lg border overflow-hidden"
-                  style={{ borderColor: "var(--color-paper-3)" }}
+                  className="grid grid-cols-2 gap-2"
                 >
                   <button
                     type="button"
                     onClick={() => setNewType("block")}
-                    className="flex-1 px-3 py-2.5 text-sm font-medium transition-colors"
+                    className="rounded-xl border-2 px-3 py-3 text-sm font-medium transition-colors"
                     style={{
-                      backgroundColor: newType === "block" ? "var(--color-ink)" : "transparent",
+                      borderColor: newType === "block" ? "var(--color-ink)" : "var(--color-paper-3)",
+                      backgroundColor: newType === "block" ? "var(--color-ink)" : "var(--color-paper-2)",
                       color: newType === "block" ? "var(--color-paper)" : "var(--color-ink-soft)",
                       minHeight: 44,
                     }}
                   >
-                    Block
+                    <span className="block">Block</span>
+                    <span className="mt-0.5 block text-[10px] font-normal opacity-70">
+                      Takes a time slot
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setNewType("reminder")}
-                    className="flex-1 px-3 py-2.5 text-sm font-medium transition-colors"
+                    className="rounded-xl border-2 px-3 py-3 text-sm font-medium transition-colors"
                     style={{
-                      backgroundColor: newType === "reminder" ? "var(--color-ink)" : "transparent",
+                      borderColor: newType === "reminder" ? "var(--color-ink)" : "var(--color-paper-3)",
+                      backgroundColor: newType === "reminder" ? "var(--color-ink)" : "var(--color-paper-2)",
                       color: newType === "reminder" ? "var(--color-paper)" : "var(--color-ink-soft)",
                       minHeight: 44,
                     }}
                   >
-                    Reminder
+                    <span className="block">Reminder</span>
+                    <span className="mt-0.5 block text-[10px] font-normal opacity-70">
+                      Colored line, no slot
+                    </span>
                   </button>
                 </div>
-                <p className="mt-1 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
-                  {newType === "block"
-                    ? "Takes up a time slot on the calendar."
-                    : "Shows as a colored line — doesn't block time."}
-                </p>
               </div>
 
               {/* Time inputs — hide end time for reminders */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                  <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
                     {newType === "reminder" ? "Time" : "Start"}
                   </label>
                   <input
                     type="time"
                     value={newStart}
                     onChange={(e) => setNewStart(e.target.value)}
-                    className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
-                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
+                    className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                   />
                 </div>
                 {newType !== "reminder" && (
                   <div className="flex-1">
-                    <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>End</label>
+                    <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                      End
+                    </label>
                     <input
                       type="time"
                       value={newEnd}
                       onChange={(e) => setNewEnd(e.target.value)}
-                      className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
-                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
+                      className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                     />
                   </div>
                 )}
               </div>
 
               {/* Recurrence option */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div
+                className="rounded-xl border p-3"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+              >
+                <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
                     checked={enableRecurrence}
-                    onChange={(e) => setEnableRecurrence(e.target.checked)}
+                    onChange={(e) => {
+                      setEnableRecurrence(e.target.checked);
+                      if (e.target.checked && recurrenceDays.length === 0) {
+                        // Default to the current day of the week
+                        const dow = new Date(date + "T00:00:00").getDay();
+                        setRecurrenceDays([dow]);
+                      }
+                    }}
                     className="h-4 w-4 rounded"
                     style={{ accentColor: "var(--color-accent)" }}
                   />
-                  <span className="flex items-center gap-1.5 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                    <Repeat className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
-                    Repeat weekly
+                  <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                    <Repeat className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+                    Repeat
                   </span>
                 </label>
+
                 {enableRecurrence && (
-                  <div className="mt-2">
-                    <label className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Repeat every week until</label>
-                    <input
-                      type="date"
-                      value={recurrenceEndDate}
-                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                      required={enableRecurrence}
-                      className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
-                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
-                    />
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
-                      Creates this event every {new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" })} until the end date.
-                    </p>
+                  <div className="mt-3 flex flex-col gap-3">
+                    {/* Day-of-week picker */}
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                        Repeat on
+                      </label>
+                      <div className="flex gap-1">
+                        {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => {
+                          const isSelected = recurrenceDays.includes(idx);
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setRecurrenceDays(recurrenceDays.filter((d) => d !== idx));
+                                } else {
+                                  setRecurrenceDays([...recurrenceDays, idx].sort((a, b) => a - b));
+                                }
+                              }}
+                              className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-medium transition-colors sm:h-10 sm:w-10"
+                              style={{
+                                backgroundColor: isSelected ? "var(--color-ink)" : "var(--color-paper)",
+                                color: isSelected ? "var(--color-paper)" : "var(--color-ink-muted)",
+                                border: `1px solid ${isSelected ? "var(--color-ink)" : "var(--color-paper-3)"}`,
+                              }}
+                              aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][idx]}
+                            >
+                              {dayLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {recurrenceDays.length === 0 && (
+                        <p className="mt-1.5 text-[11px]" style={{ color: "var(--color-error)" }}>
+                          Select at least one day.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* End date */}
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                        Until
+                      </label>
+                      <input
+                        type="date"
+                        value={recurrenceEndDate}
+                        onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                        required={enableRecurrence}
+                        className="w-full rounded-xl border px-4 py-3 text-sm outline-none focus:border-[var(--color-accent)]"
+                        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
+                      />
+                    </div>
+
+                    {/* Summary */}
+                    {recurrenceDays.length > 0 && recurrenceEndDate && (
+                      <p className="text-[11px] leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+                        Creates this {newType} every{" "}
+                        {recurrenceDays
+                          .sort((a, b) => a - b)
+                          .map((d) => ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d])
+                          .join(", ")}{" "}
+                        until {new Date(recurrenceEndDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              {/* Action buttons */}
+              <div className="flex gap-2 pt-1">
                 <button
                   type="submit"
-                  className="flex-1 rounded-lg px-4 py-3 text-sm font-medium"
+                  disabled={enableRecurrence && (recurrenceDays.length === 0 || !recurrenceEndDate)}
+                  className="flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
                   style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
                 >
-                  {enableRecurrence ? "Add recurring" : "Add"}
+                  {enableRecurrence ? "Add recurring" : "Add event"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="rounded-lg border px-4 py-3 text-sm"
+                  className="rounded-xl border px-4 py-3 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
                   style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
                 >
                   Cancel

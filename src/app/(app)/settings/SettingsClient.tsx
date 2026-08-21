@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2 } from "lucide-react";
 
 interface PrayerSettings {
@@ -29,39 +29,47 @@ const PRAYER_LABELS: Array<{ key: keyof PrayerTimes; label: string }> = [
   { key: "isha", label: "Isha" },
 ];
 
-const METHOD_LABELS: Record<number, string> = {
-  1: "University of Islamic Sciences, Karachi",
-  2: "ISNA (North America)",
-  3: "Muslim World League",
-  4: "Umm Al-Qura, Makkah",
-  5: "Egyptian General Authority",
-  7: "University of Tehran",
-  8: "Gulf Region",
-  9: "Kuwait",
-  10: "Qatar",
-  11: "Singapore",
-  12: "France",
-  13: "Turkey",
-  14: "Russia",
-  15: "Moonsighting Committee Worldwide",
-  16: "Dubai",
-  17: "JAKIM (Malaysia)",
-  18: "Tunisia",
-  19: "Algeria",
-  20: "KEMENAG (Indonesia)",
-  21: "Morocco",
-  22: "Communauté Islamique de Genève",
-  23: "Spiritual Administration of Muslims of Russia",
-};
+const METHOD_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 2, label: "ISNA (North America)" },
+  { value: 3, label: "Muslim World League" },
+  { value: 4, label: "Umm Al-Qura, Makkah" },
+  { value: 1, label: "University of Islamic Sciences, Karachi" },
+  { value: 5, label: "Egyptian General Authority" },
+  { value: 7, label: "University of Tehran" },
+  { value: 8, label: "Gulf Region" },
+  { value: 9, label: "Kuwait" },
+  { value: 10, label: "Qatar" },
+  { value: 16, label: "Dubai" },
+  { value: 11, label: "Singapore" },
+  { value: 12, label: "France" },
+  { value: 13, label: "Turkey" },
+  { value: 14, label: "Russia" },
+  { value: 15, label: "Moonsighting Committee Worldwide" },
+  { value: 17, label: "JAKIM (Malaysia)" },
+  { value: 18, label: "Tunisia" },
+  { value: 19, label: "Algeria" },
+  { value: 20, label: "KEMENAG (Indonesia)" },
+  { value: 21, label: "Morocco" },
+  { value: 22, label: "Communauté Islamique de Genève" },
+  { value: 23, label: "Spiritual Administration of Muslims of Russia" },
+];
+
+function methodLabel(value: number): string {
+  return METHOD_OPTIONS.find((m) => m.value === value)?.label || `Method ${value}`;
+}
 
 export default function SettingsClient({
-  prayerSettings,
-  todayPrayerTimes,
+  prayerSettings: initialSettings,
+  todayPrayerTimes: initialTimes,
 }: {
   prayerSettings: PrayerSettings | null;
   todayPrayerTimes: PrayerTimes | null;
 }) {
-  // Location state
+  // Track prayer settings in client state so they update after save
+  const [prayerSettings, setPrayerSettings] = useState<PrayerSettings | null>(initialSettings);
+  const [todayPrayerTimes, setTodayPrayerTimes] = useState<PrayerTimes | null>(initialTimes);
+
+  // Location search state
   const [cityQuery, setCityQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [locationResult, setLocationResult] = useState<{
@@ -72,6 +80,11 @@ export default function SettingsClient({
   } | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationMsg, setLocationMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Calculation method state
+  const [selectedMethod, setSelectedMethod] = useState<number>(initialSettings?.calculationMethod || 2);
+  const [savingMethod, setSavingMethod] = useState(false);
+  const [methodMsg, setMethodMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Prayer times sync state
   const [syncing, setSyncing] = useState(false);
@@ -89,7 +102,7 @@ export default function SettingsClient({
   const [loggingOut, setLoggingOut] = useState(false);
 
   // Load share link status on mount
-  useState(() => {
+  useEffect(() => {
     fetch("/api/share/generate")
       .then((r) => r.json())
       .then((data) => {
@@ -100,9 +113,9 @@ export default function SettingsClient({
       })
       .catch(() => {})
       .finally(() => setShareLoading(false));
-  });
+  }, []);
 
-  // Search for a city using OpenStreetMap Nominatim (free, no API key)
+  // Search for a city using OpenStreetMap Nominatim
   async function handleCitySearch(e: React.FormEvent) {
     e.preventDefault();
     if (!cityQuery.trim()) return;
@@ -120,10 +133,6 @@ export default function SettingsClient({
         const results = await res.json();
         if (results.length > 0) {
           const result = results[0];
-          // Get timezone from coordinates using a simple approach
-          // We'll use the browser's Intl API to guess timezone, or just use UTC
-          // The AlAdhan API doesn't need timezone — it calculates based on lat/lng
-          // We store timezone for display purposes
           let timezone = "UTC";
           try {
             timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -150,7 +159,7 @@ export default function SettingsClient({
     }
   }
 
-  // Save location to DB
+  // Save location + calculation method to DB, then sync prayer times
   async function handleSaveLocation() {
     if (!locationResult) return;
     setSavingLocation(true);
@@ -164,18 +173,32 @@ export default function SettingsClient({
           latitude: locationResult.lat,
           longitude: locationResult.lng,
           timezone: locationResult.timezone,
+          calculationMethod: selectedMethod,
         }),
       });
 
       if (res.ok) {
+        const data = await res.json();
+        // Update local state so the UI reflects the new settings immediately
+        setPrayerSettings({
+          latitude: locationResult.lat,
+          longitude: locationResult.lng,
+          timezone: locationResult.timezone,
+          calculationMethod: data.calculationMethod || selectedMethod,
+          madhab: prayerSettings?.madhab || null,
+        });
+
         setLocationMsg({ ok: true, text: "Location saved. Syncing prayer times..." });
+
         // Auto-sync prayer times after saving location
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
           const syncData = await syncRes.json();
           setLocationMsg({ ok: true, text: `Location saved. Prayer times synced (${syncData.daysCached} days).` });
+          // Fetch today's prayer times to display them
+          await refreshPrayerTimes();
         } else {
-          setLocationMsg({ ok: true, text: "Location saved. Click 'Sync prayer times' to fetch times." });
+          setLocationMsg({ ok: true, text: "Location saved. Click Sync to fetch prayer times." });
         }
       } else {
         const data = await res.json();
@@ -188,6 +211,81 @@ export default function SettingsClient({
     }
   }
 
+  // Save calculation method only (when user changes the dropdown)
+  async function handleSaveMethod() {
+    if (!prayerSettings) return;
+    setSavingMethod(true);
+    setMethodMsg(null);
+
+    try {
+      const res = await fetch("/api/onboarding/save-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: prayerSettings.latitude,
+          longitude: prayerSettings.longitude,
+          timezone: prayerSettings.timezone,
+          calculationMethod: selectedMethod,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPrayerSettings({
+          ...prayerSettings,
+          calculationMethod: data.calculationMethod || selectedMethod,
+        });
+        setMethodMsg({ ok: true, text: "Method saved. Re-syncing prayer times..." });
+
+        // Re-sync prayer times with the new method
+        const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          setMethodMsg({ ok: true, text: `Method updated. Prayer times re-synced (${syncData.daysCached} days).` });
+          await refreshPrayerTimes();
+        } else {
+          setMethodMsg({ ok: true, text: "Method saved. Click Sync to update prayer times." });
+        }
+      } else {
+        const data = await res.json();
+        setMethodMsg({ ok: false, text: data.error || "Failed to save method." });
+      }
+    } catch {
+      setMethodMsg({ ok: false, text: "Network error." });
+    } finally {
+      setSavingMethod(false);
+    }
+  }
+
+  // Fetch today's prayer times from the API
+  async function refreshPrayerTimes() {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    try {
+      const res = await fetch(`/api/prayer-times?date=${today}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Format times: "04:50:00" → "4:50 AM"
+        const fmt = (t: string) => {
+          const [h, m] = t.split(":").map(Number);
+          const hour = h % 12 || 12;
+          const period = h < 12 ? "AM" : "PM";
+          return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+        };
+        setTodayPrayerTimes({
+          fajr: fmt(data.fajr),
+          sunrise: fmt(data.sunrise),
+          dhuhr: fmt(data.dhuhr),
+          asr: fmt(data.asr),
+          maghrib: fmt(data.maghrib),
+          isha: fmt(data.isha),
+        });
+      }
+    } catch {
+      // ignore — user can click Sync
+    }
+  }
+
   // Sync prayer times
   async function handleSyncPrayerTimes() {
     setSyncing(true);
@@ -197,6 +295,7 @@ export default function SettingsClient({
       const data = await res.json();
       if (res.ok) {
         setSyncMsg({ ok: true, text: `Synced ${data.daysCached} days of prayer times.` });
+        await refreshPrayerTimes();
       } else {
         setSyncMsg({ ok: false, text: data.error || "Sync failed." });
       }
@@ -298,12 +397,6 @@ export default function SettingsClient({
                 {prayerSettings.timezone}
               </span>
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Calculation Method</span>
-              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
-                {METHOD_LABELS[prayerSettings.calculationMethod] || `Method ${prayerSettings.calculationMethod}`}
-              </span>
-            </div>
           </div>
         ) : (
           <p className="mb-4 text-sm" style={{ color: "var(--color-ink-muted)" }}>
@@ -323,13 +416,14 @@ export default function SettingsClient({
               borderColor: "var(--color-paper-3)",
               backgroundColor: "var(--color-paper)",
               color: "var(--color-ink)",
+              minHeight: 44,
             }}
           />
           <button
             type="submit"
             disabled={searching}
             className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
           >
             {searching ? "Searching..." : "Search"}
           </button>
@@ -347,8 +441,8 @@ export default function SettingsClient({
             <button
               onClick={handleSaveLocation}
               disabled={savingLocation}
-              className="mt-3 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+              className="mt-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
             >
               {savingLocation ? "Saving..." : "Save this location"}
             </button>
@@ -366,17 +460,75 @@ export default function SettingsClient({
         )}
       </section>
 
+      {/* ── Calculation Method ── */}
+      <section
+        className="mb-6 rounded-2xl border p-5 sm:p-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+            Calculation Method
+          </h2>
+        </div>
+
+        <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+          Determines how prayer times are calculated for your location. ISNA is the default for North America.
+        </p>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <select
+            value={selectedMethod}
+            onChange={(e) => setSelectedMethod(parseInt(e.target.value, 10))}
+            className="flex-1 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+            style={{
+              borderColor: "var(--color-paper-3)",
+              backgroundColor: "var(--color-paper)",
+              color: "var(--color-ink)",
+              minHeight: 44,
+            }}
+          >
+            {METHOD_OPTIONS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSaveMethod}
+            disabled={savingMethod || !prayerSettings || selectedMethod === prayerSettings?.calculationMethod}
+            className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-50"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+          >
+            {savingMethod ? "Saving..." : "Save method"}
+          </button>
+        </div>
+
+        {prayerSettings && (
+          <p className="mt-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+            Current: {methodLabel(prayerSettings.calculationMethod)}
+          </p>
+        )}
+
+        {methodMsg && (
+          <p
+            className="mt-3 flex items-center gap-1.5 text-xs"
+            style={{ color: methodMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+          >
+            {methodMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+            {methodMsg.text}
+          </p>
+        )}
+      </section>
+
       {/* ── Today's Prayer Times ── */}
       <section
         className="mb-6 rounded-2xl border p-5 sm:p-6"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
-              Today&apos;s Prayer Times
-            </h2>
-          </div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+            Today&apos;s Prayer Times
+          </h2>
           <button
             onClick={handleSyncPrayerTimes}
             disabled={syncing || !prayerSettings}
