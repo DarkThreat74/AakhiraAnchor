@@ -3,6 +3,7 @@ import { db, schema } from "@/lib/db/client";
 import { eq, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Sun, Sunrise, Sunset, Moon, CloudSun } from "lucide-react";
+import ShareLinkCard from "./share-link-card";
 
 export const dynamic = "force-dynamic";
 
@@ -155,6 +156,11 @@ export default async function AppHome() {
             →
           </span>
         </a>
+      </div>
+
+      {/* ── Public share link ── */}
+      <div className="mt-4">
+        <ShareLinkCard />
       </div>
     </div>
   );

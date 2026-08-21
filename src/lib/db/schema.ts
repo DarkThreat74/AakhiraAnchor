@@ -64,6 +64,8 @@ export const users = pgTable('users', {
   subscriptionTier: subscriptionTier('subscription_tier').default('free').notNull(),
   onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
   role: userRole('role').default('user').notNull(),
+  // Public calendar share token — null = sharing disabled, non-null = public read-only calendar at /user/public/[token]
+  publicShareToken: text('public_share_token').unique(),
 });
 
 // ─── Prayer Settings (per-user location + calculation) ───

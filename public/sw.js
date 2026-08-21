@@ -233,8 +233,14 @@ self.addEventListener("fetch", (event) => {
   // Don't intercept notification endpoints — always need fresh
   if (url.pathname.startsWith("/api/notifications")) return;
 
+  // Don't intercept public calendar API — always need fresh
+  if (url.pathname.startsWith("/api/public/")) return;
+
+  // Don't intercept share management API
+  if (url.pathname.startsWith("/api/share/")) return;
+
   // ── Navigation requests: network-first ──
-  // BUT skip public pages (landing, login, signup, admin) — the SW should
+  // BUT skip public pages (landing, login, signup, admin, public calendar) — the SW should
   // only control authenticated app pages. This prevents stale cached versions
   // of auth pages from being served, and avoids interfering with login/signup.
   if (request.mode === "navigate") {
@@ -245,6 +251,7 @@ self.addEventListener("fetch", (event) => {
       pathname === "/login" ||
       pathname === "/signup" ||
       pathname.startsWith("/admin") ||
+      pathname.startsWith("/user/public/") ||
       pathname.startsWith("/api/")
     ) {
       return; // Let the browser handle it directly — no SW interference
