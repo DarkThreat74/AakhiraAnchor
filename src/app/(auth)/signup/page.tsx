@@ -91,10 +91,21 @@ export default function SignupForm() {
         }),
       });
 
-      const data = await res.json();
+      // Safely parse JSON — response might be empty if the server crashes
+      let data: { message?: string; error?: string; ok?: boolean } = {};
+      const text = await res.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          setError(`Server returned an unexpected response (status ${res.status}).`);
+          setPending(false);
+          return;
+        }
+      }
 
       if (!res.ok) {
-        setError(data.message || data.error || "Something went wrong.");
+        setError(data.message || data.error || `Request failed with status ${res.status}.`);
         setPending(false);
         return;
       }

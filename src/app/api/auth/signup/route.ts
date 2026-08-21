@@ -9,6 +9,7 @@ import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  try {
   // ── Rate limit: 5 signup attempts per 15 min per IP ──
   const ip = getClientIp(request.headers);
   if (!checkRateLimit("signup", ip, 5, 15 * 60 * 1000)) {
@@ -106,4 +107,11 @@ export async function POST(request: NextRequest) {
   await setSessionCookie(user);
 
   return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Server error: ${message}` },
+      { status: 500 },
+    );
+  }
 }

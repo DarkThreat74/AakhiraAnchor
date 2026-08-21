@@ -42,10 +42,22 @@ export default function AdminLoginPage() {
         }),
       });
 
-      const data = await res.json();
+      // Safely parse JSON — response might be empty if the server crashes
+      let data: { error?: string; ok?: boolean } = {};
+      const text = await res.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Response is HTML or empty — not JSON
+          setError(`Server returned an unexpected response (status ${res.status}). Check that environment variables are set on Vercel.`);
+          setPending(false);
+          return;
+        }
+      }
 
       if (!res.ok) {
-        setError(data.error || "Access denied.");
+        setError(data.error || `Request failed with status ${res.status}.`);
         setPending(false);
         return;
       }
