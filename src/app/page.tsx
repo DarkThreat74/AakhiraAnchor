@@ -3,9 +3,13 @@
  *   principle band → Arabic quote → letter close → footer
  * Spectral for editorial Latin text, Amiri for Arabic.
  * Warm contemplative palette. No gradients. No AI-slop patterns.
+ *
+ * Animation: scroll-triggered fade-ins, staggered reveals, blur-in for
+ * Arabic background text, scale-in for focal elements.
  */
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { FadeIn, StaggerGroup, StaggerItem, ScaleIn, BlurIn } from "@/components/animations";
 
 export default function MarketingPage() {
   return (
@@ -46,123 +50,151 @@ export default function MarketingPage() {
       {/* ── Hero — full viewport, Arabic calligraphy background ── */}
       <section className="relative flex min-h-screen items-center overflow-hidden pt-20">
         {/* Arabic background text — "حيا على الصلاة" (Come to prayer) repeated as a watermark */}
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          aria-hidden="true"
-          style={{ overflow: "hidden" }}
+        <BlurIn
+          delay={0.2}
+          duration={2}
         >
           <div
-            className="select-none whitespace-nowrap text-center"
-            style={{
-              fontFamily: "var(--font-amiri)",
-              fontSize: "clamp(8rem, 22vw, 22rem)",
-              color: "var(--color-accent)",
-              opacity: 0.06,
-              lineHeight: 1,
-              transform: "rotate(-5deg)",
-            }}
-            dir="rtl"
+            className="absolute inset-0 flex items-center justify-center"
+            aria-hidden="true"
+            style={{ overflow: "hidden" }}
           >
-            حي على الصلاة
+            <div
+              className="select-none whitespace-nowrap text-center"
+              style={{
+                fontFamily: "var(--font-amiri)",
+                fontSize: "clamp(8rem, 22vw, 22rem)",
+                color: "var(--color-accent)",
+                opacity: 0.06,
+                lineHeight: 1,
+                transform: "rotate(-5deg)",
+              }}
+              dir="rtl"
+            >
+              حي على الصلاة
+            </div>
           </div>
-        </div>
+        </BlurIn>
 
         {/* Secondary Arabic — smaller, positioned top-right */}
-        <div
-          className="absolute right-6 top-32 hidden sm:block lg:right-16"
-          aria-hidden="true"
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-amiri)",
-              fontSize: "clamp(1.5rem, 3vw, 2.5rem)",
-              color: "var(--color-warmth)",
-              opacity: 0.15,
-            }}
-            dir="rtl"
+        <BlurIn delay={0.6} duration={1.5}>
+          <div
+            className="absolute right-6 top-32 hidden sm:block lg:right-16"
+            aria-hidden="true"
           >
-            إن الصلاة كانت على المؤمنين كتاباً موقوتاً
-          </span>
-        </div>
+            <span
+              style={{
+                fontFamily: "var(--font-amiri)",
+                fontSize: "clamp(1.5rem, 3vw, 2.5rem)",
+                color: "var(--color-warmth)",
+                opacity: 0.15,
+              }}
+              dir="rtl"
+            >
+              إن الصلاة كانت على المؤمنين كتاباً موقوتاً
+            </span>
+          </div>
+        </BlurIn>
 
         {/* Tertiary Arabic — bottom-left, very faint */}
-        <div
-          className="absolute bottom-24 left-6 hidden sm:block lg:left-16"
-          aria-hidden="true"
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-amiri)",
-              fontSize: "clamp(1.2rem, 2.5vw, 2rem)",
-              color: "var(--color-accent)",
-              opacity: 0.08,
-            }}
-            dir="rtl"
+        <BlurIn delay={0.9} duration={1.5}>
+          <div
+            className="absolute bottom-24 left-6 hidden sm:block lg:left-16"
+            aria-hidden="true"
           >
-            الوقتُ كالسيف
-          </span>
-        </div>
+            <span
+              style={{
+                fontFamily: "var(--font-amiri)",
+                fontSize: "clamp(1.2rem, 2.5vw, 2rem)",
+                color: "var(--color-accent)",
+                opacity: 0.08,
+              }}
+              dir="rtl"
+            >
+              الوقتُ كالسيف
+            </span>
+          </div>
+        </BlurIn>
 
         <div className="relative z-10 w-full px-6 sm:px-10 lg:px-16">
           <div className="max-w-2xl">
-            <p
-              className="mb-8 text-xs font-medium uppercase tracking-[0.2em]"
-              style={{ color: "var(--color-accent)" }}
-            >
-              Prayer-centered life tracker
-            </p>
-            <h1
-              className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
-              style={{
-                color: "var(--color-ink)",
-                overflowWrap: "anywhere",
-                minWidth: 0,
-              }}
-            >
-              The five prayers
-              <br />
-              are the fixed
-              <br />
-              anchor.
-            </h1>
-            <p
-              className="mt-10 max-w-lg text-lg leading-relaxed"
-              style={{ color: "var(--color-ink-soft)" }}
-            >
-              Everything else fits around them. A calendar that treats
-              prayer times as the structure of your day — not a reminder
-              you dismiss.
-            </p>
-            <div className="mt-12 flex flex-wrap items-center gap-4">
-              <Link
-                href="/signup"
-                className="inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-medium transition-opacity hover:opacity-90"
-                style={{
-                  backgroundColor: "var(--color-ink)",
-                  color: "var(--color-paper)",
-                }}
+            <FadeIn delay={0.3} y={16} duration={0.6}>
+              <p
+                className="mb-8 text-xs font-medium uppercase tracking-[0.2em]"
+                style={{ color: "var(--color-accent)" }}
               >
-                Start tracking
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/login"
-                className="text-base font-medium underline underline-offset-4 transition-opacity hover:opacity-60"
+                Prayer-centered life tracker
+              </p>
+            </FadeIn>
+
+            <StaggerGroup stagger={0.15}>
+              <StaggerItem>
+                <h1
+                  className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
+                  style={{
+                    color: "var(--color-ink)",
+                    overflowWrap: "anywhere",
+                    minWidth: 0,
+                  }}
+                >
+                  The five prayers
+                  <br />
+                  are the fixed
+                  <br />
+                  anchor.
+                </h1>
+              </StaggerItem>
+            </StaggerGroup>
+
+            <FadeIn delay={0.8} y={20} duration={0.7}>
+              <p
+                className="mt-10 max-w-lg text-lg leading-relaxed"
                 style={{ color: "var(--color-ink-soft)" }}
               >
-                I have an account
-              </Link>
-            </div>
+                Everything else fits around them. A calendar that treats
+                prayer times as the structure of your day — not a reminder
+                you dismiss.
+              </p>
+            </FadeIn>
+
+            <FadeIn delay={1.0} y={20} duration={0.7}>
+              <div className="mt-12 flex flex-wrap items-center gap-4">
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-medium transition-opacity hover:opacity-90"
+                  style={{
+                    backgroundColor: "var(--color-ink)",
+                    color: "var(--color-paper)",
+                  }}
+                >
+                  Start tracking
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/login"
+                  className="text-base font-medium underline underline-offset-4 transition-opacity hover:opacity-60"
+                  style={{ color: "var(--color-ink-soft)" }}
+                >
+                  I have an account
+                </Link>
+              </div>
+            </FadeIn>
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          <div
-            className="h-12 w-px"
-            style={{ backgroundColor: "var(--color-ink-muted)", opacity: 0.3 }}
-          />
-        </div>
+        {/* Scroll indicator — animated bounce */}
+        <FadeIn delay={1.4} duration={1}>
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+            <div
+              className="h-12 w-px"
+              style={{
+                backgroundColor: "var(--color-ink-muted)",
+                opacity: 0.3,
+                animation: "waqt-scroll-pulse 2s ease-in-out infinite",
+              }}
+            />
+          </div>
+        </FadeIn>
       </section>
 
       {/* ── Principle band — full width, three principles as numbered prose ── */}
@@ -174,66 +206,79 @@ export default function MarketingPage() {
         }}
       >
         <div className="mx-auto max-w-5xl">
-          <div className="mb-16 flex items-center gap-4">
-            <p
-              className="text-xs font-medium uppercase tracking-[0.2em]"
-              style={{ color: "var(--color-ink-muted)" }}
-            >
-              How it works
-            </p>
-            <span
-              style={{
-                fontFamily: "var(--font-amiri)",
-                fontSize: "1.5rem",
-                color: "var(--color-accent)",
-                opacity: 0.5,
-              }}
-              dir="rtl"
-            >
-              كيف يعمل
-            </span>
-          </div>
-          <div className="grid gap-16 lg:grid-cols-3 lg:gap-12">
-            <Principle
-              num="01"
-              title="Prayer times become the grid"
-              body="Your day view shows the five prayer windows as background bands. Scheduled events sit on top. Overlaps are permissive — nothing blocks, nothing warns."
-            />
-            <Principle
-              num="02"
-              title="Check in, or let it rest"
-              body="Mark a prayer as prayed when you're ready. If you forget, it resolves quietly as assumed prayed at day's end. No silent penalties, no shame spiral."
-            />
-            <Principle
-              num="03"
-              title="Accountability, not punishment"
-              body="Track an oath ledger and a qadaa backlog on a dedicated page — one deliberate tap away, never on your home screen. The app is a witness, not a collector."
-            />
-          </div>
+          <FadeIn y={20}>
+            <div className="mb-16 flex items-center gap-4">
+              <p
+                className="text-xs font-medium uppercase tracking-[0.2em]"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                How it works
+              </p>
+              <span
+                style={{
+                  fontFamily: "var(--font-amiri)",
+                  fontSize: "1.5rem",
+                  color: "var(--color-accent)",
+                  opacity: 0.5,
+                }}
+                dir="rtl"
+              >
+                كيف يعمل
+              </span>
+            </div>
+          </FadeIn>
+
+          <StaggerGroup className="grid gap-16 lg:grid-cols-3 lg:gap-12" stagger={0.18}>
+            <StaggerItem>
+              <Principle
+                num="01"
+                title="Prayer times become the grid"
+                body="Your day view shows the five prayer windows as background bands. Scheduled events sit on top. Overlaps are permissive — nothing blocks, nothing warns."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Principle
+                num="02"
+                title="Check in, or let it rest"
+                body="Mark a prayer as prayed when you're ready. If you forget, it resolves quietly as assumed prayed at day's end. No silent penalties, no shame spiral."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Principle
+                num="03"
+                title="Accountability, not punishment"
+                body="Track an oath ledger and a qadaa backlog on a dedicated page — one deliberate tap away, never on your home screen. The app is a witness, not a collector."
+              />
+            </StaggerItem>
+          </StaggerGroup>
         </div>
       </section>
 
       {/* ── Quote band — full width, Arabic + translation ── */}
       <section className="px-6 py-24 sm:px-10 sm:py-32 lg:px-16">
         <div className="mx-auto max-w-4xl text-center">
-          {/* Arabic original */}
-          <p
-            className="mb-8 text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl"
-            style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
-            dir="rtl"
-          >
-            حي على الصلاة
-          </p>
-          {/* Translation */}
-          <p
-            className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl lg:text-4xl"
-            style={{ color: "var(--color-ink-soft)" }}
-          >
-            &ldquo;Come to prayer.&rdquo;
-          </p>
-          <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            — The call to prayer, heard five times daily
-          </p>
+          <ScaleIn delay={0.1} duration={0.9}>
+            <p
+              className="mb-8 text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl"
+              style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
+              dir="rtl"
+            >
+              حي على الصلاة
+            </p>
+          </ScaleIn>
+          <FadeIn delay={0.3} y={16} duration={0.7}>
+            <p
+              className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl lg:text-4xl"
+              style={{ color: "var(--color-ink-soft)" }}
+            >
+              &ldquo;Come to prayer.&rdquo;
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.5} y={12} duration={0.6}>
+            <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
+              — The call to prayer, heard five times daily
+            </p>
+          </FadeIn>
         </div>
       </section>
 
@@ -246,22 +291,28 @@ export default function MarketingPage() {
         }}
       >
         <div className="mx-auto max-w-4xl text-center">
-          <p
-            className="mb-6 text-3xl leading-relaxed sm:text-4xl"
-            style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
-            dir="rtl"
-          >
-            إن الصلاة كانت على المؤمنين كتاباً موقوتاً
-          </p>
-          <p
-            className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl"
-            style={{ color: "var(--color-ink-soft)" }}
-          >
-            &ldquo;Prayer has been prescribed for the believers at fixed times.&rdquo;
-          </p>
-          <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            — Quran, An-Nisa 4:103
-          </p>
+          <ScaleIn delay={0.1} duration={0.9}>
+            <p
+              className="mb-6 text-3xl leading-relaxed sm:text-4xl"
+              style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
+              dir="rtl"
+            >
+              إن الصلاة كانت على المؤمنين كتاباً موقوتاً
+            </p>
+          </ScaleIn>
+          <FadeIn delay={0.3} y={16} duration={0.7}>
+            <p
+              className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl"
+              style={{ color: "var(--color-ink-soft)" }}
+            >
+              &ldquo;Prayer has been prescribed for the believers at fixed times.&rdquo;
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.5} y={12} duration={0.6}>
+            <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
+              — Quran, An-Nisa 4:103
+            </p>
+          </FadeIn>
         </div>
       </section>
 
@@ -271,25 +322,29 @@ export default function MarketingPage() {
         style={{ borderColor: "var(--color-paper-3)" }}
       >
         <div className="mx-auto max-w-2xl">
-          <p
-            className="text-xl leading-relaxed"
-            style={{ color: "var(--color-ink-soft)" }}
-          >
-            Waqt is being built carefully, one piece at a time. If you want to
-            be part of the first group of users, create an account — you&apos;ll
-            get the calendar and prayer tracking first, with more arriving in
-            steady updates.
-          </p>
-          <div className="mt-10">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 text-base font-medium underline underline-offset-4"
-              style={{ color: "var(--color-accent)" }}
+          <FadeIn y={24} duration={0.8}>
+            <p
+              className="text-xl leading-relaxed"
+              style={{ color: "var(--color-ink-soft)" }}
             >
-              Create your account
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+              Waqt is being built carefully, one piece at a time. If you want to
+              be part of the first group of users, create an account — you&apos;ll
+              get the calendar and prayer tracking first, with more arriving in
+              steady updates.
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.2} y={20} duration={0.7}>
+            <div className="mt-10">
+              <Link
+                href="/signup"
+                className="inline-flex items-center gap-2 text-base font-medium underline underline-offset-4"
+                style={{ color: "var(--color-accent)" }}
+              >
+                Create your account
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </FadeIn>
         </div>
       </section>
 

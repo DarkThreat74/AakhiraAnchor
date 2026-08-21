@@ -110,6 +110,12 @@ body {
   pointer-events: none;
 }
 
+/* ── Scroll indicator pulse animation ── */
+@keyframes waqt-scroll-pulse {
+  0%, 100% { opacity: 0.15; transform: scaleY(0.7); }
+  50% { opacity: 0.4; transform: scaleY(1); }
+}
+
 /* ── ClawCaptcha responsive scaling ──
  * The captcha is 440px wide with fixed internal pixel sizes.
  * On screens narrower than 440px, scale it down proportionally
