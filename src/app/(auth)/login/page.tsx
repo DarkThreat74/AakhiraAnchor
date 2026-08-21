@@ -36,11 +36,8 @@ export default function LoginForm() {
         return;
       }
 
-      // HARD NAVIGATION — not router.push().
-      // This does a full page load, which:
-      // 1. Guarantees the browser sends the new session cookie
-      // 2. Avoids any client-side routing issues
-      // 3. Goes to /today which is the actual app home (not the marketing page at /)
+      // HARD NAVIGATION — full page load guarantees the browser sends
+      // the new session cookie and avoids client-side routing issues.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/today";
     } catch {

@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import LogoutButton from "./logout-button";
-import ServiceWorkerRegister from "@/components/sw-register";
 import { Calendar, BookOpen, Heart, Settings, Home } from "lucide-react";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
@@ -83,8 +82,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
 
-      {/* Service worker — only registered for authenticated app pages */}
-      <ServiceWorkerRegister />
+      {/* Service worker removed — was causing login/navigation interference */}
     </div>
   );
 }

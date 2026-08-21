@@ -76,7 +76,21 @@ export default function DayViewClient({ date }: { date: string }) {
           const prayerData = await prayerRes.json();
           if (!cancelled) setPrayerTimes(prayerData);
         } else {
+          // No cached prayer times for this date — try auto-syncing
           if (!cancelled) setPrayerTimes(null);
+          try {
+            const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
+            if (syncRes.ok && !cancelled) {
+              // Re-fetch prayer times after sync
+              const retryRes = await fetch(`/api/prayer-times?date=${date}`);
+              if (retryRes.ok) {
+                const retryData = await retryRes.json();
+                if (!cancelled) setPrayerTimes(retryData);
+              }
+            }
+          } catch {
+            // Sync failed silently — user can retry from settings
+          }
         }
         if (logRes?.ok) {
           const logData = await logRes.json();
@@ -193,7 +207,7 @@ export default function DayViewClient({ date }: { date: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-4xl px-3 py-4 sm:px-6 sm:py-6">
       {/* Prayer status bar */}
       {prayerTimes && (
         <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
@@ -212,7 +226,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 <span className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
                   {prayer.label}
                 </span>
-                <span className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                <span className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
                   {prayerTimes[prayer.key]}
                 </span>
                 <span
@@ -239,138 +253,140 @@ export default function DayViewClient({ date }: { date: string }) {
         </div>
       )}
 
-      {/* Day grid */}
-      <div className="relative overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)" }}>
-        <div className="relative" style={{ height: HOURS.length * HOUR_HEIGHT }}>
-          {/* Hour lines */}
-          {HOURS.map((hour, i) => (
-            <div
-              key={hour}
-              className="absolute left-0 right-0 flex"
-              style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
-            >
+      {/* Day grid — horizontally scrollable on mobile to prevent overflow */}
+      <div className="overflow-x-auto">
+        <div className="relative overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", minWidth: 320 }}>
+          <div className="relative" style={{ height: HOURS.length * HOUR_HEIGHT }}>
+            {/* Hour lines */}
+            {HOURS.map((hour, i) => (
               <div
-                className="w-14 shrink-0 pt-1 pr-2 text-right text-[10px] font-medium tabular-nums"
-                style={{ color: "var(--color-ink-muted)" }}
+                key={hour}
+                className="absolute left-0 right-0 flex"
+                style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
               >
-                {hour === 12 ? "12 PM" : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+                <div
+                  className="w-12 shrink-0 pt-1 pr-2 text-right text-[10px] font-medium tabular-nums sm:w-14"
+                  style={{ color: "var(--color-ink-muted)" }}
+                >
+                  {hour === 12 ? "12P" : hour > 12 ? `${hour - 12}P` : `${hour}A`}
+                </div>
+                <div
+                  className="flex-1 border-t"
+                  style={{ borderColor: "var(--color-paper-3)" }}
+                />
               </div>
-              <div
-                className="flex-1 border-t"
-                style={{ borderColor: "var(--color-paper-3)" }}
-              />
-            </div>
-          ))}
+            ))}
 
-          {/* Prayer bands */}
-          {prayerTimes &&
-            PRAYER_NAMES.map((prayer) => {
-              const time = prayerTimes[prayer.key];
-              if (!time) return null;
-              const minutes = timeToMinutes(time);
-              if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
-              const top = minutesToTop(minutes);
+            {/* Prayer bands */}
+            {prayerTimes &&
+              PRAYER_NAMES.map((prayer) => {
+                const time = prayerTimes[prayer.key];
+                if (!time) return null;
+                const minutes = timeToMinutes(time);
+                if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
+                const top = minutesToTop(minutes);
+                return (
+                  <div
+                    key={prayer.key}
+                    className="absolute z-10 flex items-center gap-1 sm:gap-2"
+                    style={{ top: top - 10, left: "3rem", right: 0 }}
+                  >
+                    <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                      style={{
+                        backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
+                        color: prayer.color,
+                      }}
+                    >
+                      {prayer.label} · {time}
+                    </span>
+                    <div className="h-px w-3 sm:w-4" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
+                  </div>
+                );
+              })}
+
+            {/* Tap-to-add zones */}
+            {HOURS.map((hour, i) => (
+              <button
+                key={`add-${hour}`}
+                className="absolute flex items-center justify-center opacity-0 transition-opacity hover:opacity-100"
+                style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 - 12, height: 24, left: "3rem", right: 0 }}
+                onClick={() => {
+                  setAddSlot({ hour });
+                  setNewStart(`${String(hour).padStart(2, "0")}:00`);
+                  setNewEnd(`${String(hour + 1).padStart(2, "0")}:00`);
+                  setShowAddForm(true);
+                }}
+              >
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full"
+                  style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)" }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </span>
+              </button>
+            ))}
+
+            {/* Events */}
+            {events.map((event) => {
+              const startStr = isoToLocalTime(event.startAt);
+              const endStr = isoToLocalTime(event.endAt);
+              const startMin = timeToMinutes(startStr);
+              const endMin = timeToMinutes(endStr);
+              const top = minutesToTop(startMin);
+              const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 24);
+
+              const overlapping = getOverlappingEvents(event, events).sort((a, b) => {
+                const aStart = timeToMinutes(isoToLocalTime(a.startAt));
+                const bStart = timeToMinutes(isoToLocalTime(b.startAt));
+                return aStart - bStart;
+              });
+              const index = overlapping.findIndex((e) => e.id === event.id);
+              const widthPct = 100 / overlapping.length;
+              const leftPct = index * widthPct;
+
+              const typeColors: Record<string, string> = {
+                block: "var(--color-accent)",
+                task: "var(--color-warmth)",
+                reminder: "var(--color-ink-muted)",
+              };
+
               return (
                 <div
-                  key={prayer.key}
-                  className="absolute left-14 right-0 z-10 flex items-center gap-2"
-                  style={{ top: top - 10 }}
+                  key={event.id}
+                  className="absolute z-20 overflow-hidden rounded-lg border p-1.5 text-xs sm:p-2"
+                  style={{
+                    top,
+                    height,
+                    left: `calc(3rem + ${leftPct}% * (100% - 3rem) / 100)`,
+                    width: `calc(${widthPct}% * (100% - 3rem) / 100 - 4px)`,
+                    backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)",
+                    borderColor: typeColors[event.type] || "var(--color-accent)",
+                    borderLeftWidth: 3,
+                  }}
                 >
-                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
-                  <span
-                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
-                      color: prayer.color,
-                    }}
-                  >
-                    {prayer.label} · {time}
-                  </span>
-                  <div className="h-px w-4" style={{ backgroundColor: prayer.color, opacity: 0.4 }} />
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
+                        {event.title}
+                      </p>
+                      <p className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                        {startStr}–{endStr}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteEvent(event.id)}
+                      className="shrink-0 opacity-50 transition-opacity hover:opacity-100"
+                      aria-label="Delete event"
+                    >
+                      <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
-
-          {/* Tap-to-add zones */}
-          {HOURS.map((hour, i) => (
-            <button
-              key={`add-${hour}`}
-              className="absolute left-14 right-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100"
-              style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 - 12, height: 24 }}
-              onClick={() => {
-                setAddSlot({ hour });
-                setNewStart(`${String(hour).padStart(2, "0")}:00`);
-                setNewEnd(`${String(hour + 1).padStart(2, "0")}:00`);
-                setShowAddForm(true);
-              }}
-            >
-              <span
-                className="flex h-6 w-6 items-center justify-center rounded-full"
-                style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)" }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </span>
-            </button>
-          ))}
-
-          {/* Events */}
-          {events.map((event) => {
-            const startStr = isoToLocalTime(event.startAt);
-            const endStr = isoToLocalTime(event.endAt);
-            const startMin = timeToMinutes(startStr);
-            const endMin = timeToMinutes(endStr);
-            const top = minutesToTop(startMin);
-            const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 24);
-
-            // Calculate width for overlapping events — sort by start time for stable column assignment
-            const overlapping = getOverlappingEvents(event, events).sort((a, b) => {
-              const aStart = timeToMinutes(isoToLocalTime(a.startAt));
-              const bStart = timeToMinutes(isoToLocalTime(b.startAt));
-              return aStart - bStart;
-            });
-            const index = overlapping.findIndex((e) => e.id === event.id);
-            const widthPct = 100 / overlapping.length;
-            const leftPct = index * widthPct;
-
-            const typeColors: Record<string, string> = {
-              block: "var(--color-accent)",
-              task: "var(--color-warmth)",
-              reminder: "var(--color-ink-muted)",
-            };
-
-            return (
-              <div
-                key={event.id}
-                className="absolute z-20 overflow-hidden rounded-lg border p-2 text-xs"
-                style={{
-                  top,
-                  height,
-                  left: `calc(3.5rem + ${leftPct} / 100 * (100% - 3.5rem))`,
-                  width: `calc(${widthPct} / 100 * (100% - 3.5rem) - 4px)`,
-                  backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)",
-                  borderColor: typeColors[event.type] || "var(--color-accent)",
-                  borderLeftWidth: 3,
-                }}
-              >
-                <div className="flex items-start justify-between gap-1">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
-                      {event.title}
-                    </p>
-                    <p className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
-                      {startStr} – {endStr}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteEvent(event.id)}
-                    className="shrink-0 opacity-50 transition-opacity hover:opacity-100"
-                  >
-                    <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          </div>
         </div>
       </div>
 
@@ -383,7 +399,7 @@ export default function DayViewClient({ date }: { date: string }) {
         <p className="mt-4 text-sm" style={{ color: "var(--color-error)" }}>{error}</p>
       )}
 
-      {/* Add event form */}
+      {/* Add event form — bottom sheet on mobile, centered modal on desktop */}
       {showAddForm && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center"
@@ -392,7 +408,7 @@ export default function DayViewClient({ date }: { date: string }) {
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleAddEvent}
-            className="w-full max-w-md rounded-t-2xl border p-6 sm:rounded-2xl"
+            className="w-full max-w-md rounded-t-2xl border p-5 sm:rounded-2xl sm:p-6"
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
           >
             <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--color-ink)" }}>
@@ -406,7 +422,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 onChange={(e) => setNewTitle(e.target.value)}
                 autoFocus
                 required
-                className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+                className="rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
                 style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
               />
               <div className="flex gap-3">
@@ -416,7 +432,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     type="time"
                     value={newStart}
                     onChange={(e) => setNewStart(e.target.value)}
-                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
                     style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
                   />
                 </div>
@@ -426,7 +442,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     type="time"
                     value={newEnd}
                     onChange={(e) => setNewEnd(e.target.value)}
-                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
                     style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
                   />
                 </div>
@@ -434,7 +450,7 @@ export default function DayViewClient({ date }: { date: string }) {
               <select
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as "block" | "task" | "reminder")}
-                className="rounded-lg border px-3 py-2 text-sm outline-none"
+                className="rounded-lg border px-3 py-2.5 text-sm outline-none"
                 style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
               >
                 <option value="block">Block</option>

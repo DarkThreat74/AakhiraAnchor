@@ -9,48 +9,14 @@ export default function LogoutButton() {
   const handleLogout = async () => {
     setPending(true);
 
-    // 1. Clear the session cookie via API call (not server action — avoids SW intercept)
+    // Clear the session cookie via API call
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch {
       // ignore — we'll redirect anyway
     }
 
-    // 2. Clear SW API cache to prevent cross-user data leakage
-    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: "CLEAR_API_CACHE" });
-    }
-
-    // 3. Clear all caches
-    if ("caches" in window) {
-      try {
-        const names = await caches.keys();
-        await Promise.all(names.map((n) => caches.delete(n)));
-      } catch {
-        // ignore
-      }
-    }
-
-    // 4. Unregister service worker
-    if ("serviceWorker" in navigator) {
-      try {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((r) => r.unregister()));
-      } catch {
-        // ignore
-      }
-    }
-
-    // 5. Clear storage
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {
-      // ignore
-    }
-
-    // 6. Hard redirect to login — use window.location for a full page load
-    //    that bypasses any SW that might still be controlling the page
+    // Hard redirect to login — full page load
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/login";
   };
