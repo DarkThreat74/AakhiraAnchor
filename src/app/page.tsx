@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { FadeIn, StaggerGroup, StaggerItem, ScaleIn, BlurIn } from "@/components/animations";
+import { FadeIn, StaggerGroup, StaggerItem, ScaleIn, AmbientFade } from "@/components/animations";
 
 export default function MarketingPage() {
   return (
@@ -50,10 +50,7 @@ export default function MarketingPage() {
       {/* ── Hero — full viewport, Arabic calligraphy background ── */}
       <section className="relative flex min-h-screen items-center overflow-hidden pt-20">
         {/* Arabic background text — "حيا على الصلاة" (Come to prayer) repeated as a watermark */}
-        <BlurIn
-          delay={0.2}
-          duration={2}
-        >
+        <AmbientFade delay={0.1} duration={0.6}>
           <div
             className="absolute inset-0 flex items-center justify-center"
             aria-hidden="true"
@@ -74,10 +71,10 @@ export default function MarketingPage() {
               حي على الصلاة
             </div>
           </div>
-        </BlurIn>
+        </AmbientFade>
 
         {/* Secondary Arabic — smaller, positioned top-right */}
-        <BlurIn delay={0.6} duration={1.5}>
+        <AmbientFade delay={0.2} duration={0.5}>
           <div
             className="absolute right-6 top-32 hidden sm:block lg:right-16"
             aria-hidden="true"
@@ -94,10 +91,10 @@ export default function MarketingPage() {
               إن الصلاة كانت على المؤمنين كتاباً موقوتاً
             </span>
           </div>
-        </BlurIn>
+        </AmbientFade>
 
         {/* Tertiary Arabic — bottom-left, very faint */}
-        <BlurIn delay={0.9} duration={1.5}>
+        <AmbientFade delay={0.3} duration={0.5}>
           <div
             className="absolute bottom-24 left-6 hidden sm:block lg:left-16"
             aria-hidden="true"
@@ -114,11 +111,11 @@ export default function MarketingPage() {
               الوقتُ كالسيف
             </span>
           </div>
-        </BlurIn>
+        </AmbientFade>
 
         <div className="relative z-10 w-full px-6 sm:px-10 lg:px-16">
           <div className="max-w-2xl">
-            <FadeIn delay={0.3} y={16} duration={0.6}>
+            <FadeIn delay={0.05} y={12} duration={0.35}>
               <p
                 className="mb-8 text-xs font-medium uppercase tracking-[0.2em]"
                 style={{ color: "var(--color-accent)" }}
@@ -127,7 +124,7 @@ export default function MarketingPage() {
               </p>
             </FadeIn>
 
-            <StaggerGroup stagger={0.15}>
+            <StaggerGroup stagger={0.08}>
               <StaggerItem>
                 <h1
                   className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
@@ -146,7 +143,7 @@ export default function MarketingPage() {
               </StaggerItem>
             </StaggerGroup>
 
-            <FadeIn delay={0.8} y={20} duration={0.7}>
+            <FadeIn delay={0.2} y={16} duration={0.4}>
               <p
                 className="mt-10 max-w-lg text-lg leading-relaxed"
                 style={{ color: "var(--color-ink-soft)" }}
@@ -157,7 +154,7 @@ export default function MarketingPage() {
               </p>
             </FadeIn>
 
-            <FadeIn delay={1.0} y={20} duration={0.7}>
+            <FadeIn delay={0.3} y={16} duration={0.4}>
               <div className="mt-12 flex flex-wrap items-center gap-4">
                 <Link
                   href="/signup"
@@ -183,7 +180,7 @@ export default function MarketingPage() {
         </div>
 
         {/* Scroll indicator — animated bounce */}
-        <FadeIn delay={1.4} duration={1}>
+        <FadeIn delay={0.5} duration={0.4}>
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
             <div
               className="h-12 w-px"
@@ -257,7 +254,7 @@ export default function MarketingPage() {
       {/* ── Quote band — full width, Arabic + translation ── */}
       <section className="px-6 py-24 sm:px-10 sm:py-32 lg:px-16">
         <div className="mx-auto max-w-4xl text-center">
-          <ScaleIn delay={0.1} duration={0.9}>
+          <ScaleIn delay={0.05} duration={0.4}>
             <p
               className="mb-8 text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl"
               style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
@@ -266,7 +263,7 @@ export default function MarketingPage() {
               حي على الصلاة
             </p>
           </ScaleIn>
-          <FadeIn delay={0.3} y={16} duration={0.7}>
+          <FadeIn delay={0.15} y={12} duration={0.35}>
             <p
               className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl lg:text-4xl"
               style={{ color: "var(--color-ink-soft)" }}
@@ -274,7 +271,7 @@ export default function MarketingPage() {
               &ldquo;Come to prayer.&rdquo;
             </p>
           </FadeIn>
-          <FadeIn delay={0.5} y={12} duration={0.6}>
+          <FadeIn delay={0.25} y={8} duration={0.3}>
             <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
               — The call to prayer, heard five times daily
             </p>
@@ -291,7 +288,7 @@ export default function MarketingPage() {
         }}
       >
         <div className="mx-auto max-w-4xl text-center">
-          <ScaleIn delay={0.1} duration={0.9}>
+          <ScaleIn delay={0.05} duration={0.4}>
             <p
               className="mb-6 text-3xl leading-relaxed sm:text-4xl"
               style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri)" }}
@@ -300,7 +297,7 @@ export default function MarketingPage() {
               إن الصلاة كانت على المؤمنين كتاباً موقوتاً
             </p>
           </ScaleIn>
-          <FadeIn delay={0.3} y={16} duration={0.7}>
+          <FadeIn delay={0.15} y={12} duration={0.35}>
             <p
               className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl"
               style={{ color: "var(--color-ink-soft)" }}
@@ -308,7 +305,7 @@ export default function MarketingPage() {
               &ldquo;Prayer has been prescribed for the believers at fixed times.&rdquo;
             </p>
           </FadeIn>
-          <FadeIn delay={0.5} y={12} duration={0.6}>
+          <FadeIn delay={0.25} y={8} duration={0.3}>
             <p className="mt-6 text-sm" style={{ color: "var(--color-ink-muted)" }}>
               — Quran, An-Nisa 4:103
             </p>
@@ -322,7 +319,7 @@ export default function MarketingPage() {
         style={{ borderColor: "var(--color-paper-3)" }}
       >
         <div className="mx-auto max-w-2xl">
-          <FadeIn y={24} duration={0.8}>
+          <FadeIn y={20} duration={0.4}>
             <p
               className="text-xl leading-relaxed"
               style={{ color: "var(--color-ink-soft)" }}
@@ -333,7 +330,7 @@ export default function MarketingPage() {
               steady updates.
             </p>
           </FadeIn>
-          <FadeIn delay={0.2} y={20} duration={0.7}>
+          <FadeIn delay={0.1} y={16} duration={0.35}>
             <div className="mt-10">
               <Link
                 href="/signup"
