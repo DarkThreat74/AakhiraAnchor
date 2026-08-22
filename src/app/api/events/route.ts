@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Recurrence end date must be after start date." }, { status: 400 });
     }
 
-    // Get user's timezone to correctly determine local day-of-week
+    // Get user's timezone to correctly determine local date of the start event
     const [settings] = await db
       .select({ timezone: schema.prayerSettings.timezone })
       .from(schema.prayerSettings)
@@ -163,23 +163,23 @@ export async function POST(request: NextRequest) {
       .limit(1);
     const userTimezone = settings?.timezone || "UTC";
 
-    // Helper: get local day-of-week (0=Sunday) for a UTC Date in the user's timezone
-    const getLocalDayOfWeek = (date: Date): number => {
-      const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: userTimezone,
-        weekday: "short",
-      });
-      const dayName = formatter.format(date);
-      const dayMap: Record<string, number> = {
-        Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
-      };
-      return dayMap[dayName] ?? 0;
-    };
+    // Extract the user's LOCAL date components from the start event
+    // This tells us which calendar day the event falls on in the user's timezone
+    const dateFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: userTimezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const dateParts = dateFormatter.formatToParts(startDate);
+    const startLocalYear = parseInt(dateParts.find((p) => p.type === "year")?.value || "2026", 10);
+    const startLocalMonth = parseInt(dateParts.find((p) => p.type === "month")?.value || "1", 10);
+    const startLocalDay = parseInt(dateParts.find((p) => p.type === "day")?.value || "1", 10);
 
     // Determine which days of the week to repeat on
     // recurrenceDays: array of 0-6 (0=Sunday, 6=Saturday) in user's LOCAL timezone
     // If not provided, default to the local day of the start date
-    const startDayOfWeek = getLocalDayOfWeek(startDate);
+    const startDayOfWeek = new Date(startLocalYear, startLocalMonth - 1, startLocalDay).getDay();
     const daysToRepeat = recurrenceDays && recurrenceDays.length > 0
       ? [...new Set(recurrenceDays)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b)
       : [startDayOfWeek];
@@ -188,21 +188,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Select at least one day to repeat on." }, { status: 400 });
     }
 
-    // Generate occurrences: iterate day by day from startDate until recurEnd
-    // For each day, check if its LOCAL day-of-week is in daysToRepeat
+    // Generate occurrences by iterating local calendar dates.
+    // For each matching day-of-week, compute the occurrence by adding the day
+    // difference (in whole days) to the original startDate. This preserves the
+    // exact UTC time (and thus the local time) of the original event.
     const occurrences: Array<{ startAt: Date; endAt: Date }> = [];
     const durationMs = effectiveEnd.getTime() - startDate.getTime();
+    const recurEndMs = recurEnd.getTime();
 
-    // Start from the first day of the recurrence (the start date itself)
-    let currentDate = new Date(startDate);
-    currentDate.setHours(0, 0, 0, 0);
+    let currentYear = startLocalYear;
+    let currentMonth = startLocalMonth;
+    let currentDay = startLocalDay;
 
-    while (currentDate <= recurEnd) {
-      const dow = getLocalDayOfWeek(currentDate);
+    while (true) {
+      // Check if we've passed the recurrence end date
+      const currentDateObj = new Date(currentYear, currentMonth - 1, currentDay);
+      if (currentDateObj.getTime() > recurEndMs + 24 * 60 * 60 * 1000) break;
+
+      const dow = currentDateObj.getDay(); // Correct day-of-week for this calendar date
+
       if (daysToRepeat.includes(dow)) {
-        // Create the event at the same UTC time as the original (preserves local time)
-        const occStart = new Date(currentDate);
-        occStart.setUTCHours(startDate.getUTCHours(), startDate.getUTCMinutes(), 0, 0);
+        // Compute day difference from the start local date
+        const startLocalDateObj = new Date(startLocalYear, startLocalMonth - 1, startLocalDay);
+        const dayDiff = Math.round((currentDateObj.getTime() - startLocalDateObj.getTime()) / (24 * 60 * 60 * 1000));
+
+        // Create the occurrence by shifting the original UTC timestamp by whole days
+        const occStart = new Date(startDate.getTime() + dayDiff * 24 * 60 * 60 * 1000);
         if (occStart >= startDate) {
           occurrences.push({
             startAt: occStart,
@@ -210,8 +221,13 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+
       // Move to next day
-      currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+      currentDay++;
+      const nextDate = new Date(currentYear, currentMonth - 1, currentDay);
+      currentYear = nextDate.getFullYear();
+      currentMonth = nextDate.getMonth() + 1;
+      currentDay = nextDate.getDate();
     }
 
     if (occurrences.length === 0) {
