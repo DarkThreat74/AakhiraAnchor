@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, MapPin, Repeat } from "lucide-react";
+import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 
 interface CalendarEvent {
@@ -10,6 +10,7 @@ interface CalendarEvent {
   startAt: string;
   endAt: string;
   type: "block" | "task" | "reminder";
+  color?: string | null;
 }
 
 interface PrayerTimes {
@@ -24,6 +25,7 @@ interface PrayerTimes {
 const HOURS = Array.from({ length: 24 }, (_, i) => i); // 12 AM to 11 PM (all 24 hours)
 const HOUR_HEIGHT = 56; // px per hour
 const TIME_COL = 44; // px — time label column
+const DEFAULT_START_HOUR = 5; // 5 AM — default visible start
 
 const PRAYER_NAMES: Array<{
   key: keyof PrayerTimes;
@@ -48,6 +50,18 @@ const REMINDER_COLORS = [
   "#b45309", // amber
   "#1e40af", // deep blue
   "#9f1239", // crimson
+];
+
+// Color palette for event blocks — user-selectable
+const EVENT_COLORS = [
+  { label: "Teal", value: "#0e7490" },
+  { label: "Orange", value: "#c2410c" },
+  { label: "Violet", value: "#7c3aed" },
+  { label: "Rose", value: "#be185d" },
+  { label: "Green", value: "#15803d" },
+  { label: "Amber", value: "#b45309" },
+  { label: "Blue", value: "#1e40af" },
+  { label: "Crimson", value: "#9f1239" },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -86,6 +100,10 @@ export default function DayViewClient({ date }: { date: string }) {
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showEarlyHours, setShowEarlyHours] = useState(false);
+  const [newColor, setNewColor] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +186,7 @@ export default function DayViewClient({ date }: { date: string }) {
   }
 
   function formatHour(hour: number): string {
+    if (hour === 0) return "12a";
     if (hour === 12) return "12p";
     if (hour > 12) return `${hour - 12}p`;
     return `${hour}a`;
@@ -210,6 +229,7 @@ export default function DayViewClient({ date }: { date: string }) {
       startAt: startISO,
       endAt: endISO,
       type: newType,
+      color: newColor,
     };
     if (enableRecurrence && recurrenceEndDate) {
       body.recurrenceEndDate = recurrenceEndDate;
@@ -269,6 +289,76 @@ export default function DayViewClient({ date }: { date: string }) {
     } catch {
       // ignore
     }
+  }
+
+  async function handleUpdateEvent(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingEvent || !newTitle.trim()) return;
+
+    if (newType !== "reminder" && timeToMinutes(newEnd) <= timeToMinutes(newStart)) {
+      setError("End time must be after start time.");
+      return;
+    }
+
+    const startISO = new Date(`${date}T${newStart}:00`).toISOString();
+    const endISO = newType === "reminder"
+      ? new Date(`${date}T${newStart}:00`).toISOString()
+      : new Date(`${date}T${newEnd}:00`).toISOString();
+
+    try {
+      const res = await fetch(`/api/events/${editingEvent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle,
+          startAt: startISO,
+          endAt: endISO,
+          type: newType,
+          color: newColor,
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setEvents(events.map((e) => (e.id === editingEvent.id ? updated : e)));
+        setEditingEvent(null);
+        setNewTitle("");
+        setNewColor(null);
+        setError(null);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to update event.");
+      }
+    } catch {
+      setError("Network error.");
+    }
+  }
+
+  function openEditForm(event: CalendarEvent) {
+    const startStr = isoToLocalTime(event.startAt);
+    const endStr = isoToLocalTime(event.endAt);
+    setEditingEvent(event);
+    setNewTitle(event.title);
+    setNewStart(startStr);
+    setNewEnd(endStr);
+    setNewType(event.type);
+    setNewColor(event.color || null);
+    setEnableRecurrence(false);
+    setRecurrenceEndDate("");
+    setRecurrenceDays([]);
+    setError(null);
+    setShowAddForm(false);
+  }
+
+  function closeForm() {
+    setShowAddForm(false);
+    setEditingEvent(null);
+    setNewTitle("");
+    setNewColor(null);
+    setError(null);
+    setEnableRecurrence(false);
+    setRecurrenceEndDate("");
+    setRecurrenceDays([]);
   }
 
   return (
@@ -332,7 +422,40 @@ export default function DayViewClient({ date }: { date: string }) {
         className="relative overflow-hidden rounded-2xl border"
         style={{ borderColor: "var(--color-paper-3)" }}
       >
-        <div className="relative" style={{ height: HOURS.length * HOUR_HEIGHT }}>
+        {/* View More / Hide button for early hours */}
+        <button
+          onClick={() => setShowEarlyHours(!showEarlyHours)}
+          className="flex w-full items-center justify-center gap-1 border-b py-1.5 text-[11px] font-medium"
+          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
+        >
+          {showEarlyHours ? (
+            <>
+              <ChevronUp className="h-3 w-3" />
+              Hide 12 AM – 4 AM
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3" />
+              Show 12 AM – 4 AM
+            </>
+          )}
+        </button>
+        {/* Grid container — clips early hours when collapsed */}
+        <div
+          className="relative overflow-hidden"
+          style={{
+            height: showEarlyHours
+              ? HOURS.length * HOUR_HEIGHT
+              : (HOURS.length - DEFAULT_START_HOUR) * HOUR_HEIGHT,
+          }}
+        >
+          <div
+            className="relative"
+            style={{
+              height: HOURS.length * HOUR_HEIGHT,
+              transform: showEarlyHours ? "none" : `translateY(-${DEFAULT_START_HOUR * HOUR_HEIGHT}px)`,
+            }}
+          >
           {/* Hour lines + labels */}
           {HOURS.map((hour, i) => (
             <div
@@ -467,13 +590,16 @@ export default function DayViewClient({ date }: { date: string }) {
             const widthPct = 100 / overlapping.length;
             const leftPct = index * widthPct;
 
-            const borderColor = TYPE_COLORS[event.type] || "var(--color-accent)";
-            const bgColor = TYPE_BG[event.type] || TYPE_BG.block;
+            const borderColor = event.color || TYPE_COLORS[event.type] || "var(--color-accent)";
+            const bgColor = event.color
+              ? `color-mix(in oklab, ${event.color} 18%, transparent)`
+              : TYPE_BG[event.type] || TYPE_BG.block;
 
             return (
               <div
                 key={event.id}
-                className="absolute z-20 overflow-hidden rounded-lg border p-1.5 sm:p-2"
+                onClick={() => openEditForm(event)}
+                className="absolute z-20 cursor-pointer overflow-hidden rounded-lg border p-1.5 transition-opacity hover:opacity-80 sm:p-2"
                 style={{
                   top,
                   height,
@@ -489,7 +615,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     {event.title}
                   </p>
                   <button
-                    onClick={() => handleDeleteEvent(event.id)}
+                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm(event); }}
                     className="shrink-0 opacity-40 transition-opacity hover:opacity-100"
                     aria-label="Delete event"
                     style={{ minHeight: 28, minWidth: 28 }}
@@ -500,6 +626,7 @@ export default function DayViewClient({ date }: { date: string }) {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
@@ -510,9 +637,11 @@ export default function DayViewClient({ date }: { date: string }) {
           setNewStart("09:00");
           setNewEnd("10:00");
           setNewType("block");
+          setNewColor(null);
           setEnableRecurrence(false);
           setRecurrenceEndDate("");
           setRecurrenceDays([]);
+          setEditingEvent(null);
           setShowAddForm(true);
         }}
         className="mt-4 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-opacity hover:opacity-90"
@@ -531,13 +660,16 @@ export default function DayViewClient({ date }: { date: string }) {
         <p className="mt-4 text-sm" style={{ color: "var(--color-error)" }}>{error}</p>
       )}
 
-      {/* Add event form — compact inline section */}
-      {showAddForm && (
+      {/* Add/Edit event form — compact inline section */}
+      {(showAddForm || editingEvent) && (
         <form
-          onSubmit={handleAddEvent}
+          onSubmit={editingEvent ? handleUpdateEvent : handleAddEvent}
           className="mt-3 w-full max-w-sm rounded-2xl border p-4 sm:mt-4 sm:p-5"
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
         >
+            <div className="mb-2 text-xs font-semibold" style={{ color: "var(--color-ink-muted)" }}>
+              {editingEvent ? "Edit event" : "New event"}
+            </div>
             <div className="flex flex-col gap-3">
               {/* Title */}
               <input
@@ -581,6 +713,38 @@ export default function DayViewClient({ date }: { date: string }) {
                 </button>
               </div>
 
+              {/* Color picker */}
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setNewColor(null)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border-2 text-[9px] font-medium"
+                  style={{
+                    borderColor: newColor === null ? "var(--color-ink)" : "var(--color-paper-3)",
+                    backgroundColor: "var(--color-paper-2)",
+                    color: "var(--color-ink-muted)",
+                  }}
+                  aria-label="Default color"
+                  title="Default"
+                >
+                  Auto
+                </button>
+                {EVENT_COLORS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setNewColor(c.value)}
+                    className="h-7 w-7 rounded-full border-2"
+                    style={{
+                      backgroundColor: c.value,
+                      borderColor: newColor === c.value ? "var(--color-ink)" : "transparent",
+                    }}
+                    aria-label={c.label}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+
               {/* Time inputs — hide end time for reminders */}
               <div className="flex gap-2">
                 <div className="flex-1">
@@ -605,94 +769,96 @@ export default function DayViewClient({ date }: { date: string }) {
                 )}
               </div>
 
-              {/* Recurrence option */}
-              <div
-                className="rounded-lg border p-2.5"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
-              >
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={enableRecurrence}
-                    onChange={(e) => {
-                      setEnableRecurrence(e.target.checked);
-                      if (e.target.checked && recurrenceDays.length === 0) {
-                        // Default to the current day of the week
-                        const dow = new Date(date + "T00:00:00").getDay();
-                        setRecurrenceDays([dow]);
-                      }
-                    }}
-                    className="h-4 w-4 rounded"
-                    style={{ accentColor: "var(--color-accent)" }}
-                  />
-                  <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--color-ink)" }}>
-                    <Repeat className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
-                    Repeat
-                  </span>
-                </label>
+              {/* Recurrence option — only for new events, not editing */}
+              {!editingEvent && (
+                <div
+                  className="rounded-lg border p-2.5"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+                >
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={enableRecurrence}
+                      onChange={(e) => {
+                        setEnableRecurrence(e.target.checked);
+                        if (e.target.checked && recurrenceDays.length === 0) {
+                          // Default to the current day of the week (in user's local timezone)
+                          const dow = new Date(date + "T00:00:00").getDay();
+                          setRecurrenceDays([dow]);
+                        }
+                      }}
+                      className="h-4 w-4 rounded"
+                      style={{ accentColor: "var(--color-accent)" }}
+                    />
+                    <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                      <Repeat className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+                      Repeat
+                    </span>
+                  </label>
 
-                {enableRecurrence && (
-                  <div className="mt-2.5 flex flex-col gap-2.5">
-                    {/* Day-of-week picker */}
-                    <div>
-                      <div className="flex gap-1">
-                        {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => {
-                          const isSelected = recurrenceDays.includes(idx);
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                if (isSelected) {
-                                  setRecurrenceDays(recurrenceDays.filter((d) => d !== idx));
-                                } else {
-                                  setRecurrenceDays([...recurrenceDays, idx].sort((a, b) => a - b));
-                                }
-                              }}
-                              className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-medium transition-colors sm:h-9 sm:w-9"
-                              style={{
-                                backgroundColor: isSelected ? "var(--color-ink)" : "var(--color-paper)",
-                                color: isSelected ? "var(--color-paper)" : "var(--color-ink-muted)",
-                                border: `1px solid ${isSelected ? "var(--color-ink)" : "var(--color-paper-3)"}`,
-                              }}
-                              aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][idx]}
-                            >
-                              {dayLabel}
-                            </button>
-                          );
-                        })}
+                  {enableRecurrence && (
+                    <div className="mt-2.5 flex flex-col gap-2.5">
+                      {/* Day-of-week picker */}
+                      <div>
+                        <div className="flex gap-1">
+                          {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => {
+                            const isSelected = recurrenceDays.includes(idx);
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setRecurrenceDays(recurrenceDays.filter((d) => d !== idx));
+                                  } else {
+                                    setRecurrenceDays([...recurrenceDays, idx].sort((a, b) => a - b));
+                                  }
+                                }}
+                                className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-medium transition-colors sm:h-9 sm:w-9"
+                                style={{
+                                  backgroundColor: isSelected ? "var(--color-ink)" : "var(--color-paper)",
+                                  color: isSelected ? "var(--color-paper)" : "var(--color-ink-muted)",
+                                  border: `1px solid ${isSelected ? "var(--color-ink)" : "var(--color-paper-3)"}`,
+                                }}
+                                aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][idx]}
+                              >
+                                {dayLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {recurrenceDays.length === 0 && (
+                          <p className="mt-1.5 text-[11px]" style={{ color: "var(--color-error)" }}>
+                            Select at least one day.
+                          </p>
+                        )}
                       </div>
-                      {recurrenceDays.length === 0 && (
-                        <p className="mt-1.5 text-[11px]" style={{ color: "var(--color-error)" }}>
-                          Select at least one day.
+
+                      {/* End date */}
+                      <input
+                        type="date"
+                        value={recurrenceEndDate}
+                        onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                        required={enableRecurrence}
+                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+                        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 40 }}
+                      />
+
+                      {/* Summary */}
+                      {recurrenceDays.length > 0 && recurrenceEndDate && (
+                        <p className="text-[11px] leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+                          Every{" "}
+                          {recurrenceDays
+                            .sort((a, b) => a - b)
+                            .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
+                            .join(", ")}{" "}
+                          until {new Date(recurrenceEndDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}.
                         </p>
                       )}
                     </div>
-
-                    {/* End date */}
-                    <input
-                      type="date"
-                      value={recurrenceEndDate}
-                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                      required={enableRecurrence}
-                      className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
-                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 40 }}
-                    />
-
-                    {/* Summary */}
-                    {recurrenceDays.length > 0 && recurrenceEndDate && (
-                      <p className="text-[11px] leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-                        Every{" "}
-                        {recurrenceDays
-                          .sort((a, b) => a - b)
-                          .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
-                          .join(", ")}{" "}
-                        until {new Date(recurrenceEndDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="flex gap-2">
@@ -702,19 +868,70 @@ export default function DayViewClient({ date }: { date: string }) {
                   className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
                   style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
                 >
-                  {enableRecurrence ? "Add recurring" : "Add"}
+                  {editingEvent ? "Save" : enableRecurrence ? "Add recurring" : "Add"}
                 </button>
+                {editingEvent && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(editingEvent)}
+                    className="rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
+                    style={{ borderColor: "var(--color-error)", color: "var(--color-error)", minHeight: 40 }}
+                  >
+                    Delete
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setShowAddForm(false)}
-                  className="rounded-xl border px-4 py-3 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+                  onClick={closeForm}
+                  className="rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
                 >
                   Cancel
                 </button>
               </div>
             </div>
           </form>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs rounded-2xl border p-5 text-center"
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+          >
+            <p className="mb-1 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Delete event?
+            </p>
+            <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              &ldquo;{deleteConfirm.title}&rdquo; will be permanently removed.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  handleDeleteEvent(deleteConfirm.id);
+                  setDeleteConfirm(null);
+                  closeForm();
+                }}
+                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 40 }}
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

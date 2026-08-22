@@ -2,6 +2,8 @@ import { getSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { db, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 import DayViewClient from "./DayViewClient";
 
 export const dynamic = "force-dynamic";
@@ -10,24 +12,35 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
   const session = await getSession();
   if (!session) redirect("/login");
 
+  // Get user's timezone so we compute "today" in their local time, not server UTC
+  const [settings] = await db
+    .select({ timezone: schema.prayerSettings.timezone })
+    .from(schema.prayerSettings)
+    .where(eq(schema.prayerSettings.userId, session.userId))
+    .limit(1);
+  const userTimezone = settings?.timezone || "UTC";
+
+  // Compute today's date in the user's timezone
+  const nowInTz = new Date().toLocaleString("en-US", { timeZone: userTimezone });
+  const today = new Date(nowInTz).toISOString().split("T")[0];
+
   const params = await searchParams;
-  const today = new Date().toISOString().split("T")[0];
   const date = params.date || today;
 
-  // Calculate prev/next days
-  const dateObj = new Date(date + "T00:00:00");
-  const prevDate = new Date(dateObj);
-  prevDate.setDate(prevDate.getDate() - 1);
-  const nextDate = new Date(dateObj);
-  nextDate.setDate(nextDate.getDate() + 1);
+  // Calculate prev/next days using date strings (avoid timezone issues)
+  const [y, m, d] = date.split("-").map(Number);
+  const prevDate = new Date(y, m - 1, d - 1);
+  const nextDate = new Date(y, m - 1, d + 1);
+  const prevStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-${String(prevDate.getDate()).padStart(2, "0")}`;
+  const nextStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
 
-  const prevStr = prevDate.toISOString().split("T")[0];
-  const nextStr = nextDate.toISOString().split("T")[0];
-
+  // Format the date in the user's timezone
+  const dateObj = new Date(y, m - 1, d);
   const formattedDate = dateObj.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    timeZone: userTimezone,
   });
 
   return (

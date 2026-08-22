@@ -35,11 +35,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { title, startAt, endAt, type, recurrenceRule } = body as {
+  const { title, startAt, endAt, type, color, recurrenceRule } = body as {
     title?: string;
     startAt?: string;
     endAt?: string;
     type?: string;
+    color?: string | null;
     recurrenceRule?: string | null;
   };
 
@@ -89,6 +90,10 @@ export async function PATCH(
 
   if (recurrenceRule !== undefined) {
     updates.recurrenceRule = recurrenceRule?.trim() || null;
+  }
+
+  if (color !== undefined) {
+    updates.color = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
   }
 
   // Update — scoped to the current user

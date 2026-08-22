@@ -97,11 +97,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { title, startAt, endAt, type, recurrenceEndDate, recurrenceDays } = body as {
+  const { title, startAt, endAt, type, color, recurrenceEndDate, recurrenceDays } = body as {
     title?: string;
     startAt?: string;
     endAt?: string;
     type?: string;
+    color?: string;
     recurrenceEndDate?: string;
     recurrenceDays?: number[];
   };
@@ -131,6 +132,9 @@ export async function POST(request: NextRequest) {
   const validTypes = ["block", "task", "reminder"];
   const eventType = validTypes.includes(type || "") ? (type as "block" | "task" | "reminder") : "block";
 
+  // Validate color — must be a hex string like "#c2410c" or null
+  const validColor = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
+
   if (eventType !== "reminder" && endDate <= startDate) {
     return NextResponse.json({ error: "End time must be after start time." }, { status: 400 });
   }
@@ -151,10 +155,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Recurrence end date must be after start date." }, { status: 400 });
     }
 
+    // Get user's timezone to correctly determine local day-of-week
+    const [settings] = await db
+      .select({ timezone: schema.prayerSettings.timezone })
+      .from(schema.prayerSettings)
+      .where(eq(schema.prayerSettings.userId, session.userId))
+      .limit(1);
+    const userTimezone = settings?.timezone || "UTC";
+
+    // Helper: get local day-of-week (0=Sunday) for a UTC Date in the user's timezone
+    const getLocalDayOfWeek = (date: Date): number => {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: userTimezone,
+        weekday: "short",
+      });
+      const dayName = formatter.format(date);
+      const dayMap: Record<string, number> = {
+        Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+      };
+      return dayMap[dayName] ?? 0;
+    };
+
     // Determine which days of the week to repeat on
-    // recurrenceDays: array of 0-6 (0=Sunday, 6=Saturday)
-    // If not provided, default to the day of the start date
-    const startDayOfWeek = startDate.getDay();
+    // recurrenceDays: array of 0-6 (0=Sunday, 6=Saturday) in user's LOCAL timezone
+    // If not provided, default to the local day of the start date
+    const startDayOfWeek = getLocalDayOfWeek(startDate);
     const daysToRepeat = recurrenceDays && recurrenceDays.length > 0
       ? [...new Set(recurrenceDays)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b)
       : [startDayOfWeek];
@@ -164,21 +189,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate occurrences: iterate day by day from startDate until recurEnd
-    // For each day, check if its day-of-week is in daysToRepeat
+    // For each day, check if its LOCAL day-of-week is in daysToRepeat
     const occurrences: Array<{ startAt: Date; endAt: Date }> = [];
     const durationMs = effectiveEnd.getTime() - startDate.getTime();
-    const timeOfDayMs = (startDate.getHours() * 60 + startDate.getMinutes()) * 60 * 1000;
 
     // Start from the first day of the recurrence (the start date itself)
     let currentDate = new Date(startDate);
     currentDate.setHours(0, 0, 0, 0);
 
     while (currentDate <= recurEnd) {
-      const dow = currentDate.getDay();
+      const dow = getLocalDayOfWeek(currentDate);
       if (daysToRepeat.includes(dow)) {
-        // Create the event at the same time of day as the original
-        const occStart = new Date(currentDate.getTime() + timeOfDayMs);
-        // Don't create events before the original start date
+        // Create the event at the same UTC time as the original (preserves local time)
+        const occStart = new Date(currentDate);
+        occStart.setUTCHours(startDate.getUTCHours(), startDate.getUTCMinutes(), 0, 0);
         if (occStart >= startDate) {
           occurrences.push({
             startAt: occStart,
@@ -207,6 +231,7 @@ export async function POST(request: NextRequest) {
           startAt: occ.startAt,
           endAt: occ.endAt,
           type: eventType,
+          color: validColor,
           recurrenceRule: `WEEKLY_${daysToRepeat.join(",")}_UNTIL_${recurrenceEndDate}`,
           createdVia: "manual" as const,
         })),
@@ -225,6 +250,7 @@ export async function POST(request: NextRequest) {
       startAt: startDate,
       endAt: effectiveEnd,
       type: eventType,
+      color: validColor,
       recurrenceRule: null,
       createdVia: "manual",
     })

@@ -208,6 +208,8 @@ export const events = pgTable('events', {
   startAt: timestamp('start_at', { withTimezone: true }).notNull(),
   endAt: timestamp('end_at', { withTimezone: true }).notNull(),
   type: eventType('type').default('block').notNull(),
+  // Custom color (hex string like "#c2410c"). Null = use type-based default color.
+  color: text('color'),
   // iCal RRULE string, null = one-off
   recurrenceRule: text('recurrence_rule'),
   createdVia: eventCreatedVia('created_via').default('manual').notNull(),

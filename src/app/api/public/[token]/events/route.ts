@@ -55,6 +55,7 @@ export async function GET(
         startAt: schema.events.startAt,
         endAt: schema.events.endAt,
         type: schema.events.type,
+        color: schema.events.color,
       })
       .from(schema.events)
       .where(
@@ -87,6 +88,7 @@ export async function GET(
       startAt: schema.events.startAt,
       endAt: schema.events.endAt,
       type: schema.events.type,
+      color: schema.events.color,
     })
     .from(schema.events)
     .where(

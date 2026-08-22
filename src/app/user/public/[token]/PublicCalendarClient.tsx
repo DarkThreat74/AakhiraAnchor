@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Eye, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 
 interface CalendarEvent {
   id: string;
@@ -10,6 +10,7 @@ interface CalendarEvent {
   startAt: string;
   endAt: string;
   type: "block" | "task" | "reminder";
+  color?: string | null;
 }
 
 interface PrayerTimes {
@@ -24,6 +25,7 @@ interface PrayerTimes {
 const HOURS = Array.from({ length: 24 }, (_, i) => i); // 12 AM to 11 PM (all 24 hours)
 const HOUR_HEIGHT = 56;
 const TIME_COL = 44;
+const DEFAULT_START_HOUR = 5; // 5 AM — default visible start
 
 const PRAYER_NAMES: Array<{
   key: keyof PrayerTimes;
@@ -216,6 +218,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showEarlyHours, setShowEarlyHours] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -290,6 +293,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
   }
 
   function formatHour(hour: number): string {
+    if (hour === 0) return "12a";
     if (hour === 12) return "12p";
     if (hour > 12) return `${hour - 12}p`;
     return `${hour}a`;
@@ -392,7 +396,41 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
         className="relative overflow-hidden rounded-2xl border"
         style={{ borderColor: "var(--color-paper-3)" }}
       >
-        <div className="relative" style={{ height: HOURS.length * HOUR_HEIGHT, backgroundColor: "var(--color-paper)" }}>
+        {/* View More / Hide button for early hours */}
+        <button
+          onClick={() => setShowEarlyHours(!showEarlyHours)}
+          className="flex w-full items-center justify-center gap-1 border-b py-1.5 text-[11px] font-medium"
+          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
+        >
+          {showEarlyHours ? (
+            <>
+              <ChevronUp className="h-3 w-3" />
+              Hide 12 AM – 4 AM
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3" />
+              Show 12 AM – 4 AM
+            </>
+          )}
+        </button>
+        {/* Grid container — clips early hours when collapsed */}
+        <div
+          className="relative overflow-hidden"
+          style={{
+            height: showEarlyHours
+              ? HOURS.length * HOUR_HEIGHT
+              : (HOURS.length - DEFAULT_START_HOUR) * HOUR_HEIGHT,
+          }}
+        >
+          <div
+            className="relative"
+            style={{
+              height: HOURS.length * HOUR_HEIGHT,
+              backgroundColor: "var(--color-paper)",
+              transform: showEarlyHours ? "none" : `translateY(-${DEFAULT_START_HOUR * HOUR_HEIGHT}px)`,
+            }}
+          >
           {/* Hour lines */}
           {HOURS.map((hour, i) => (
             <div
@@ -490,8 +528,10 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             const widthPct = 100 / overlapping.length;
             const leftPct = index * widthPct;
 
-            const borderColor = TYPE_COLORS[event.type] || "var(--color-accent)";
-            const bgColor = TYPE_BG[event.type] || TYPE_BG.block;
+            const borderColor = event.color || TYPE_COLORS[event.type] || "var(--color-accent)";
+            const bgColor = event.color
+              ? `color-mix(in oklab, ${event.color} 18%, transparent)`
+              : TYPE_BG[event.type] || TYPE_BG.block;
 
             return (
               <div
@@ -515,6 +555,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
