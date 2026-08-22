@@ -34,13 +34,13 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
   const prevStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-${String(prevDate.getDate()).padStart(2, "0")}`;
   const nextStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
 
-  // Format the date in the user's timezone
+  // Format the date — no timeZone conversion needed since dateObj is already
+  // constructed from the user's local date components (y, m, d)
   const dateObj = new Date(y, m - 1, d);
   const formattedDate = dateObj.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
-    timeZone: userTimezone,
   });
 
   return (

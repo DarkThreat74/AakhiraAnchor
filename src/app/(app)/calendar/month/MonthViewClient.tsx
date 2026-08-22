@@ -10,6 +10,7 @@ interface CalendarEvent {
   startAt: string;
   endAt: string;
   type: "block" | "task" | "reminder";
+  color?: string | null;
 }
 
 // Color palette for reminders — must match DayViewClient
@@ -45,7 +46,9 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
           const events: CalendarEvent[] = await res.json();
           const grouped: Record<string, CalendarEvent[]> = {};
           for (const event of events) {
-            const eventDate = event.startAt.split("T")[0];
+            // Use local date (browser timezone) to group events, not UTC date
+            const d = new Date(event.startAt);
+            const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             if (!grouped[eventDate]) grouped[eventDate] = [];
             grouped[eventDate].push(event);
           }
@@ -208,7 +211,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       minute: "2-digit",
                       hour12: true,
                     });
-                    const color = typeColors[event.type] || "var(--color-accent)";
+                    const color = event.color || typeColors[event.type] || "var(--color-accent)";
                     return (
                       <div
                         key={event.id}
