@@ -21,7 +21,7 @@ interface PrayerTimes {
   isha: string;
 }
 
-const HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 5 AM to 10 PM
+const HOURS = Array.from({ length: 24 }, (_, i) => i); // 12 AM to 11 PM (all 24 hours)
 const HOUR_HEIGHT = 56;
 const TIME_COL = 44;
 
