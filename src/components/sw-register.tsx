@@ -63,9 +63,17 @@ export default function ServiceWorkerRegister() {
           break;
         case "EVENT_QUEUED_OFFLINE":
           showOfflineToast("Saved offline — will sync when you're back online.");
+          // Dispatch a window event so components can react (e.g. mark event as pending)
+          window.dispatchEvent(new CustomEvent("waqt:offline-queued", { detail: data }));
           break;
         case "EVENT_SYNCED":
-          showOfflineToast("Event synced to server.");
+          showOfflineToast(`${data.count || 1} event${(data.count || 1) > 1 ? "s" : ""} synced to server.`);
+          // Dispatch a window event so components can refetch fresh data
+          window.dispatchEvent(new CustomEvent("waqt:events-synced", { detail: data }));
+          break;
+        case "EVENT_SYNC_FAILED":
+          showOfflineToast("Some offline changes could not be synced.");
+          window.dispatchEvent(new CustomEvent("waqt:sync-failed", { detail: data }));
           break;
       }
     };

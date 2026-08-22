@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v5";
+const CACHE_VERSION = "waqt-v6";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -93,7 +93,11 @@ async function syncOutbox() {
   const outbox = await getOutbox();
   if (outbox.length === 0) return;
 
+  let syncedCount = 0;
+  let failed = false;
+
   for (const item of outbox) {
+    if (failed) break;
     try {
       const res = await fetch(item.url, {
         method: item.method,
@@ -104,14 +108,29 @@ async function syncOutbox() {
 
       if (res.ok) {
         await removeFromOutbox(item.id);
-        // Notify client that an event was synced
+        syncedCount++;
+      } else {
+        // Server rejected it (e.g. validation error) — remove from outbox
+        // to avoid retrying forever, but notify client
+        await removeFromOutbox(item.id);
         const clients = await self.clients.matchAll({ type: "window" });
-        clients.forEach((c) => c.postMessage({ type: "EVENT_SYNCED", operation: item }));
+        clients.forEach((c) => c.postMessage({
+          type: "EVENT_SYNC_FAILED",
+          operation: item,
+          status: res.status,
+        }));
       }
     } catch {
       // Still offline — stop trying, will retry on next sync
+      failed = true;
       break;
     }
+  }
+
+  // Notify client that sync is complete so it can refetch fresh data
+  if (syncedCount > 0) {
+    const clients = await self.clients.matchAll({ type: "window" });
+    clients.forEach((c) => c.postMessage({ type: "EVENT_SYNCED", count: syncedCount }));
   }
 }
 
@@ -191,11 +210,13 @@ self.addEventListener("fetch", (event) => {
         } catch {
           // Offline — store in outbox for later sync
           const body = await bodyPromise;
+          const tempId = "offline-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
           await addToOutbox({
             method: request.method,
             url: request.url,
             body: body,
             headers: { "Content-Type": "application/json" },
+            tempId: tempId,
           });
 
           // Notify client that event was queued offline
@@ -205,6 +226,7 @@ self.addEventListener("fetch", (event) => {
               type: "EVENT_QUEUED_OFFLINE",
               method: request.method,
               body: body,
+              tempId: tempId,
             })
           );
 
@@ -213,9 +235,29 @@ self.addEventListener("fetch", (event) => {
             self.registration.sync.register("waqt-event-sync");
           }
 
-          // Return a synthetic success response
+          // Return a synthetic success response with the temp ID
+          // For POST, include enough data for the client to render the event
+          const responseData: Record<string, unknown> = {
+            ok: true,
+            offline: true,
+            tempId: tempId,
+            message: "Saved offline. Will sync when online.",
+          };
+
+          // For POST, echo back the event data with the temp ID so the client
+          // can display it immediately on the calendar
+          if (request.method === "POST" && body) {
+            responseData.id = tempId;
+            responseData.title = body.title || "Untitled";
+            responseData.startAt = body.startAt;
+            responseData.endAt = body.endAt;
+            responseData.type = body.type || "block";
+            responseData.color = body.color || null;
+            responseData._pending = true;
+          }
+
           return new Response(
-            JSON.stringify({ ok: true, offline: true, message: "Saved offline. Will sync when online." }),
+            JSON.stringify(responseData),
             { status: 202, headers: { "Content-Type": "application/json" } }
           );
         }
@@ -265,14 +307,24 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => {
+          // Offline — try the exact cached page first, then any cached app page,
+          // then the cached landing page as a last resort. Never show a bare
+          // "You are offline" text — the app shell should always render.
           return caches.match(request).then(
             (cached) =>
               cached ||
-              caches.match("/") ||
-              new Response("You are offline.", {
-                status: 503,
-                headers: { "Content-Type": "text/plain" },
-              })
+              caches.match("/calendar/day").then(
+                (dayCached) =>
+                  dayCached ||
+                  caches.match("/").then(
+                    (rootCached) =>
+                      rootCached ||
+                      new Response(
+                        "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
+                        { status: 200, headers: { "Content-Type": "text/html" } }
+                      )
+                  )
+              )
           );
         })
     );

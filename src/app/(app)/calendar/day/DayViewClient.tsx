@@ -11,6 +11,7 @@ interface CalendarEvent {
   endAt: string;
   type: "block" | "task" | "reminder";
   color?: string | null;
+  _pending?: boolean;
 }
 
 interface PrayerTimes {
@@ -104,6 +105,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [newColor, setNewColor] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,13 +152,75 @@ export default function DayViewClient({ date }: { date: string }) {
 
         if (!cancelled) setError(null);
       } catch {
-        if (!cancelled) setError("Failed to load calendar data.");
+        // If offline, don't show an error — the SW will serve cached data
+        // via the stale-while-revalidate strategy. Just silently fail.
+        if (!cancelled && !navigator.onLine) {
+          setError(null);
+        } else if (!cancelled) {
+          setError("Failed to load calendar data.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
 
     return () => { cancelled = true; };
+  }, [date]);
+
+  // ── Online/offline + sync listeners ──
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Refetch events to get any synced changes
+      (async () => {
+        try {
+          const res = await fetch(`/api/events?date=${date}`);
+          if (res.ok) {
+            const data = await res.json();
+            const filtered = data.filter((e: { startAt: string }) => {
+              const d = new Date(e.startAt);
+              const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return localDateStr === date;
+            });
+            setEvents(filtered);
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    const handleSynced = () => {
+      // Events were synced from the outbox — refetch to get real data
+      (async () => {
+        try {
+          const res = await fetch(`/api/events?date=${date}`);
+          if (res.ok) {
+            const data = await res.json();
+            const filtered = data.filter((e: { startAt: string }) => {
+              const d = new Date(e.startAt);
+              const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return localDateStr === date;
+            });
+            setEvents(filtered);
+            setError(null);
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("waqt:events-synced", handleSynced);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("waqt:events-synced", handleSynced);
+    };
   }, [date]);
 
   function timeToMinutes(time: string): number {
@@ -247,13 +311,49 @@ export default function DayViewClient({ date }: { date: string }) {
 
       if (res.ok) {
         const data = await res.json();
+
+        // Offline response — event was queued in the SW outbox
+        if (data.offline && data._pending) {
+          // Add the temporary event to the UI so it shows immediately
+          const tempEvent: CalendarEvent = {
+            id: data.id,
+            title: data.title,
+            startAt: data.startAt,
+            endAt: data.endAt,
+            type: data.type,
+            color: data.color,
+            _pending: true,
+          };
+          // Only add if it falls on the currently viewed date
+          const d = new Date(tempEvent.startAt);
+          const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          if (localDateStr === date) {
+            setEvents([...events, tempEvent]);
+          }
+          setSuccessMsg("Saved offline — will sync when online.");
+          setShowAddForm(false);
+          setNewTitle("");
+          setNewColor(null);
+          setEnableRecurrence(false);
+          setRecurrenceEndDate("");
+          setRecurrenceDays([]);
+          setError(null);
+          setTimeout(() => setSuccessMsg(null), 3000);
+          return;
+        }
+
         // If recurring, API returns { created, events }
         if (data.events && Array.isArray(data.events)) {
           // Refetch events for this date to get the ones that landed on today
           const refetch = await fetch(`/api/events?date=${date}`);
           if (refetch.ok) {
             const refreshed = await refetch.json();
-            setEvents(refreshed);
+            const filtered = refreshed.filter((e: { startAt: string }) => {
+              const d = new Date(e.startAt);
+              const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return localDateStr === date;
+            });
+            setEvents(filtered);
           }
           setSuccessMsg(`Created ${data.created} recurring events.`);
         } else {
@@ -263,6 +363,7 @@ export default function DayViewClient({ date }: { date: string }) {
         }
         setShowAddForm(false);
         setNewTitle("");
+        setNewColor(null);
         setEnableRecurrence(false);
         setRecurrenceEndDate("");
         setRecurrenceDays([]);
@@ -281,6 +382,11 @@ export default function DayViewClient({ date }: { date: string }) {
   }
 
   async function handleDeleteEvent(id: string) {
+    // If it's a pending offline event, just remove it from local state
+    if (id.startsWith("offline-")) {
+      setEvents(events.filter((e) => e.id !== id));
+      return;
+    }
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -320,6 +426,27 @@ export default function DayViewClient({ date }: { date: string }) {
 
       if (res.ok) {
         const updated = await res.json();
+        // Offline response — update was queued in the SW outbox
+        if (updated.offline) {
+          // Update the local event with the new values and mark as pending
+          const localUpdated: CalendarEvent = {
+            ...editingEvent,
+            title: newTitle,
+            startAt: startISO,
+            endAt: endISO,
+            type: newType,
+            color: newColor,
+            _pending: true,
+          };
+          setEvents(events.map((e) => (e.id === editingEvent.id ? localUpdated : e)));
+          setSuccessMsg("Saved offline — will sync when online.");
+          setEditingEvent(null);
+          setNewTitle("");
+          setNewColor(null);
+          setError(null);
+          setTimeout(() => setSuccessMsg(null), 3000);
+          return;
+        }
         setEvents(events.map((e) => (e.id === editingEvent.id ? updated : e)));
         setEditingEvent(null);
         setNewTitle("");
@@ -363,6 +490,21 @@ export default function DayViewClient({ date }: { date: string }) {
 
   return (
     <div className="mx-auto max-w-5xl px-2 py-3 sm:px-6 sm:py-6">
+      {/* Offline banner */}
+      {!isOnline && (
+        <div
+          className="mb-3 flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium sm:mb-4"
+          style={{
+            borderColor: "var(--color-warmth)",
+            backgroundColor: "color-mix(in oklab, var(--color-warmth) 10%, transparent)",
+            color: "var(--color-warmth)",
+          }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--color-warmth)" }} />
+          You&apos;re offline — changes will sync when you reconnect.
+        </div>
+      )}
+
       {/* Prayer times bar */}
       {prayerTimes && (
         <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
@@ -613,6 +755,11 @@ export default function DayViewClient({ date }: { date: string }) {
                 <div className="flex h-full items-center justify-between gap-1">
                   <p className="min-w-0 flex-1 truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
                     {event.title}
+                    {event._pending && (
+                      <span className="ml-1 inline-block text-[8px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
+                        ●
+                      </span>
+                    )}
                   </p>
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirm(event); }}
