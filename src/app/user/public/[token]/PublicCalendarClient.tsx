@@ -528,9 +528,10 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             const widthPct = 100 / overlapping.length;
             const leftPct = index * widthPct;
 
-            const borderColor = event.color || TYPE_COLORS[event.type] || "var(--color-accent)";
-            const bgColor = event.color
-              ? `color-mix(in oklab, ${event.color} 18%, transparent)`
+            const eventColor = event.color && event.color.length >= 4 ? event.color : null;
+            const borderColor = eventColor || TYPE_COLORS[event.type] || "var(--color-accent)";
+            const bgColor = eventColor
+              ? `color-mix(in oklab, ${eventColor} 18%, transparent)`
               : TYPE_BG[event.type] || TYPE_BG.block;
 
             return (
@@ -739,7 +740,7 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
                     minute: "2-digit",
                     hour12: true,
                   });
-                  const color = typeColors[event.type] || "var(--color-accent)";
+                  const color = (event.color && event.color.length >= 4 ? event.color : null) || typeColors[event.type] || "var(--color-accent)";
                   return (
                     <div
                       key={event.id}

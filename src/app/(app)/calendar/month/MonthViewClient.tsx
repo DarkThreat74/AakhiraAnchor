@@ -211,7 +211,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       minute: "2-digit",
                       hour12: true,
                     });
-                    const color = event.color || typeColors[event.type] || "var(--color-accent)";
+                    const color = (event.color && event.color.length >= 4 ? event.color : null) || typeColors[event.type] || "var(--color-accent)";
                     return (
                       <div
                         key={event.id}
