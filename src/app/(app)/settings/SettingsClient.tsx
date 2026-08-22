@@ -358,7 +358,25 @@ export default function SettingsClient({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      // Fallback: use a temporary textarea (handles non-secure context / permission denied)
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = shareUrl;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // Final fallback — select the input so user can manually copy
+        const input = document.getElementById("share-url-input") as HTMLInputElement | null;
+        if (input) {
+          input.select();
+        }
+      }
     }
   }
 

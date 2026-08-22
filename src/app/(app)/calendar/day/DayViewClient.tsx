@@ -105,7 +105,8 @@ export default function DayViewClient({ date }: { date: string }) {
   const [newColor, setNewColor] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [mounted, setMounted] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +170,13 @@ export default function DayViewClient({ date }: { date: string }) {
 
   // ── Online/offline + sync listeners ──
   useEffect(() => {
+    // After mount, sync the real online status (avoids hydration mismatch)
+    // Using a Promise to defer the setState outside the effect body
+    Promise.resolve().then(() => {
+      setMounted(true);
+      setIsOnline(navigator.onLine);
+    });
+
     const handleOnline = () => {
       setIsOnline(true);
       // Refetch events to get any synced changes
@@ -490,8 +498,8 @@ export default function DayViewClient({ date }: { date: string }) {
 
   return (
     <div className="mx-auto max-w-5xl px-2 py-3 sm:px-6 sm:py-6">
-      {/* Offline banner */}
-      {!isOnline && (
+      {/* Offline banner — only show after mount to avoid hydration mismatch */}
+      {mounted && !isOnline && (
         <div
           className="mb-3 flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium sm:mb-4"
           style={{
