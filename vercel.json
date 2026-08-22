@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/checkin-scheduler",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/prayer-times-sync",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

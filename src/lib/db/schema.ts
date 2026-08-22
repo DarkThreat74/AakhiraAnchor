@@ -214,6 +214,8 @@ export const events = pgTable('events', {
   recurrenceRule: text('recurrence_rule'),
   createdVia: eventCreatedVia('created_via').default('manual').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  // When a push notification was sent for this event (null = not notified yet)
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
 });
 
 // ─── Daily Huddle ───
