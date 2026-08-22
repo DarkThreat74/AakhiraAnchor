@@ -101,7 +101,14 @@ export default function DayViewClient({ date }: { date: string }) {
 
         if (eventsRes.ok) {
           const eventsData = await eventsRes.json();
-          if (!cancelled) setEvents(eventsData);
+          // Filter to only events that fall on this date in the user's local timezone
+          // The API returns a wider window to handle timezone offsets
+          const filtered = eventsData.filter((e: { startAt: string }) => {
+            const d = new Date(e.startAt);
+            const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            return localDateStr === date;
+          });
+          if (!cancelled) setEvents(filtered);
         }
 
         if (prayerRes?.ok) {
@@ -346,7 +353,7 @@ export default function DayViewClient({ date }: { date: string }) {
             </div>
           ))}
 
-          {/* Prayer time lines — colored lines only, no labels */}
+          {/* Prayer time lines — colored line with label pill */}
           {prayerTimes &&
             PRAYER_NAMES.map((prayer) => {
               const time = prayerTimes[prayer.key];
@@ -358,9 +365,19 @@ export default function DayViewClient({ date }: { date: string }) {
                 <div
                   key={prayer.key}
                   className="absolute z-10 flex items-center"
-                  style={{ top: top - 0.5, left: TIME_COL, right: 0 }}
+                  style={{ top: top - 7, left: TIME_COL, right: 0 }}
                 >
-                  <div className="h-px w-full" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
+                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
+                  <span
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                    style={{
+                      backgroundColor: "var(--color-paper)",
+                      color: prayer.color,
+                      border: `1px solid ${prayer.color}`,
+                    }}
+                  >
+                    {prayer.label} {formatTime(time)}
+                  </span>
                 </div>
               );
             })}

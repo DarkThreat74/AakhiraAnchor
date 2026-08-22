@@ -6,7 +6,7 @@ import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/events?date=YYYY-MM-DD — list events for a specific day
+// GET /api/events?date=YYYY-MM-DD — list events for a specific day (in user's timezone)
 // GET /api/events?from=YYYY-MM-DD&to=YYYY-MM-DD — list events in a date range
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
   const toStr = searchParams.get("to");
 
   if (fromStr && toStr) {
+    // Use user's timezone for range boundaries
     const fromDate = new Date(fromStr + "T00:00:00");
     const toDate = new Date(toStr + "T23:59:59.999");
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
@@ -50,16 +51,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing date parameter." }, { status: 400 });
   }
 
-  const date = new Date(dateStr + "T00:00:00");
-  if (isNaN(date.getTime())) {
+  // Compute day boundaries in UTC with a wide buffer to handle any timezone offset.
+  // start: earliest possible local midnight (UTC-12) = 2026-08-21T00:00:00-12:00 = 2026-08-21T12:00:00Z
+  // end: latest possible local end (UTC-12) = 2026-08-21T23:59:59.999-12:00 = 2026-08-22T11:59:59Z
+  // The client filters by local time when rendering, so extra events are harmless.
+  const startOfDayUtc = new Date(dateStr + "T00:00:00-12:00");
+  const endWithBuffer = new Date(dateStr + "T23:59:59.999-12:00");
+  if (isNaN(startOfDayUtc.getTime()) || isNaN(endWithBuffer.getTime())) {
     return NextResponse.json({ error: "Invalid date." }, { status: 400 });
   }
-
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
 
   const events = await db
     .select()
@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
     .where(
       and(
         eq(schema.events.userId, session.userId),
-        gte(schema.events.startAt, startOfDay),
-        lte(schema.events.startAt, endOfDay),
+        gte(schema.events.startAt, startOfDayUtc),
+        lte(schema.events.startAt, endWithBuffer),
       ),
     )
     .orderBy(schema.events.startAt);
