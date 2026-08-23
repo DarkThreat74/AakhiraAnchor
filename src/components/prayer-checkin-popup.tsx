@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, X, Loader2, MapPin } from "lucide-react";
-import { shouldShowMasjidQuestion, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
+import { shouldShowMasjidQuestion, isPrayerWindowOpen, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
@@ -36,6 +36,7 @@ export default function PrayerCheckinPopup({
   const currentMinutes = timeMatch ? parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]) : now.getHours() * 60 + now.getMinutes();
 
   const showMasjid = shouldShowMasjidQuestion(prayer, currentMinutes, timings);
+  const windowOpen = isPrayerWindowOpen(prayer, currentMinutes, timings);
   const alreadyPrayed = existingStatus === "prayed";
 
   async function checkIn(wentToMasjid: boolean | null) {
@@ -140,7 +141,25 @@ export default function PrayerCheckinPopup({
           </div>
         )}
 
-        {step === "main" && !alreadyPrayed && (
+        {step === "main" && !alreadyPrayed && !windowOpen && (
+          <div className="text-center">
+            <p className="mb-3 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+              The {prayerLabel} window has ended.
+            </p>
+            <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              You can no longer log this prayer. In sha&apos; Allah, catch the next one on time.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+            >
+              Close
+            </button>
+          </div>
+        )}
+
+        {step === "main" && !alreadyPrayed && windowOpen && (
           <>
             <p className="mb-4 text-sm" style={{ color: "var(--color-ink-soft)" }}>
               Did you pray {prayerLabel}?

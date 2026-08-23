@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { isPrayerWindowOpen, getCurrentMinutesInTimezone, type PrayerTimings } from "@/lib/prayer/checkin";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,52 @@ export async function POST(request: NextRequest) {
 
   const validStatuses = ["prayed", "missed", "pending", "assumed_prayed"];
   const finalStatus = validStatuses.includes(status || "") ? status : "prayed";
+
+  // ── Window check: don't allow logging "prayed" after the prayer window has ended ──
+  // "pending" (undo) is always allowed.
+  if (finalStatus === "prayed") {
+    // Get user's prayer settings (timezone)
+    const [settings] = await db
+      .select({ timezone: schema.prayerSettings.timezone })
+      .from(schema.prayerSettings)
+      .where(eq(schema.prayerSettings.userId, session.userId))
+      .limit(1);
+
+    if (settings?.timezone) {
+      // Get cached prayer times for this date
+      const [cache] = await db
+        .select()
+        .from(schema.prayerTimesCache)
+        .where(
+          and(
+            eq(schema.prayerTimesCache.userId, session.userId),
+            eq(schema.prayerTimesCache.date, date),
+          ),
+        )
+        .limit(1);
+
+      if (cache) {
+        const timings: PrayerTimings = {
+          fajr: cache.fajr,
+          sunrise: cache.sunrise,
+          dhuhr: cache.dhuhr,
+          asr: cache.asr,
+          maghrib: cache.maghrib,
+          isha: cache.isha,
+        };
+
+        const currentMinutes = getCurrentMinutesInTimezone(settings.timezone);
+
+        if (!isPrayerWindowOpen(prayerName as "fajr" | "dhuhr" | "asr" | "maghrib" | "isha", currentMinutes, timings)) {
+          return NextResponse.json(
+            { error: "The prayer window has ended. You can no longer log this prayer." },
+            { status: 403 },
+          );
+        }
+      }
+      // If no cached prayer times, fail open (allow the check-in)
+    }
+  }
 
   // Upsert prayer log entry
   const [existing] = await db

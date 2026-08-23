@@ -43,6 +43,60 @@ export function getCurrentMinutesInTimezone(timezone: string): number {
 }
 
 /**
+ * Get the end time (in minutes since midnight) for a prayer's window.
+ * Asr is adjusted +1 hour (display time), so Dhuhr ends at adjusted Asr.
+ *
+ * Windows:
+ * - Fajr → Sunrise
+ * - Dhuhr → Asr (adjusted +1hr)
+ * - Asr  → Maghrib
+ * - Maghrib → Isha
+ * - Isha → 23:59
+ */
+export function getPrayerWindowEnd(prayer: PrayerKey, timings: PrayerTimings): number {
+  const asrAdjusted = parseMinutes(timings.asr) + 60;
+  switch (prayer) {
+    case "fajr":
+      return parseMinutes(timings.sunrise);
+    case "dhuhr":
+      return asrAdjusted;
+    case "asr":
+      return parseMinutes(timings.maghrib);
+    case "maghrib":
+      return parseMinutes(timings.isha);
+    case "isha":
+      return 23 * 60 + 59;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Get the start time (in minutes since midnight) for a prayer's window.
+ * Asr is adjusted +1 hour.
+ */
+export function getPrayerWindowStart(prayer: PrayerKey, timings: PrayerTimings): number {
+  if (prayer === "asr") {
+    return parseMinutes(timings.asr) + 60;
+  }
+  return parseMinutes(timings[prayer]);
+}
+
+/**
+ * Check if a prayer's window is currently open (can still be logged).
+ * Returns true if the current time is within the prayer window.
+ */
+export function isPrayerWindowOpen(
+  prayer: PrayerKey,
+  currentMinutes: number,
+  timings: PrayerTimings,
+): boolean {
+  const start = getPrayerWindowStart(prayer, timings);
+  const end = getPrayerWindowEnd(prayer, timings);
+  return currentMinutes >= start && currentMinutes <= end;
+}
+
+/**
  * Determine whether the "Did you pray in the masjid?" question should be shown
  * for the given prayer, based on the current time and prayer timings.
  *
