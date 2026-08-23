@@ -707,24 +707,26 @@ export default function DayViewClient({ date }: { date: string }) {
             return (
               <div
                 key={event.id}
-                className="absolute z-15 flex items-center group"
+                className="absolute z-25 flex items-center group"
                 style={{ top: top - 7, left: TIME_COL, right: 0 }}
               >
                 <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />
-                <span
-                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                <button
+                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); openEditForm(event); }}
+                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-transform hover:scale-105 sm:px-2 sm:text-[10px]"
                   style={{
                     backgroundColor: "var(--color-paper)",
                     color: color,
                     border: `1px solid ${color}`,
+                    cursor: "pointer",
                   }}
                 >
                   {event.title} · {formatTime(startStr)}
-                </span>
+                </button>
                 <div className="h-0.5 w-3 sm:w-4" style={{ backgroundColor: color, opacity: 0.7 }} />
                 {/* Delete button — appears on hover */}
                 <button
-                  onClick={() => handleDeleteEvent(event.id)}
+                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                   className="ml-1 hidden shrink-0 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100 sm:block"
                   aria-label="Delete reminder"
                   style={{ color: "var(--color-ink-muted)" }}

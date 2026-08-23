@@ -113,6 +113,10 @@ export default function SettingsClient({
   const [qadaaSetting, setQadaaSetting] = useState(false);
   const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
 
+  // Prayer code state
+  const [prayerCode, setPrayerCode] = useState<string | null>(null);
+  const [prayerCodeCopied, setPrayerCodeCopied] = useState(false);
+
   // Logout state
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -133,6 +137,12 @@ export default function SettingsClient({
     fetch("/api/qadaa")
       .then((r) => r.json())
       .then((data) => setQadaaData(data))
+      .catch(() => {});
+
+    // Fetch prayer code
+    fetch("/api/prayer-friends/my-code")
+      .then((r) => r.json())
+      .then((data) => { if (data.prayerCode) setPrayerCode(data.prayerCode); })
       .catch(() => {});
   }, []);
 
@@ -368,6 +378,30 @@ export default function SettingsClient({
     }
   }
 
+  async function handleCopyPrayerCode() {
+    if (!prayerCode) return;
+    try {
+      await navigator.clipboard.writeText(prayerCode);
+      setPrayerCodeCopied(true);
+      setTimeout(() => setPrayerCodeCopied(false), 2000);
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = prayerCode;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setPrayerCodeCopied(true);
+        setTimeout(() => setPrayerCodeCopied(false), 2000);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   async function handleCopy() {
     if (!shareUrl) return;
     try {
@@ -477,7 +511,7 @@ export default function SettingsClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
+    <div className="mx-auto w-full max-w-2xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-10">
       <h1 className="mb-6 text-xl font-semibold tracking-tight sm:mb-8 sm:text-2xl" style={{ color: "var(--color-ink)" }}>
         Settings
       </h1>
@@ -561,6 +595,44 @@ export default function SettingsClient({
               {nameMsg.text}
             </p>
           )}
+        </div>
+      </section>
+
+      {/* ── Prayer Code ── */}
+      <section
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Prayer Code
+            </h2>
+          </div>
+
+          <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+            Share this 6-character code with friends so they can add you and compare prayer streaks.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <div
+              className="flex-1 rounded-lg border px-3 py-2.5 text-center text-lg font-bold tracking-[0.3em]"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+            >
+              {prayerCode || "------"}
+            </div>
+            <button
+              onClick={handleCopyPrayerCode}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper)]"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+            >
+              {prayerCodeCopied ? (
+                <><Check className="h-3.5 w-3.5" style={{ color: "var(--color-success)" }} /> Copied</>
+              ) : (
+                <><Copy className="h-3.5 w-3.5" /> Copy</>
+              )}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -802,7 +874,7 @@ export default function SettingsClient({
               >
                 <span
                   className="min-w-0 flex-1 truncate text-xs"
-                  style={{ color: "var(--color-ink-soft)" }}
+                  style={{ color: "var(--color-ink-soft)", wordBreak: "break-all", overflow: "hidden", textOverflow: "ellipsis" }}
                 >
                   {shareUrl}
                 </span>
