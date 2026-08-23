@@ -84,6 +84,7 @@ function NavItem({ label, href, icon: Icon }: { label: string; href: string; ico
   return (
     <Link
       href={href}
+      prefetch
       className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
       style={{ color: "var(--color-ink-soft)" }}
     >
@@ -97,6 +98,7 @@ function MobileNavItem({ label, href, icon: Icon }: { label: string; href: strin
   return (
     <Link
       href={href}
+      prefetch
       className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium"
       style={{ color: "var(--color-ink-muted)" }}
     >

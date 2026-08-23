@@ -120,14 +120,14 @@ export default function DayViewClient({ date }: { date: string }) {
     (async () => {
       try {
         const [eventsRes, prayerRes, logRes] = await Promise.all([
-          fetch(`/api/events?date=${date}`),
+          fetch(`/api/events?date=${date}`).catch(() => null),
           fetch(`/api/prayer-times?date=${date}`).catch(() => null),
           fetch(`/api/prayer-log?date=${date}`).catch(() => null),
         ]);
 
         if (cancelled) return;
 
-        if (eventsRes.ok) {
+        if (eventsRes?.ok) {
           const eventsData = await eventsRes.json();
           // Filter to only events that fall on this date in the user's local timezone
           // The API returns a wider window to handle timezone offsets

@@ -38,13 +38,8 @@ export default function ServiceWorkerRegister() {
       });
 
     // ── Handle controller change (new SW took control) ──
+    // Only reload — don't clear localStorage/sessionStorage (that wipes offline data)
     const handleControllerChange = () => {
-      try {
-        localStorage.clear();
-        sessionStorage.clear();
-      } catch {
-        // Storage might be unavailable
-      }
       window.location.reload();
     };
 
@@ -67,7 +62,7 @@ export default function ServiceWorkerRegister() {
           window.dispatchEvent(new CustomEvent("waqt:offline-queued", { detail: data }));
           break;
         case "EVENT_SYNCED":
-          showOfflineToast(`${data.count || 1} event${(data.count || 1) > 1 ? "s" : ""} synced to server.`);
+          showOfflineToast(`${data.count || 1} item${(data.count || 1) > 1 ? "s" : ""} synced to server.`);
           // Dispatch a window event so components can refetch fresh data
           window.dispatchEvent(new CustomEvent("waqt:events-synced", { detail: data }));
           break;
@@ -80,12 +75,12 @@ export default function ServiceWorkerRegister() {
 
     navigator.serviceWorker.addEventListener("message", handleMessage);
 
-    // ── Check for updates every 60 seconds ──
+    // ── Check for updates every 5 minutes (not 60s — too aggressive) ──
     const interval = setInterval(() => {
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (reg) reg.update();
       });
-    }, 60_000);
+    }, 5 * 60_000);
 
     // ── On 'online' event, tell SW to sync outbox ──
     const handleOnline = () => {

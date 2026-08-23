@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v9";
+const CACHE_VERSION = "waqt-v10";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -190,10 +190,20 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // ── Handle event writes (POST/PATCH/DELETE) ──
+  // ── NEVER intercept Next.js internal requests ──
+  // These are RSC payload fetches, chunk loads, etc. Intercepting them
+  // adds overhead to every client-side navigation (the #1 cause of slow tabs).
+  if (url.pathname.startsWith("/_next/")) return;
+
+  // ── Handle ALL API writes (POST/PATCH/PUT/DELETE) ──
+  // When online: pass through to server. When offline: queue in IndexedDB.
   if (
     request.method !== "GET" &&
-    url.pathname.startsWith("/api/events")
+    url.pathname.startsWith("/api/") &&
+    !url.pathname.startsWith("/api/auth/") &&
+    !url.pathname.startsWith("/api/admin/") &&
+    !url.pathname.startsWith("/api/notifications/") &&
+    !url.pathname.startsWith("/api/cron/")
   ) {
     // Clone the request body before consuming it
     const bodyPromise = request.clone().json().catch(() => null);
@@ -203,9 +213,6 @@ self.addEventListener("fetch", (event) => {
         try {
           // Try online first
           const response = await fetch(request);
-          if (response.ok) return response;
-
-          // Non-ok response — return it (validation error etc)
           return response;
         } catch {
           // Offline — store in outbox for later sync
@@ -214,17 +221,19 @@ self.addEventListener("fetch", (event) => {
           await addToOutbox({
             method: request.method,
             url: request.url,
+            pathname: url.pathname,
             body: body,
             headers: { "Content-Type": "application/json" },
             tempId: tempId,
           });
 
-          // Notify client that event was queued offline
+          // Notify client that the write was queued offline
           const clients = await self.clients.matchAll({ type: "window" });
           clients.forEach((c) =>
             c.postMessage({
               type: "EVENT_QUEUED_OFFLINE",
               method: request.method,
+              pathname: url.pathname,
               body: body,
               tempId: tempId,
             })
@@ -235,8 +244,7 @@ self.addEventListener("fetch", (event) => {
             self.registration.sync.register("waqt-event-sync");
           }
 
-          // Return a synthetic success response with the temp ID
-          // For POST, include enough data for the client to render the event
+          // Return a synthetic success response
           const responseData: Record<string, unknown> = {
             ok: true,
             offline: true,
@@ -244,16 +252,21 @@ self.addEventListener("fetch", (event) => {
             message: "Saved offline. Will sync when online.",
           };
 
-          // For POST, echo back the event data with the temp ID so the client
-          // can display it immediately on the calendar
+          // For event POSTs, echo back event data so the calendar can render it
           if (request.method === "POST" && body) {
-            responseData.id = tempId;
-            responseData.title = body.title || "Untitled";
-            responseData.startAt = body.startAt;
-            responseData.endAt = body.endAt;
-            responseData.type = body.type || "block";
-            responseData.color = body.color || null;
-            responseData._pending = true;
+            if (url.pathname.startsWith("/api/events")) {
+              responseData.id = tempId;
+              responseData.title = body.title || "Untitled";
+              responseData.startAt = body.startAt;
+              responseData.endAt = body.endAt;
+              responseData.type = body.type || "block";
+              responseData.color = body.color || null;
+              responseData._pending = true;
+            } else {
+              // For other API POSTs (prayer log, qadaa, etc.), echo back the body
+              Object.assign(responseData, body);
+              responseData._pending = true;
+            }
           }
 
           return new Response(
@@ -280,6 +293,9 @@ self.addEventListener("fetch", (event) => {
 
   // Don't intercept share management API
   if (url.pathname.startsWith("/api/share/")) return;
+
+  // Don't intercept cron API
+  if (url.pathname.startsWith("/api/cron/")) return;
 
   // ── Navigation requests: stale-while-revalidate ──
   // Serve cached HTML instantly (if available), then fetch fresh HTML in the
@@ -317,6 +333,26 @@ self.addEventListener("fetch", (event) => {
             { status: 200, headers: { "Content-Type": "text/html" } }
           )
         );
+      })
+    );
+    return;
+  }
+
+  // ── Next.js RSC payload fetches (client-side navigation): stale-while-revalidate ──
+  // These have the RSC header. Cache them so offline <Link> navigation works.
+  if (request.headers.get("RSC") === "1") {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const responseClone = response.clone();
+              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || fetchPromise;
       })
     );
     return;
@@ -361,21 +397,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Everything else: stale-while-revalidate ──
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
-        .then((response) => {
-          if (response.ok && response.type === "basic") {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
-  );
+  // ── Everything else: let the browser handle it (no SW interception) ──
+  // This is critical for fast client-side navigation — intercepting Next.js
+  // RSC payload fetches adds overhead to every <Link> click.
 });
 
 // ─── Message handler ───

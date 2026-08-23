@@ -98,6 +98,29 @@ export default function PrayerDashboard() {
     })();
   }, []);
 
+  // Refetch when offline items sync
+  useEffect(() => {
+    const handleSynced = () => {
+      // Refetch all data after sync
+      (async () => {
+        try {
+          const [analyticsRes, friendsRes, qadaaRes] = await Promise.all([
+            fetch("/api/prayer-log/analytics").catch(() => null),
+            fetch("/api/prayer-friends").catch(() => null),
+            fetch("/api/qadaa").catch(() => null),
+          ]);
+          if (analyticsRes?.ok) setAnalytics(await analyticsRes.json());
+          if (friendsRes?.ok) setFriends(await friendsRes.json());
+          if (qadaaRes?.ok) setQadaa(await qadaaRes.json());
+        } catch {
+          // ignore
+        }
+      })();
+    };
+    window.addEventListener("waqt:events-synced", handleSynced);
+    return () => window.removeEventListener("waqt:events-synced", handleSynced);
+  }, []);
+
   async function handleCopyCode() {
     if (!prayerCode) return;
     try {
@@ -120,9 +143,13 @@ export default function PrayerDashboard() {
         body: JSON.stringify({ code: addFriendCode.trim().toUpperCase() }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && !data.offline) {
         setFriends([...friends, data.friend]);
         setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}!`);
+        setAddFriendCode("");
+        setTimeout(() => setFriendSuccess(null), 3000);
+      } else if (data.offline) {
+        setFriendSuccess("Saved offline — will sync when online.");
         setAddFriendCode("");
         setTimeout(() => setFriendSuccess(null), 3000);
       } else {
@@ -137,6 +164,7 @@ export default function PrayerDashboard() {
     try {
       const res = await fetch(`/api/prayer-friends/remove?friendId=${friendId}`, { method: "DELETE" });
       if (res.ok) {
+        // Optimistically remove from local list (works both online and offline)
         setFriends(friends.filter((f) => f.id !== friendId));
       }
     } catch {
@@ -160,9 +188,21 @@ export default function PrayerDashboard() {
         }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && !data.offline) {
         setQadaa(data);
         setQadaaMsg("Qadaa set up successfully.");
+        setTimeout(() => setQadaaMsg(null), 3000);
+      } else if (data.offline) {
+        // Offline — set local state from input values
+        setQadaa({
+          fajrOwed: setupFajr,
+          dhuhrOwed: setupDhuhr,
+          asrOwed: setupAsr,
+          maghribOwed: setupMaghrib,
+          ishaOwed: setupIsha,
+          setupCompleted: true,
+        });
+        setQadaaMsg("Saved offline — will sync when online.");
         setTimeout(() => setQadaaMsg(null), 3000);
       } else {
         setQadaaMsg(data.error || "Failed to set up qadaa.");
@@ -183,10 +223,25 @@ export default function PrayerDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        setQadaa(data);
-        setQadaaMsg(delta > 0
-          ? `Added ${delta} to ${PRAYER_LABELS[adjustPrayer]} qadaa.`
-          : `Logged ${Math.abs(delta)} ${PRAYER_LABELS[adjustPrayer]} qadaa as prayed.`);
+        if (data.offline) {
+          // Offline — update local state optimistically
+          if (qadaa) {
+            const colMap: Record<string, keyof typeof qadaa> = {
+              fajr: "fajrOwed", dhuhr: "dhuhrOwed", asr: "asrOwed",
+              maghrib: "maghribOwed", isha: "ishaOwed",
+            };
+            const col = colMap[adjustPrayer];
+            if (col) {
+              setQadaa({ ...qadaa, [col]: Math.max(0, (qadaa[col] as number) + delta) });
+            }
+          }
+          setQadaaMsg("Saved offline — will sync when online.");
+        } else {
+          setQadaa(data);
+          setQadaaMsg(delta > 0
+            ? `Added ${delta} to ${PRAYER_LABELS[adjustPrayer]} qadaa.`
+            : `Logged ${Math.abs(delta)} ${PRAYER_LABELS[adjustPrayer]} qadaa as prayed.`);
+        }
         setTimeout(() => setQadaaMsg(null), 3000);
       }
     } catch {
