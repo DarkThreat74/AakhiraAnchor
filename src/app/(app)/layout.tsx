@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { Calendar, Settings, Flame } from "lucide-react";
+import ServiceWorkerRegister from "@/components/sw-register";
+import NotificationScheduler from "@/components/notification-scheduler";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 export const dynamic = "force-dynamic";
@@ -69,6 +71,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileNavItem key={item.href} {...item} />
         ))}
       </nav>
+
+      {/* Service worker + notification scheduler */}
+      <ServiceWorkerRegister />
+      <NotificationScheduler />
     </div>
   );
 }
