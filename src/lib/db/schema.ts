@@ -60,6 +60,8 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   // Display name — collected during onboarding, used in public calendar URL and header
   displayName: text('display_name'),
+  // First name — used in prayer friends dashboard
+  firstName: text('first_name'),
   phone: text('phone'),
   phoneVerified: boolean('phone_verified').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -68,7 +70,26 @@ export const users = pgTable('users', {
   role: userRole('role').default('user').notNull(),
   // Public calendar share token — null = sharing disabled, non-null = public read-only calendar at /user/[name]/[token]
   publicShareToken: text('public_share_token').unique(),
+  // 6-character prayer share code — share with friends to let them see your prayer streaks
+  prayerCode: text('prayer_code').unique(),
 });
+
+// ─── Prayer Friends (share streak access via code) ───
+
+export const prayerFriends = pgTable(
+  'prayer_friends',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // The user who added the friend
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    // The friend being added
+    friendId: uuid('friend_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('prayer_friends_user_friend_idx').on(table.userId, table.friendId),
+  ],
+);
 
 // ─── Prayer Settings (per-user location + calculation) ───
 
@@ -328,3 +349,4 @@ export type DailyLessonView = typeof dailyLessonViews.$inferSelect;
 export type DhikrSequence = typeof dhikrSequences.$inferSelect;
 export type Talk = typeof talks.$inferSelect;
 export type OnboardingResponse = typeof onboardingResponses.$inferSelect;
+export type PrayerFriend = typeof prayerFriends.$inferSelect;

@@ -107,6 +107,12 @@ export default function SettingsClient({
   const [copied, setCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
+  // Qadaa state
+  const [qadaaData, setQadaaData] = useState<{ totalOwed: number; onboardingEstimate: number } | null>(null);
+  const [qadaaYears, setQadaaYears] = useState(1);
+  const [qadaaSetting, setQadaaSetting] = useState(false);
+  const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
+
   // Logout state
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -122,6 +128,12 @@ export default function SettingsClient({
       })
       .catch(() => {})
       .finally(() => setShareLoading(false));
+
+    // Fetch qadaa status
+    fetch("/api/qadaa")
+      .then((r) => r.json())
+      .then((data) => setQadaaData(data))
+      .catch(() => {});
   }, []);
 
   // Search for a city using OpenStreetMap Nominatim
@@ -281,11 +293,16 @@ export default function SettingsClient({
           const period = h < 12 ? "AM" : "PM";
           return `${hour}:${String(m).padStart(2, "0")} ${period}`;
         };
+        // Asr display time = API time + 1 hour
+        const asrParts = data.asr.split(":").map(Number);
+        const asrAdjusted = ((asrParts[0] + 1) % 24);
+        const asrDisplay = `${String(asrAdjusted).padStart(2, "0")}:${String(asrParts[1]).padStart(2, "0")}`;
+
         setTodayPrayerTimes({
           fajr: fmt(data.fajr),
           sunrise: fmt(data.sunrise),
           dhuhr: fmt(data.dhuhr),
-          asr: fmt(data.asr),
+          asr: fmt(asrDisplay),
           maghrib: fmt(data.maghrib),
           isha: fmt(data.isha),
         });
@@ -377,6 +394,32 @@ export default function SettingsClient({
           input.select();
         }
       }
+    }
+  }
+
+  // Qadaa setup
+  async function handleQadaaSetup() {
+    setQadaaSetting(true);
+    setQadaaMsg(null);
+    try {
+      const estimate = qadaaYears * 365 * 5;
+      const res = await fetch("/api/qadaa/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimate }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQadaaData(data);
+        setQadaaMsg(`Qadaa set to ${data.totalOwed} prayers.`);
+      } else {
+        setQadaaMsg(data.error || "Failed to set qadaa.");
+      }
+    } catch {
+      setQadaaMsg("Network error.");
+    } finally {
+      setQadaaSetting(false);
+      setTimeout(() => setQadaaMsg(null), 4000);
     }
   }
 
@@ -822,6 +865,53 @@ export default function SettingsClient({
           )}
         </div>
       </section>
+
+      {/* ── Qadaa Setup ── */}
+      {qadaaData && qadaaData.onboardingEstimate === 0 && (
+        <section
+          className="overflow-hidden rounded-2xl border"
+          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+        >
+          <div className="border-b px-4 py-3 sm:px-6" style={{ borderColor: "var(--color-paper-3)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Qadaa Calculator</h2>
+          </div>
+          <div className="p-4 sm:p-6">
+            <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              Estimate how many prayers you need to catch up on. This can only be set once — after that, adjust it from the Prayer dashboard.
+            </p>
+            <div className="mb-4 flex items-center gap-3">
+              <label className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                Years missed:
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={qadaaYears}
+                onChange={(e) => setQadaaYears(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                className="w-20 rounded-lg border px-3 py-1.5 text-sm tabular-nums"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+              />
+              <span className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                = {qadaaYears * 365 * 5} prayers
+              </span>
+            </div>
+            {qadaaMsg && (
+              <div className="mb-3 text-xs font-medium" style={{ color: qadaaMsg.includes("set to") ? "var(--color-success)" : "var(--color-warmth)" }}>
+                {qadaaMsg}
+              </div>
+            )}
+            <button
+              onClick={handleQadaaSetup}
+              disabled={qadaaSetting || qadaaYears === 0}
+              className="rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+            >
+              {qadaaSetting ? "Setting..." : "Set Qadaa Estimate"}
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ── Logout ── */}
       <section

@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { Calendar, Settings } from "lucide-react";
+import { Calendar, Settings, Flame } from "lucide-react";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 export const dynamic = "force-dynamic";
 
 const navItems = [
   { label: "Calendar", href: "/calendar/day", icon: Calendar },
+  { label: "Prayer", href: "/prayer", icon: Flame },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

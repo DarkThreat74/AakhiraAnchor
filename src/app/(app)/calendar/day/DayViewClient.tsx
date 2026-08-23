@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check } from "lucide-react";
 import Link from "next/link";
+import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
+import { getDisplayAsrTime, type PrayerKey } from "@/lib/prayer/checkin";
 
 interface CalendarEvent {
   id: string;
@@ -32,13 +34,14 @@ const PRAYER_NAMES: Array<{
   key: keyof PrayerTimes;
   label: string;
   color: string;
+  isPrayer: boolean;
 }> = [
-  { key: "fajr", label: "Fajr", color: "var(--color-accent)" },
-  { key: "sunrise", label: "Sunrise", color: "var(--color-warmth)" },
-  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)" },
-  { key: "asr", label: "Asr", color: "var(--color-accent)" },
-  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)" },
-  { key: "isha", label: "Isha", color: "var(--color-accent)" },
+  { key: "fajr", label: "Fajr", color: "var(--color-accent)", isPrayer: true },
+  { key: "sunrise", label: "Sunrise", color: "var(--color-warmth)", isPrayer: false },
+  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)", isPrayer: true },
+  { key: "asr", label: "Asr", color: "var(--color-accent)", isPrayer: true },
+  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)", isPrayer: true },
+  { key: "isha", label: "Isha", color: "var(--color-accent)", isPrayer: true },
 ];
 
 // Color palette for reminders — each reminder gets a distinct color
@@ -107,15 +110,19 @@ export default function DayViewClient({ date }: { date: string }) {
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [prayerLogs, setPrayerLogs] = useState<Array<{ prayerName: string; status: string; wentToMasjid: boolean | null }>>([]);
+  const [checkinPopup, setCheckinPopup] = useState<{ prayer: PrayerKey; label: string } | null>(null);
+  const [userTimezone, setUserTimezone] = useState("America/Chicago");
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const [eventsRes, prayerRes] = await Promise.all([
+        const [eventsRes, prayerRes, logRes] = await Promise.all([
           fetch(`/api/events?date=${date}`),
           fetch(`/api/prayer-times?date=${date}`).catch(() => null),
+          fetch(`/api/prayer-log?date=${date}`).catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -149,6 +156,23 @@ export default function DayViewClient({ date }: { date: string }) {
           } catch {
             // User needs to set location in settings
           }
+        }
+
+        // Parse prayer logs
+        if (logRes?.ok) {
+          const logData = await logRes.json();
+          if (!cancelled) setPrayerLogs(logData);
+        }
+
+        // Fetch user timezone from settings
+        try {
+          const settingsRes = await fetch("/api/settings/prayer-settings");
+          if (settingsRes.ok && !cancelled) {
+            const settingsData = await settingsRes.json();
+            if (settingsData.timezone) setUserTimezone(settingsData.timezone);
+          }
+        } catch {
+          // Use default timezone
         }
 
         if (!cancelled) setError(null);
@@ -517,24 +541,33 @@ export default function DayViewClient({ date }: { date: string }) {
       {prayerTimes && (
         <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
           {PRAYER_NAMES.map((prayer) => {
-            const time = prayerTimes[prayer.key];
-            if (!time) return null;
+            const rawTime = prayerTimes[prayer.key];
+            if (!rawTime) return null;
+            // Asr time: display API time + 1 hour
+            const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
+            const log = prayerLogs.find((l) => l.prayerName === prayer.key);
+            const isPrayed = log?.status === "prayed" || log?.status === "assumed_prayed";
+            const isClickable = prayer.isPrayer;
             return (
-              <div
+              <button
                 key={prayer.key}
-                className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-2.5 py-1.5 sm:px-3"
+                onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
+                className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-2.5 py-1.5 transition-colors sm:px-3"
                 style={{
-                  borderColor: "var(--color-paper-3)",
-                  backgroundColor: "var(--color-paper)",
+                  borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
+                  backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
+                  cursor: isClickable ? "pointer" : "default",
                 }}
+                disabled={!isClickable}
               >
-                <span className="text-[11px] font-medium sm:text-xs" style={{ color: prayer.color }}>
+                <span className="flex items-center gap-1 text-[11px] font-medium sm:text-xs" style={{ color: prayer.color }}>
                   {prayer.label}
+                  {isPrayed && <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />}
                 </span>
                 <span className="text-[10px] tabular-nums sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                   {formatTime(time)}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -629,28 +662,36 @@ export default function DayViewClient({ date }: { date: string }) {
           {/* Prayer time lines — colored line with label pill */}
           {prayerTimes &&
             PRAYER_NAMES.map((prayer) => {
-              const time = prayerTimes[prayer.key];
-              if (!time) return null;
+              const rawTime = prayerTimes[prayer.key];
+              if (!rawTime) return null;
+              // Asr time: display API time + 1 hour
+              const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
               const minutes = timeToMinutes(time);
               if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
               const top = minutesToTop(minutes);
+              const log = prayerLogs.find((l) => l.prayerName === prayer.key);
+              const isPrayed = log?.status === "prayed" || log?.status === "assumed_prayed";
+              const isClickable = prayer.isPrayer;
               return (
                 <div
                   key={prayer.key}
-                  className="absolute z-10 flex items-center"
+                  className="absolute z-30 flex items-center"
                   style={{ top: top - 7, left: TIME_COL, right: 0 }}
                 >
                   <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
-                  <span
-                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium sm:px-2 sm:text-[10px]"
+                  <button
+                    onClick={isClickable ? (e: React.MouseEvent) => { e.stopPropagation(); setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }); } : undefined}
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-transform sm:px-2 sm:text-[10px]"
                     style={{
-                      backgroundColor: "var(--color-paper)",
+                      backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 10%, var(--color-paper))" : "var(--color-paper)",
                       color: prayer.color,
-                      border: `1px solid ${prayer.color}`,
+                      border: `1px solid ${isPrayed ? "var(--color-success)" : prayer.color}`,
+                      cursor: isClickable ? "pointer" : "default",
                     }}
                   >
                     {prayer.label} {formatTime(time)}
-                  </span>
+                    {isPrayed && " ✓"}
+                  </button>
                 </div>
               );
             })}
@@ -1088,6 +1129,34 @@ export default function DayViewClient({ date }: { date: string }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Prayer check-in popup */}
+      {checkinPopup && prayerTimes && (
+        <PrayerCheckinPopup
+          prayer={checkinPopup.prayer}
+          prayerLabel={checkinPopup.label}
+          date={date}
+          timezone={userTimezone}
+          timings={{
+            fajr: prayerTimes.fajr,
+            sunrise: prayerTimes.sunrise,
+            dhuhr: prayerTimes.dhuhr,
+            asr: prayerTimes.asr,
+            maghrib: prayerTimes.maghrib,
+            isha: prayerTimes.isha,
+          }}
+          existingStatus={prayerLogs.find((l) => l.prayerName === checkinPopup.prayer)?.status}
+          onClose={() => setCheckinPopup(null)}
+          onCheckedIn={(result) => {
+            // Update local prayer logs state
+            setPrayerLogs((prev) => {
+              const filtered = prev.filter((l) => l.prayerName !== checkinPopup.prayer);
+              return [...filtered, { prayerName: checkinPopup.prayer, status: result.status, wentToMasjid: result.wentToMasjid }];
+            });
+            setCheckinPopup(null);
+          }}
+        />
       )}
     </div>
   );

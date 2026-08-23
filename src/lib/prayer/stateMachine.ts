@@ -95,9 +95,22 @@ export function getPrayerWindow(
   prayerName: PrayerWindow["prayerName"],
   timings: { fajr: string; sunrise: string; dhuhr: string; asr: string; maghrib: string; isha: string },
 ): PrayerWindow {
+  // Asr display time = API time + 1 hour
+  // The Asr prayer window starts at the adjusted time
+  const asrParts = timings.asr.split(":").map(Number);
+  const asrAdjusted = `${String((asrParts[0] + 1) % 24).padStart(2, "0")}:${String(asrParts[1]).padStart(2, "0")}`;
+
+  const startTimes: Record<PrayerWindow["prayerName"], string> = {
+    fajr: timings.fajr,
+    dhuhr: timings.dhuhr,
+    asr: asrAdjusted,
+    maghrib: timings.maghrib,
+    isha: timings.isha,
+  };
+
   const endTimes: Record<PrayerWindow["prayerName"], string> = {
     fajr: timings.sunrise,
-    dhuhr: timings.asr,
+    dhuhr: asrAdjusted, // Dhuhr ends when Asr (adjusted) starts
     asr: timings.maghrib,
     maghrib: timings.isha,
     isha: "23:59",
@@ -105,7 +118,7 @@ export function getPrayerWindow(
 
   return {
     prayerName,
-    startTime: timings[prayerName],
+    startTime: startTimes[prayerName],
     endTime: endTimes[prayerName],
   };
 }

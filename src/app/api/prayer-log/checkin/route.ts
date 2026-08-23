@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
         wentToMasjid: wentToMasjid ?? existing.wentToMasjid,
         markedAt: new Date(),
         lastCheckinAt: new Date(),
+        // Reset checkin stage when user manually marks as prayed
+        checkinStage: 0,
       })
       .where(eq(schema.prayerLog.id, existing.id))
       .returning();

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 
 interface CalendarEvent {
   id: string;
@@ -28,8 +28,15 @@ function getReminderColor(title: string): string {
   return REMINDER_COLORS[Math.abs(hash) % REMINDER_COLORS.length];
 }
 
+interface PrayerLogEntry {
+  date: string;
+  prayerName: string;
+  status: string;
+}
+
 export default function MonthViewClient({ year, month }: { year: number; month: number }) {
   const [eventsByDate, setEventsByDate] = useState<Record<string, CalendarEvent[]>>({});
+  const [prayerLogsByDate, setPrayerLogsByDate] = useState<Record<string, PrayerLogEntry[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,12 +48,15 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
         const daysInMonth = new Date(year, month, 0).getDate();
         const toStr = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
 
-        const res = await fetch(`/api/events?from=${fromStr}&to=${toStr}`);
-        if (res.ok && !cancelled) {
-          const events: CalendarEvent[] = await res.json();
+        const [eventsRes, logRes] = await Promise.all([
+          fetch(`/api/events?from=${fromStr}&to=${toStr}`),
+          fetch(`/api/prayer-log/range?from=${fromStr}&to=${toStr}`).catch(() => null),
+        ]);
+
+        if (eventsRes.ok && !cancelled) {
+          const events: CalendarEvent[] = await eventsRes.json();
           const grouped: Record<string, CalendarEvent[]> = {};
           for (const event of events) {
-            // Use local date (browser timezone) to group events, not UTC date
             const d = new Date(event.startAt);
             const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             if (!grouped[eventDate]) grouped[eventDate] = [];
@@ -56,6 +66,16 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             grouped[date].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
           }
           if (!cancelled) setEventsByDate(grouped);
+        }
+
+        if (logRes?.ok && !cancelled) {
+          const logs: PrayerLogEntry[] = await logRes.json();
+          const grouped: Record<string, PrayerLogEntry[]> = {};
+          for (const log of logs) {
+            if (!grouped[log.date]) grouped[log.date] = [];
+            grouped[log.date].push(log);
+          }
+          if (!cancelled) setPrayerLogsByDate(grouped);
         }
       } catch {
         // ignore
@@ -180,6 +200,9 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             const dayEvents = cell.dateStr ? eventsByDate[cell.dateStr] || [] : [];
             const blockEvents = dayEvents.filter((e) => e.type !== "reminder");
             const reminderEvents = dayEvents.filter((e) => e.type === "reminder");
+            const dayLogs = cell.dateStr ? prayerLogsByDate[cell.dateStr] || [] : [];
+            const prayedCount = dayLogs.filter((l) => l.status === "prayed" || l.status === "assumed_prayed").length;
+            const allPrayed = prayedCount === 5;
 
             return (
               <Link
@@ -192,15 +215,18 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                   opacity: done ? 0.6 : 1,
                 }}
               >
-                {/* Day number */}
+                {/* Day number + all-prayed check */}
                 <span
-                  className="mb-0.5 font-medium tabular-nums"
+                  className="mb-0.5 flex items-center justify-between font-medium tabular-nums"
                   style={{
                     color: isToday ? "var(--color-accent)" : done ? "var(--color-ink-muted)" : "var(--color-ink)",
                     fontSize: 11,
                   }}
                 >
                   {cell.day}
+                  {allPrayed && (
+                    <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />
+                  )}
                 </span>
 
                 {/* Event blocks — show up to 2, then "+N more" */}

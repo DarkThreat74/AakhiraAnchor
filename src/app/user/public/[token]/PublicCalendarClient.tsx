@@ -40,6 +40,15 @@ const PRAYER_NAMES: Array<{
   { key: "isha", label: "Isha", color: "var(--color-accent)" },
 ];
 
+// Asr display time = API time + 1 hour
+function getDisplayAsrTime(apiTime: string): string {
+  const [h, m] = apiTime.split(":").map(Number);
+  const adjusted = h * 60 + m + 60;
+  const nh = Math.floor(adjusted / 60) % 24;
+  const nm = adjusted % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
 const REMINDER_COLORS = [
   "#c2410c", "#0e7490", "#7c3aed", "#be185d",
   "#15803d", "#b45309", "#1e40af", "#9f1239",
@@ -368,8 +377,9 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
       {prayerTimes && (
         <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
           {PRAYER_NAMES.map((prayer) => {
-            const time = prayerTimes[prayer.key];
-            if (!time) return null;
+            const rawTime = prayerTimes[prayer.key];
+            if (!rawTime) return null;
+            const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
             return (
               <div
                 key={prayer.key}
@@ -454,8 +464,9 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
           {/* Prayer time lines — colored line with label pill */}
           {prayerTimes &&
             PRAYER_NAMES.map((prayer) => {
-              const time = prayerTimes[prayer.key];
-              if (!time) return null;
+              const rawTime = prayerTimes[prayer.key];
+              if (!rawTime) return null;
+              const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
               const minutes = timeToMinutes(time);
               if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
               const top = minutesToTop(minutes);
