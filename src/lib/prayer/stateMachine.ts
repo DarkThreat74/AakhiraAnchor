@@ -78,6 +78,14 @@ export function isWindowClosed(window: PrayerWindow, now: Date): boolean {
 }
 
 /**
+ * Parse "HH:MM" into minutes since midnight.
+ */
+function parseMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
  * Parse "HH:MM" into a Date for today.
  */
 function parseTimeToday(timeStr: string, base: Date): Date {
@@ -113,7 +121,8 @@ export function getPrayerWindow(
     dhuhr: asrAdjusted, // Dhuhr ends when Asr (adjusted) starts
     asr: timings.maghrib,
     maghrib: timings.isha,
-    isha: "23:59",
+    // Isha ends at next day's Fajr — represented as fajr time + 24h in minutes
+    isha: `${String(Math.floor((parseMinutes(timings.fajr) + 1440) / 60) % 24).padStart(2, "0")}:${String((parseMinutes(timings.fajr) + 1440) % 60).padStart(2, "0")}`,
   };
 
   return {

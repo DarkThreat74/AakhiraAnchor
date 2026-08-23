@@ -6,8 +6,11 @@ import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/qadaa/setup — set the initial qadaa estimate (only works if not already set)
-// Body: { estimate: number }
+const VALID_PRAYERS = ["fajr", "dhuhr", "asr", "maghrib", "isha"] as const;
+type PrayerName = (typeof VALID_PRAYERS)[number];
+
+// POST /api/qadaa/setup — set initial per-salah qadaa amounts (only works if not already set up)
+// Body: { fajr: number, dhuhr: number, asr: number, maghrib: number, isha: number }
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -26,25 +29,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { estimate } = body as { estimate?: number };
+  const { fajr, dhuhr, asr, maghrib, isha } = body as {
+    fajr?: number; dhuhr?: number; asr?: number; maghrib?: number; isha?: number;
+  };
 
-  if (typeof estimate !== "number" || !Number.isInteger(estimate) || estimate < 0) {
-    return NextResponse.json({ error: "Estimate must be a non-negative integer." }, { status: 400 });
+  // Validate all 5 prayers
+  const amounts: Record<PrayerName, number> = {
+    fajr: Number(fajr) || 0,
+    dhuhr: Number(dhuhr) || 0,
+    asr: Number(asr) || 0,
+    maghrib: Number(maghrib) || 0,
+    isha: Number(isha) || 0,
+  };
+
+  for (const prayer of VALID_PRAYERS) {
+    if (!Number.isInteger(amounts[prayer]) || amounts[prayer] < 0) {
+      return NextResponse.json({ error: `${prayer} must be a non-negative integer.` }, { status: 400 });
+    }
+    if (amounts[prayer] > 100000) {
+      return NextResponse.json({ error: `${prayer} value too large.` }, { status: 400 });
+    }
   }
 
-  // Cap at a reasonable maximum (100 years × 365 × 5 = 182500)
-  const cappedEstimate = Math.min(182500, estimate);
-
-  // Check if already set
+  // Check if already set up
   const [existing] = await db
     .select()
     .from(schema.qadaaLedger)
     .where(eq(schema.qadaaLedger.userId, session.userId))
     .limit(1);
 
-  if (existing && existing.onboardingEstimate > 0) {
+  if (existing?.setupCompleted) {
     return NextResponse.json(
-      { error: "Qadaa estimate already set. Use the prayer dashboard to adjust." },
+      { error: "Qadaa already set up. Use the adjust endpoint to change amounts." },
       { status: 409 },
     );
   }
@@ -52,15 +68,34 @@ export async function POST(request: NextRequest) {
   if (existing) {
     await db
       .update(schema.qadaaLedger)
-      .set({ totalOwed: cappedEstimate, onboardingEstimate: cappedEstimate, updatedAt: new Date() })
+      .set({
+        fajrOwed: amounts.fajr,
+        dhuhrOwed: amounts.dhuhr,
+        asrOwed: amounts.asr,
+        maghribOwed: amounts.maghrib,
+        ishaOwed: amounts.isha,
+        setupCompleted: true,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.qadaaLedger.userId, session.userId));
   } else {
     await db.insert(schema.qadaaLedger).values({
       userId: session.userId,
-      totalOwed: cappedEstimate,
-      onboardingEstimate: cappedEstimate,
+      fajrOwed: amounts.fajr,
+      dhuhrOwed: amounts.dhuhr,
+      asrOwed: amounts.asr,
+      maghribOwed: amounts.maghrib,
+      ishaOwed: amounts.isha,
+      setupCompleted: true,
     });
   }
 
-  return NextResponse.json({ totalOwed: cappedEstimate, onboardingEstimate: cappedEstimate });
+  return NextResponse.json({
+    fajrOwed: amounts.fajr,
+    dhuhrOwed: amounts.dhuhr,
+    asrOwed: amounts.asr,
+    maghribOwed: amounts.maghrib,
+    ishaOwed: amounts.isha,
+    setupCompleted: true,
+  });
 }

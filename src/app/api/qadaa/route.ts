@@ -5,7 +5,7 @@ import { getSessionFromRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/qadaa — get the user's qadaa ledger
+// GET /api/qadaa — get the user's per-salah qadaa ledger
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -19,12 +19,22 @@ export async function GET(request: NextRequest) {
     .limit(1);
 
   if (!ledger) {
-    // Return default if no ledger exists yet
-    return NextResponse.json({ totalOwed: 0, onboardingEstimate: 0 });
+    return NextResponse.json({
+      fajrOwed: 0,
+      dhuhrOwed: 0,
+      asrOwed: 0,
+      maghribOwed: 0,
+      ishaOwed: 0,
+      setupCompleted: false,
+    });
   }
 
   return NextResponse.json({
-    totalOwed: ledger.totalOwed,
-    onboardingEstimate: ledger.onboardingEstimate,
+    fajrOwed: ledger.fajrOwed,
+    dhuhrOwed: ledger.dhuhrOwed,
+    asrOwed: ledger.asrOwed,
+    maghribOwed: ledger.maghribOwed,
+    ishaOwed: ledger.ishaOwed,
+    setupCompleted: ledger.setupCompleted,
   });
 }

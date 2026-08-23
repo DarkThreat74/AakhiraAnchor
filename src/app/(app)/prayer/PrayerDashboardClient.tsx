@@ -33,8 +33,12 @@ interface Friend {
 }
 
 interface QadaaInfo {
-  totalOwed: number;
-  onboardingEstimate: number;
+  fajrOwed: number;
+  dhuhrOwed: number;
+  asrOwed: number;
+  maghribOwed: number;
+  ishaOwed: number;
+  setupCompleted: boolean;
 }
 
 const PRAYER_LABELS: Record<string, string> = {
@@ -55,8 +59,17 @@ export default function PrayerDashboard() {
   const [friendError, setFriendError] = useState<string | null>(null);
   const [friendSuccess, setFriendSuccess] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [qadaaAdjust, setQadaaAdjust] = useState(1);
   const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
+  // Qadaa setup form state
+  const [setupFajr, setSetupFajr] = useState(0);
+  const [setupDhuhr, setSetupDhuhr] = useState(0);
+  const [setupAsr, setSetupAsr] = useState(0);
+  const [setupMaghrib, setSetupMaghrib] = useState(0);
+  const [setupIsha, setSetupIsha] = useState(0);
+  const [qadaaSetting, setQadaaSetting] = useState(false);
+  // Qadaa adjust state
+  const [adjustPrayer, setAdjustPrayer] = useState<string>("fajr");
+  const [adjustAmount, setAdjustAmount] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -131,17 +144,49 @@ export default function PrayerDashboard() {
     }
   }
 
+  async function handleQadaaSetup() {
+    setQadaaSetting(true);
+    setQadaaMsg(null);
+    try {
+      const res = await fetch("/api/qadaa/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fajr: setupFajr,
+          dhuhr: setupDhuhr,
+          asr: setupAsr,
+          maghrib: setupMaghrib,
+          isha: setupIsha,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQadaa(data);
+        setQadaaMsg("Qadaa set up successfully.");
+        setTimeout(() => setQadaaMsg(null), 3000);
+      } else {
+        setQadaaMsg(data.error || "Failed to set up qadaa.");
+      }
+    } catch {
+      setQadaaMsg("Network error.");
+    } finally {
+      setQadaaSetting(false);
+    }
+  }
+
   async function handleQadaaAdjust(delta: number) {
     try {
       const res = await fetch("/api/qadaa/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: delta }),
+        body: JSON.stringify({ prayer: adjustPrayer, amount: delta }),
       });
       if (res.ok) {
         const data = await res.json();
         setQadaa(data);
-        setQadaaMsg(delta > 0 ? `Added ${delta} qadaa.` : `Logged ${Math.abs(delta)} qadaa.`);
+        setQadaaMsg(delta > 0
+          ? `Added ${delta} to ${PRAYER_LABELS[adjustPrayer]} qadaa.`
+          : `Logged ${Math.abs(delta)} ${PRAYER_LABELS[adjustPrayer]} qadaa as prayed.`);
         setTimeout(() => setQadaaMsg(null), 3000);
       }
     } catch {
@@ -224,57 +269,142 @@ export default function PrayerDashboard() {
       </div>
 
       {/* Qadaa section */}
-      {qadaa && (
+      {qadaa && !qadaa.setupCompleted && (
+        <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Set Up Qadaa</h2>
+          </div>
+          <div className="px-4 py-4 sm:px-5">
+            <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              Enter how many of each prayer you need to make up. This is a one-time setup — after this, you can log prayed qadaa from here.
+            </p>
+            <div className="mb-4 space-y-2">
+              {([
+                { key: "fajr", label: "Fajr", val: setupFajr, set: setSetupFajr },
+                { key: "dhuhr", label: "Dhuhr", val: setupDhuhr, set: setSetupDhuhr },
+                { key: "asr", label: "Asr", val: setupAsr, set: setSetupAsr },
+                { key: "maghrib", label: "Maghrib", val: setupMaghrib, set: setSetupMaghrib },
+                { key: "isha", label: "Isha", val: setupIsha, set: setSetupIsha },
+              ] as const).map((p) => (
+                <div key={p.key} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{p.label}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100000"
+                    value={p.val}
+                    onChange={(e) => p.set(Math.max(0, Math.min(100000, parseInt(e.target.value) || 0)))}
+                    className="w-24 rounded-lg border px-3 py-1.5 text-center text-sm tabular-nums"
+                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mb-3 text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+              Total: {setupFajr + setupDhuhr + setupAsr + setupMaghrib + setupIsha} prayers
+            </div>
+            {qadaaMsg && (
+              <div className="mb-3 text-xs font-medium" style={{ color: qadaaMsg.includes("successfully") ? "var(--color-success)" : "var(--color-warmth)" }}>
+                {qadaaMsg}
+              </div>
+            )}
+            <button
+              onClick={handleQadaaSetup}
+              disabled={qadaaSetting || (setupFajr + setupDhuhr + setupAsr + setupMaghrib + setupIsha) === 0}
+              className="w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+            >
+              {qadaaSetting ? "Setting up..." : "Set Qadaa"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {qadaa && qadaa.setupCompleted && (
         <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
           <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
             <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Qadaa Tracker</h2>
           </div>
           <div className="px-4 py-4 sm:px-5">
-            <div className="mb-3 flex items-baseline justify-between">
-              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Prayers owed</span>
-              <span className="text-2xl font-bold tabular-nums" style={{ color: "var(--color-warmth)" }}>
-                {qadaa.totalOwed}
+            {/* Per-salah breakdown */}
+            <div className="mb-4 grid grid-cols-5 gap-2">
+              {([
+                { key: "fajr", label: "Fajr", val: qadaa.fajrOwed },
+                { key: "dhuhr", label: "Dhuhr", val: qadaa.dhuhrOwed },
+                { key: "asr", label: "Asr", val: qadaa.asrOwed },
+                { key: "maghrib", label: "Magh", val: qadaa.maghribOwed },
+                { key: "isha", label: "Isha", val: qadaa.ishaOwed },
+              ] as const).map((p) => (
+                <div key={p.key} className="flex flex-col items-center rounded-lg border py-2" style={{ borderColor: "var(--color-paper-3)" }}>
+                  <span className="text-[10px] font-medium" style={{ color: "var(--color-ink-muted)" }}>{p.label}</span>
+                  <span className="text-base font-bold tabular-nums" style={{ color: p.val > 0 ? "var(--color-warmth)" : "var(--color-success)" }}>
+                    {p.val}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Total */}
+            <div className="mb-3 flex items-baseline justify-between border-t pt-3" style={{ borderColor: "var(--color-paper-3)" }}>
+              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Total owed</span>
+              <span className="text-xl font-bold tabular-nums" style={{ color: "var(--color-warmth)" }}>
+                {qadaa.fajrOwed + qadaa.dhuhrOwed + qadaa.asrOwed + qadaa.maghribOwed + qadaa.ishaOwed}
               </span>
             </div>
+
             {qadaaMsg && (
               <div className="mb-3 text-xs font-medium" style={{ color: "var(--color-success)" }}>
                 {qadaaMsg}
               </div>
             )}
-            <div className="flex items-center gap-2">
+
+            {/* Adjust controls */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                value={adjustPrayer}
+                onChange={(e) => setAdjustPrayer(e.target.value)}
+                className="rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+              >
+                <option value="fajr">Fajr</option>
+                <option value="dhuhr">Dhuhr</option>
+                <option value="asr">Asr</option>
+                <option value="maghrib">Maghrib</option>
+                <option value="isha">Isha</option>
+              </select>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setQadaaAdjust(Math.max(1, qadaaAdjust - 1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border text-sm"
+                  onClick={() => setAdjustAmount(Math.max(1, adjustAmount - 1))}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border text-sm"
                   style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
                 >
                   -
                 </button>
                 <input
                   type="number"
-                  value={qadaaAdjust}
-                  onChange={(e) => setQadaaAdjust(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                  className="w-12 rounded-lg border px-2 py-1 text-center text-sm tabular-nums"
+                  value={adjustAmount}
+                  onChange={(e) => setAdjustAmount(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                  className="w-14 rounded-lg border px-2 py-1.5 text-center text-sm tabular-nums"
                   style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
                 />
                 <button
-                  onClick={() => setQadaaAdjust(Math.min(20, qadaaAdjust + 1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border text-sm"
+                  onClick={() => setAdjustAmount(Math.min(20, adjustAmount + 1))}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border text-sm"
                   style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
                 >
                   +
                 </button>
               </div>
               <button
-                onClick={() => handleQadaaAdjust(-qadaaAdjust)}
-                className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                onClick={() => handleQadaaAdjust(-adjustAmount)}
+                className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
                 style={{ borderColor: "var(--color-success)", color: "var(--color-success)" }}
               >
                 Log prayed
               </button>
               <button
-                onClick={() => handleQadaaAdjust(qadaaAdjust)}
-                className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                onClick={() => handleQadaaAdjust(adjustAmount)}
+                className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
                 style={{ borderColor: "var(--color-warmth)", color: "var(--color-warmth)" }}
               >
                 Add to backlog
@@ -312,11 +442,11 @@ export default function PrayerDashboard() {
         </div>
       </div>
 
-      {/* Friends section */}
+      {/* Friends competition section */}
       <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
         <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
           <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-            <Users className="h-4 w-4" /> Prayer Friends
+            <Users className="h-4 w-4" /> Prayer Competition
           </h2>
         </div>
         <div className="px-4 py-4 sm:px-5">
@@ -344,57 +474,78 @@ export default function PrayerDashboard() {
             {friendSuccess && <p className="mt-2 text-xs" style={{ color: "var(--color-success)" }}>{friendSuccess}</p>}
           </div>
 
-          {/* Friends list */}
+          {/* Side-by-side comparison */}
           {friends.length === 0 ? (
             <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              No friends added yet. Add a friend with their prayer code to compare streaks.
+              No friends added yet. Add a friend with their prayer code to compete and compare streaks side by side.
             </p>
           ) : (
-            <div className="space-y-2">
-              {/* Your row */}
-              <div
-                className="flex items-center justify-between rounded-lg border px-3 py-2.5"
-                style={{ borderColor: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 5%, transparent)" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Flame className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
-                  <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>You</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>{analytics?.totalCompleteDays || 0} complete</span>
-                  <span className="text-sm font-bold tabular-nums" style={{ color: "var(--color-accent)" }}>
-                    {analytics?.streak || 0} 🔥
-                  </span>
-                </div>
-              </div>
+            <div className="space-y-3">
+              {friends.map((friend) => {
+                const myStreak = analytics?.streak || 0;
+                const myComplete = analytics?.totalCompleteDays || 0;
+                const imWinning = myStreak >= friend.streak;
+                return (
+                  <div key={friend.id} className="rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)" }}>
+                    {/* VS header */}
+                    <div className="mb-3 flex items-center justify-center">
+                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--color-ink-muted)" }}>
+                        {imWinning ? "You're leading" : `${friend.firstName || friend.displayName || "Friend"} is leading`}
+                      </span>
+                    </div>
 
-              {friends.map((friend) => (
-                <div
-                  key={friend.id}
-                  className="flex items-center justify-between rounded-lg border px-3 py-2.5"
-                  style={{ borderColor: "var(--color-paper-3)" }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Flame className="h-4 w-4" style={{ color: "var(--color-warmth)" }} />
-                    <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-                      {friend.firstName || friend.displayName || "Friend"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>{friend.totalCompleteDays} complete</span>
-                    <span className="text-sm font-bold tabular-nums" style={{ color: "var(--color-warmth)" }}>
-                      {friend.streak} 🔥
-                    </span>
+                    {/* Side-by-side stats */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* You */}
+                      <div
+                        className="rounded-lg border p-3 text-center"
+                        style={{
+                          borderColor: imWinning ? "var(--color-accent)" : "var(--color-paper-3)",
+                          backgroundColor: imWinning ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
+                        }}
+                      >
+                        <div className="mb-1 text-xs font-medium" style={{ color: "var(--color-ink)" }}>You</div>
+                        <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--color-accent)" }}>
+                          {myStreak}
+                        </div>
+                        <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
+                        <div className="mt-2 text-xs tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
+                          {myComplete} complete
+                        </div>
+                      </div>
+
+                      {/* Friend */}
+                      <div
+                        className="rounded-lg border p-3 text-center"
+                        style={{
+                          borderColor: !imWinning ? "var(--color-warmth)" : "var(--color-paper-3)",
+                          backgroundColor: !imWinning ? "color-mix(in oklab, var(--color-warmth) 8%, transparent)" : "transparent",
+                        }}
+                      >
+                        <div className="mb-1 truncate text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+                          {friend.firstName || friend.displayName || "Friend"}
+                        </div>
+                        <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--color-warmth)" }}>
+                          {friend.streak}
+                        </div>
+                        <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
+                        <div className="mt-2 text-xs tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
+                          {friend.totalCompleteDays} complete
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Remove button */}
                     <button
                       onClick={() => handleRemoveFriend(friend.id)}
-                      className="text-xs transition-colors"
+                      className="mt-3 w-full text-center text-[10px] transition-colors"
                       style={{ color: "var(--color-ink-muted)" }}
                     >
-                      Remove
+                      Remove friend
                     </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -207,14 +207,22 @@ export const qadaaLedger = pgTable('qadaa_ledger', {
   userId: uuid('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
-  totalOwed: integer('total_owed').default(0).notNull(),
-  onboardingEstimate: integer('onboarding_estimate').default(0).notNull(),
+  // Per-salah qadaa counts — each tracks how many of that specific prayer are owed
+  fajrOwed: integer('fajr_owed').default(0).notNull(),
+  dhuhrOwed: integer('dhuhr_owed').default(0).notNull(),
+  asrOwed: integer('asr_owed').default(0).notNull(),
+  maghribOwed: integer('maghrib_owed').default(0).notNull(),
+  ishaOwed: integer('isha_owed').default(0).notNull(),
+  // Whether the initial setup has been completed
+  setupCompleted: boolean('setup_completed').default(false).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const qadaaLogEntries = pgTable('qadaa_log_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  // Which prayer was logged as qadaa
+  prayerName: text('prayer_name').notNull(),
   // Capped at 1-20 per submission
   amountLogged: integer('amount_logged').notNull(),
   loggedAt: timestamp('logged_at', { withTimezone: true }).defaultNow().notNull(),

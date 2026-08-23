@@ -51,7 +51,9 @@ export function getCurrentMinutesInTimezone(timezone: string): number {
  * - Dhuhr → Asr (adjusted +1hr)
  * - Asr  → Maghrib
  * - Maghrib → Isha
- * - Isha → 23:59
+ * - Isha → Fajr (next day) — can extend past midnight
+ *
+ * For Isha, the end time may be > 1440 (next day's Fajr in minutes from today's midnight).
  */
 export function getPrayerWindowEnd(prayer: PrayerKey, timings: PrayerTimings): number {
   const asrAdjusted = parseMinutes(timings.asr) + 60;
@@ -65,7 +67,8 @@ export function getPrayerWindowEnd(prayer: PrayerKey, timings: PrayerTimings): n
     case "maghrib":
       return parseMinutes(timings.isha);
     case "isha":
-      return 23 * 60 + 59;
+      // Isha ends at next day's Fajr — add 1440 (24h) to represent next day
+      return parseMinutes(timings.fajr) + 1440;
     default:
       return 0;
   }
@@ -85,6 +88,10 @@ export function getPrayerWindowStart(prayer: PrayerKey, timings: PrayerTimings):
 /**
  * Check if a prayer's window is currently open (can still be logged).
  * Returns true if the current time is within the prayer window.
+ *
+ * For Isha, the window extends to next day's Fajr, so we handle two cases:
+ * - Before midnight: currentMinutes >= ishaStart
+ * - After midnight: currentMinutes <= fajrStart (treated as still within Isha)
  */
 export function isPrayerWindowOpen(
   prayer: PrayerKey,
@@ -93,6 +100,22 @@ export function isPrayerWindowOpen(
 ): boolean {
   const start = getPrayerWindowStart(prayer, timings);
   const end = getPrayerWindowEnd(prayer, timings);
+
+  if (prayer === "isha") {
+    // Isha window: from isha start today to fajr start tomorrow
+    // If currentMinutes is before isha start, it might be after midnight (still isha from yesterday)
+    if (currentMinutes >= start) {
+      // Before midnight, within isha
+      return true;
+    }
+    // After midnight — check if before fajr
+    const fajrStart = parseMinutes(timings.fajr);
+    if (currentMinutes <= fajrStart) {
+      return true;
+    }
+    return false;
+  }
+
   return currentMinutes >= start && currentMinutes <= end;
 }
 
@@ -131,8 +154,15 @@ export function shouldShowMasjidQuestion(
       return currentMinutes >= maghribStart && currentMinutes <= windowEnd;
     }
     case "isha": {
-      // Show as long as NOT after 11:30 PM (1410 min)
-      return currentMinutes <= 1410;
+      // Show as long as within the Isha window (before midnight after isha start, or after midnight before fajr)
+      const ishaStart = parseMinutes(timings.isha);
+      const fajrStart = parseMinutes(timings.fajr);
+      if (currentMinutes >= ishaStart) {
+        // Before midnight, within isha
+        return true;
+      }
+      // After midnight — still isha if before fajr
+      return currentMinutes <= fajrStart;
     }
     default:
       return false;
