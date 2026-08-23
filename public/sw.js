@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v8";
+const CACHE_VERSION = "waqt-v9";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -281,10 +281,10 @@ self.addEventListener("fetch", (event) => {
   // Don't intercept share management API
   if (url.pathname.startsWith("/api/share/")) return;
 
-  // ── Navigation requests: network-first ──
-  // BUT skip public pages (landing, login, signup, admin, public calendar) — the SW should
-  // only control authenticated app pages. This prevents stale cached versions
-  // of auth pages from being served, and avoids interfering with login/signup.
+  // ── Navigation requests: stale-while-revalidate ──
+  // Serve cached HTML instantly (if available), then fetch fresh HTML in the
+  // background and update the cache. This makes tab switches instant.
+  // Offline: serve cached page, then fallback to app shell.
   if (request.mode === "navigate") {
     const pathname = url.pathname;
     // Public pages — don't intercept, let the browser handle normally
@@ -300,33 +300,24 @@ self.addEventListener("fetch", (event) => {
     }
 
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-          return response;
-        })
-        .catch(() => {
-          // Offline — try the exact cached page first, then any cached app page,
-          // then the cached landing page as a last resort. Never show a bare
-          // "You are offline" text — the app shell should always render.
-          return caches.match(request).then(
-            (cached) =>
-              cached ||
-              caches.match("/calendar/day").then(
-                (dayCached) =>
-                  dayCached ||
-                  caches.match("/").then(
-                    (rootCached) =>
-                      rootCached ||
-                      new Response(
-                        "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
-                        { status: 200, headers: { "Content-Type": "text/html" } }
-                      )
-                  )
-              )
-          );
-        })
+      caches.match(request).then((cached) => {
+        // Fetch fresh version in background to update cache
+        const fetchPromise = fetch(request)
+          .then((response) => {
+            const responseClone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+            return response;
+          })
+          .catch(() => cached); // Network failed — rely on cache
+
+        // Return cached immediately if available, otherwise wait for network
+        return cached || fetchPromise || caches.match("/calendar/day").then(
+          (dayCached) => dayCached || new Response(
+            "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
+            { status: 200, headers: { "Content-Type": "text/html" } }
+          )
+        );
+      })
     );
     return;
   }

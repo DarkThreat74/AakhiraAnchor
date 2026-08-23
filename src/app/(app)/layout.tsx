@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { Calendar, Settings, Flame } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
@@ -81,26 +82,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
 function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }) {
   return (
-    <a
+    <Link
       href={href}
       className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
       style={{ color: "var(--color-ink-soft)" }}
     >
       <Icon className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
       {label}
-    </a>
+    </Link>
   );
 }
 
 function MobileNavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }) {
   return (
-    <a
+    <Link
       href={href}
       className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium"
       style={{ color: "var(--color-ink-muted)" }}
     >
       <Icon className="h-5 w-5" />
       {label}
-    </a>
+    </Link>
   );
 }
