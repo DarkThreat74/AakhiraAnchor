@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { isPrayerWindowOpen, getCurrentMinutesInTimezone, type PrayerTimings } from "@/lib/prayer/checkin";
+import { getPrayerWindowState, getCurrentMinutesInTimezone, getPrayerWindowStart, type PrayerTimings, type PrayerKey } from "@/lib/prayer/checkin";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +86,24 @@ export async function POST(request: NextRequest) {
 
         const currentMinutes = getCurrentMinutesInTimezone(settings.timezone);
 
-        if (!isPrayerWindowOpen(prayerName as "fajr" | "dhuhr" | "asr" | "maghrib" | "isha", currentMinutes, timings)) {
+        const state = getPrayerWindowState(prayerName as PrayerKey, currentMinutes, timings);
+        if (state !== "open") {
+          const prayerLabel = prayerName.charAt(0).toUpperCase() + prayerName.slice(1);
+          if (state === "before") {
+            // Format the start time for the message
+            const startMinutes = getPrayerWindowStart(prayerName as PrayerKey, timings);
+            const startH = Math.floor(startMinutes / 60);
+            const startM = startMinutes % 60;
+            const period = startH >= 12 ? "PM" : "AM";
+            const displayH = startH === 0 ? 12 : startH > 12 ? startH - 12 : startH;
+            const timeStr = `${displayH}:${String(startM).padStart(2, "0")} ${period}`;
+            return NextResponse.json(
+              { error: `${prayerLabel} hasn't started yet. It begins at ${timeStr}.` },
+              { status: 403 },
+            );
+          }
           return NextResponse.json(
-            { error: "The prayer window has ended. You can no longer log this prayer." },
+            { error: `The ${prayerLabel} prayer window has ended. You can no longer log this prayer.` },
             { status: 403 },
           );
         }

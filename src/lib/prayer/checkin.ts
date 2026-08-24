@@ -98,6 +98,18 @@ export function isPrayerWindowOpen(
   currentMinutes: number,
   timings: PrayerTimings,
 ): boolean {
+  return getPrayerWindowState(prayer, currentMinutes, timings) === "open";
+}
+
+/**
+ * Get the state of a prayer's window relative to the current time.
+ * Returns "before" (not started yet), "open" (within window), or "ended" (window closed).
+ */
+export function getPrayerWindowState(
+  prayer: PrayerKey,
+  currentMinutes: number,
+  timings: PrayerTimings,
+): "before" | "open" | "ended" {
   const start = getPrayerWindowStart(prayer, timings);
   const end = getPrayerWindowEnd(prayer, timings);
 
@@ -106,17 +118,20 @@ export function isPrayerWindowOpen(
     // If currentMinutes is before isha start, it might be after midnight (still isha from yesterday)
     if (currentMinutes >= start) {
       // Before midnight, within isha
-      return true;
+      return "open";
     }
     // After midnight — check if before fajr
     const fajrStart = parseMinutes(timings.fajr);
     if (currentMinutes <= fajrStart) {
-      return true;
+      return "open";
     }
-    return false;
+    // After Fajr — isha from yesterday has ended
+    return "ended";
   }
 
-  return currentMinutes >= start && currentMinutes <= end;
+  if (currentMinutes < start) return "before";
+  if (currentMinutes > end) return "ended";
+  return "open";
 }
 
 /**
