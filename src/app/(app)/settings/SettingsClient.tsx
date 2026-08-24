@@ -442,16 +442,47 @@ export default function SettingsClient({
       const perm = await Notification.requestPermission();
       setNotifPermission(perm);
       if (perm === "granted") {
-        setNotifMsg("Notifications enabled! You'll get alerts at each prayer time and before reminders.");
-        // Tell the scheduler to start scheduling
-        window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
-        // Also register the service worker for push if not already
+        // Subscribe to server-side push (for background notifications)
+        let pushSubscribed = false;
+        try {
+          if ("serviceWorker" in navigator && "PushManager" in window) {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) {
+              let subscription = await reg.pushManager.getSubscription();
+              if (!subscription) {
+                const keyRes = await fetch("/api/notifications/vapid-public-key");
+                if (keyRes.ok) {
+                  const { publicKey } = await keyRes.json();
+                  if (publicKey) {
+                    subscription = await reg.pushManager.subscribe({
+                      userVisibleOnly: true,
+                      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+                    });
+                  }
+                }
+              }
+              if (subscription) {
+                await fetch("/api/notifications/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(subscription),
+                });
+                pushSubscribed = true;
+              }
+            }
+          }
+        } catch {
+          // Push subscription failed — local notifications still work
+        }
+
+        // Show a test notification immediately
         if ("serviceWorker" in navigator) {
           const reg = await navigator.serviceWorker.getRegistration();
           if (reg) {
-            // Show a test notification immediately so the user knows it works
             reg.showNotification("Waqt notifications are on", {
-              body: "You'll be notified at each prayer time and before reminders.",
+              body: pushSubscribed
+                ? "You'll be notified at each prayer time and before reminders — even in the background."
+                : "You'll be notified at each prayer time and before reminders while the app is open.",
               tag: "waqt-test",
               data: { url: "/calendar/day" },
               icon: "/icon.svg",
@@ -459,6 +490,13 @@ export default function SettingsClient({
             });
           }
         }
+
+        setNotifMsg(pushSubscribed
+          ? "Notifications enabled with background push! You'll get alerts at each prayer time."
+          : "Notifications enabled! You'll get alerts at each prayer time while the app is open."
+        );
+        // Tell the scheduler to start scheduling
+        window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
       } else if (perm === "denied") {
         setNotifMsg("Notifications were blocked. Enable them in your browser settings to receive prayer alerts.");
       } else {
@@ -470,6 +508,25 @@ export default function SettingsClient({
       setNotifEnabling(false);
       setTimeout(() => setNotifMsg(null), 6000);
     }
+  }
+
+  // Send a server-side push test (works even if app is in background)
+  async function handleServerPushTest() {
+    setNotifMsg(null);
+    try {
+      const res = await fetch("/api/notifications/test", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.sent > 0) {
+        setNotifMsg(`Server push test sent (${data.sent} delivered). Check your notifications.`);
+      } else if (res.ok && data.sent === 0) {
+        setNotifMsg("No push subscriptions found. Tap Enable notifications first.");
+      } else {
+        setNotifMsg(data.error || "Failed to send server push test.");
+      }
+    } catch {
+      setNotifMsg("Network error sending push test.");
+    }
+    setTimeout(() => setNotifMsg(null), 5000);
   }
 
   // Send a test notification
@@ -1052,14 +1109,24 @@ export default function SettingsClient({
             )}
 
             {notifPermission === "granted" && (
-              <button
-                onClick={handleTestNotification}
-                className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
-              >
-                <Send className="h-4 w-4" />
-                Send test notification
-              </button>
+              <>
+                <button
+                  onClick={handleTestNotification}
+                  className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+                >
+                  <Send className="h-4 w-4" />
+                  Test local
+                </button>
+                <button
+                  onClick={handleServerPushTest}
+                  className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+                  style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
+                >
+                  <Send className="h-4 w-4" />
+                  Test background push
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1084,4 +1151,16 @@ export default function SettingsClient({
       </section>
     </div>
   );
+}
+
+// Convert VAPID key from base64url to Uint8Array
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
