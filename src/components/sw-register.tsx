@@ -100,8 +100,13 @@ export default function ServiceWorkerRegister() {
 }
 
 // ── Subscribe to push notifications ──
+// Only subscribes if permission is ALREADY granted.
+// Permission is requested from the Settings page (user gesture required).
 async function subscribeToPush(registration: ServiceWorkerRegistration) {
   try {
+    // Don't request permission here — that must come from a user gesture (Settings button)
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+
     // Check if already subscribed
     const existing = await registration.pushManager.getSubscription();
     if (existing) {
@@ -109,10 +114,6 @@ async function subscribeToPush(registration: ServiceWorkerRegistration) {
       await sendSubscriptionToServer(existing);
       return;
     }
-
-    // Request permission first
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
 
     // Get VAPID public key from server
     const res = await fetch("/api/notifications/vapid-public-key");

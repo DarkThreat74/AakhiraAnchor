@@ -8,12 +8,16 @@ import { getCheckinStage, isWindowClosed, getPrayerWindow, STAGES } from "@/lib/
 
 export const dynamic = "force-dynamic";
 
-// POST /api/cron/checkin-scheduler — runs every 5 min
+// POST /api/cron/checkin-scheduler — runs once daily on Vercel Hobby
+// (Vercel Hobby limits crons to once per day. The client-side NotificationScheduler
+//  handles real-time prayer notifications while the app is open. This cron handles
+//  the daily pass: assumed_prayed resolution, event notifications for today, and
+//  any push notifications that can be batched.)
 // 1. Prayer check-in notifications (early/mid/closing stages)
 // 2. Event/reminder notifications (15 min before start time)
 // Idempotent — safe to run multiple times.
 export async function POST(request: NextRequest) {
-  if (!verifyCronAuth(request.headers.get("authorization"))) {
+  if (!verifyCronAuth(request.headers.get("authorization"), request.headers.get("x-vercel-cron") === "1")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

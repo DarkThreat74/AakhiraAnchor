@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // POST /api/cron/prayer-times-sync — monthly, re-fetches prayer times for all users
 export async function POST(request: NextRequest) {
-  if (!verifyCronAuth(request.headers.get("authorization"))) {
+  if (!verifyCronAuth(request.headers.get("authorization"), request.headers.get("x-vercel-cron") === "1")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
