@@ -248,23 +248,37 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                 {/* Event blocks — show up to maxVisibleEvents, then "+N more" */}
                 <div className="flex flex-col gap-0.5 overflow-hidden">
                   {blockEvents.slice(0, maxVisibleEvents).map((event) => {
-                    const time = new Date(event.startAt).toLocaleTimeString("en-US", {
+                    const fmt = new Date(event.startAt).toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
                       hour12: true,
                     });
+                    const endTime = event.endAt
+                      ? new Date(event.endAt).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        })
+                      : null;
                     const color = (event.color && event.color.length >= 4 ? event.color : null) || typeColors[event.type] || "var(--color-accent)";
                     return (
                       <div
                         key={event.id}
-                        className="truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
+                        className="rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
                         style={{
                           backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
                           color: color,
                           borderLeft: `2px solid ${color}`,
                         }}
                       >
-                        <span className="tabular-nums">{time}</span> {event.title}
+                        <div className="truncate">
+                          <span className="tabular-nums">{fmt}</span> {event.title}
+                        </div>
+                        {endTime && (
+                          <div className="truncate text-[8px] font-normal leading-tight sm:text-[9px]" style={{ color: "var(--color-ink-muted)" }}>
+                            {fmt} – {endTime}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
