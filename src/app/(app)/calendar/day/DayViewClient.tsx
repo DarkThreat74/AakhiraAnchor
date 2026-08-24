@@ -376,7 +376,10 @@ export default function DayViewClient({ date }: { date: string }) {
 
         // If recurring, API returns { created, events }
         if (data.events && Array.isArray(data.events)) {
-          // Refetch events for this date to get the ones that landed on today
+          // Clear SW API cache then refetch events for this date
+          if ("caches" in window) {
+            await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
+          }
           const refetch = await fetch(`/api/events?date=${date}`);
           if (refetch.ok) {
             const refreshed = await refetch.json();
@@ -391,6 +394,12 @@ export default function DayViewClient({ date }: { date: string }) {
         } else {
           // Single event
           setEvents([...events, data]);
+          // Clear SW API cache so next refetch includes the new event
+          if ("caches" in window) {
+            caches.keys().then((names) => {
+              names.forEach((n) => { if (n.includes("-api")) caches.delete(n); });
+            });
+          }
           setSuccessMsg(null);
         }
         setShowAddForm(false);
@@ -419,13 +428,34 @@ export default function DayViewClient({ date }: { date: string }) {
       setEvents(events.filter((e) => e.id !== id));
       return;
     }
+    // Optimistically remove from UI immediately
+    setEvents(events.filter((e) => e.id !== id));
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (res.ok) {
-        setEvents(events.filter((e) => e.id !== id));
+        // Clear the SW API cache so stale events data isn't served on next refetch
+        if ("caches" in window) {
+          caches.keys().then((names) => {
+            names.forEach((n) => {
+              if (n.includes("-api")) caches.delete(n);
+            });
+          });
+        }
+      } else {
+        // Delete failed — refetch to restore the event
+        const refetch = await fetch(`/api/events?date=${date}`);
+        if (refetch.ok) {
+          const data = await refetch.json();
+          const filtered = data.filter((e: { startAt: string }) => {
+            const d = new Date(e.startAt);
+            const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            return localDateStr === date;
+          });
+          setEvents(filtered);
+        }
       }
     } catch {
-      // ignore
+      // Network error — event stays removed from UI (offline queue will handle it)
     }
   }
 
@@ -480,6 +510,12 @@ export default function DayViewClient({ date }: { date: string }) {
           return;
         }
         setEvents(events.map((e) => (e.id === editingEvent.id ? updated : e)));
+        // Clear SW API cache so stale events data isn't served on next refetch
+        if ("caches" in window) {
+          caches.keys().then((names) => {
+            names.forEach((n) => { if (n.includes("-api")) caches.delete(n); });
+          });
+        }
         setEditingEvent(null);
         setNewTitle("");
         setNewColor(null);

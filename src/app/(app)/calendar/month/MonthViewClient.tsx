@@ -37,6 +37,22 @@ interface PrayerLogEntry {
 export default function MonthViewClient({ year, month }: { year: number; month: number }) {
   const [eventsByDate, setEventsByDate] = useState<Record<string, CalendarEvent[]>>({});
   const [prayerLogsByDate, setPrayerLogsByDate] = useState<Record<string, PrayerLogEntry[]>>({});
+  const [maxVisibleEvents, setMaxVisibleEvents] = useState(2);
+
+  // Responsive event count — show more events on larger screens
+  useEffect(() => {
+    const updateMaxEvents = () => {
+      const w = window.innerWidth;
+      if (w >= 1280) setMaxVisibleEvents(5);      // xl: 5
+      else if (w >= 1024) setMaxVisibleEvents(4);  // lg: 4
+      else if (w >= 768) setMaxVisibleEvents(3);   // md: 3
+      else if (w >= 640) setMaxVisibleEvents(3);   // sm: 3
+      else setMaxVisibleEvents(2);                  // mobile: 2
+    };
+    updateMaxEvents();
+    window.addEventListener("resize", updateMaxEvents);
+    return () => window.removeEventListener("resize", updateMaxEvents);
+  }, []);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -229,9 +245,9 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                   )}
                 </span>
 
-                {/* Event blocks — show up to 2, then "+N more" */}
+                {/* Event blocks — show up to maxVisibleEvents, then "+N more" */}
                 <div className="flex flex-col gap-0.5 overflow-hidden">
-                  {blockEvents.slice(0, 2).map((event) => {
+                  {blockEvents.slice(0, maxVisibleEvents).map((event) => {
                     const time = new Date(event.startAt).toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
@@ -252,12 +268,12 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       </div>
                     );
                   })}
-                  {blockEvents.length > 2 && (
+                  {blockEvents.length > maxVisibleEvents && (
                     <span
                       className="px-1 text-[9px] font-medium sm:text-[10px]"
                       style={{ color: "var(--color-ink-muted)" }}
                     >
-                      +{blockEvents.length - 2} more
+                      +{blockEvents.length - maxVisibleEvents} more
                     </span>
                   )}
 
