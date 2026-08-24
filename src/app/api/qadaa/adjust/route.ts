@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
@@ -57,32 +57,29 @@ export async function POST(request: NextRequest) {
 
   // Map prayer name to column
   const columnMap = {
-    fajr: "fajrOwed",
-    dhuhr: "dhuhrOwed",
-    asr: "asrOwed",
-    maghrib: "maghribOwed",
-    isha: "ishaOwed",
+    fajr: "fajr_owed",
+    dhuhr: "dhuhr_owed",
+    asr: "asr_owed",
+    maghrib: "maghrib_owed",
+    isha: "isha_owed",
   } as const;
 
-  const currentValues: Record<string, number> = {
-    fajrOwed: existing.fajrOwed,
-    dhuhrOwed: existing.dhuhrOwed,
-    asrOwed: existing.asrOwed,
-    maghribOwed: existing.maghribOwed,
-    ishaOwed: existing.ishaOwed,
-  };
-
   const colName = columnMap[prayerName];
-  const currentValue = currentValues[colName];
-  const newValue = Math.max(0, currentValue + cappedAmount);
 
-  await db
+  // Atomic increment/decrement using SQL GREATEST to prevent negative values
+  // This avoids the read-then-update race condition
+  const [updated] = await db
     .update(schema.qadaaLedger)
     .set({
-      [colName]: newValue,
+      [colName]: sql`GREATEST(${sql.raw(colName)} + ${cappedAmount}, 0)`,
       updatedAt: new Date(),
     })
-    .where(eq(schema.qadaaLedger.userId, session.userId));
+    .where(eq(schema.qadaaLedger.userId, session.userId))
+    .returning();
+
+  if (!updated) {
+    return NextResponse.json({ error: "Failed to update qadaa." }, { status: 500 });
+  }
 
   // Log the entry if it's a "prayed" adjustment (negative)
   if (cappedAmount < 0) {
@@ -94,11 +91,11 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    fajrOwed: colName === "fajrOwed" ? newValue : existing.fajrOwed,
-    dhuhrOwed: colName === "dhuhrOwed" ? newValue : existing.dhuhrOwed,
-    asrOwed: colName === "asrOwed" ? newValue : existing.asrOwed,
-    maghribOwed: colName === "maghribOwed" ? newValue : existing.maghribOwed,
-    ishaOwed: colName === "ishaOwed" ? newValue : existing.ishaOwed,
-    setupCompleted: existing.setupCompleted,
+    fajrOwed: updated.fajrOwed,
+    dhuhrOwed: updated.dhuhrOwed,
+    asrOwed: updated.asrOwed,
+    maghribOwed: updated.maghribOwed,
+    ishaOwed: updated.ishaOwed,
+    setupCompleted: updated.setupCompleted,
   });
 }

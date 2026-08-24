@@ -114,19 +114,20 @@ export function getPrayerWindowState(
   const end = getPrayerWindowEnd(prayer, timings);
 
   if (prayer === "isha") {
-    // Isha window: from isha start today to fajr start tomorrow
-    // If currentMinutes is before isha start, it might be after midnight (still isha from yesterday)
-    if (currentMinutes >= start) {
-      // Before midnight, within isha
-      return "open";
-    }
-    // After midnight — check if before fajr
+    // Isha window: from isha start today to fajr start tomorrow (crosses midnight)
+    const ishaStart = parseMinutes(timings.isha);
     const fajrStart = parseMinutes(timings.fajr);
-    if (currentMinutes <= fajrStart) {
+    if (currentMinutes >= ishaStart) {
+      // After Isha start tonight — within window
       return "open";
     }
-    // After Fajr — isha from yesterday has ended
-    return "ended";
+    // Before Isha start — could be afternoon (before) or after midnight (still in yesterday's Isha)
+    if (currentMinutes < fajrStart) {
+      // Before Fajr and before Isha start — must be after midnight, still in yesterday's Isha window
+      return "open";
+    }
+    // After Fajr but before Isha start — afternoon/evening, Isha hasn't started yet
+    return "before";
   }
 
   if (currentMinutes < start) return "before";
@@ -169,15 +170,15 @@ export function shouldShowMasjidQuestion(
       return currentMinutes >= maghribStart && currentMinutes <= windowEnd;
     }
     case "isha": {
-      // Show as long as within the Isha window (before midnight after isha start, or after midnight before fajr)
+      // Show as long as within the Isha window (after isha start tonight, or after midnight before fajr)
       const ishaStart = parseMinutes(timings.isha);
       const fajrStart = parseMinutes(timings.fajr);
       if (currentMinutes >= ishaStart) {
-        // Before midnight, within isha
+        // After Isha start tonight — within window
         return true;
       }
-      // After midnight — still isha if before fajr
-      return currentMinutes <= fajrStart;
+      // Before Isha start — only show if after midnight (before Fajr = still yesterday's Isha)
+      return currentMinutes < fajrStart;
     }
     default:
       return false;

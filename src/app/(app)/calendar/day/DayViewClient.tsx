@@ -294,10 +294,14 @@ export default function DayViewClient({ date }: { date: string }) {
 
   function getOverlappingEvents(event: CalendarEvent, allEvents: CalendarEvent[]): CalendarEvent[] {
     const start = timeToMinutes(isoToLocalTime(event.startAt));
-    const end = timeToMinutes(isoToLocalTime(event.endAt));
+    let end = timeToMinutes(isoToLocalTime(event.endAt));
+    // Handle events spanning midnight — if end < start, it crossed midnight
+    if (end < start) end += 24 * 60;
     return allEvents.filter((e) => {
       const eStart = timeToMinutes(isoToLocalTime(e.startAt));
-      const eEnd = timeToMinutes(isoToLocalTime(e.endAt));
+      let eEnd = timeToMinutes(isoToLocalTime(e.endAt));
+      if (eEnd < eStart) eEnd += 24 * 60;
+      // Normalize: shift both to comparable ranges
       return eStart < end && eEnd > start;
     });
   }
@@ -360,7 +364,7 @@ export default function DayViewClient({ date }: { date: string }) {
           const d = new Date(tempEvent.startAt);
           const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
           if (localDateStr === date) {
-            setEvents([...events, tempEvent]);
+            setEvents((prev) => [...prev, tempEvent]);
           }
           setSuccessMsg("Saved offline — will sync when online.");
           setShowAddForm(false);
@@ -393,12 +397,10 @@ export default function DayViewClient({ date }: { date: string }) {
           setSuccessMsg(`Created ${data.created} recurring events.`);
         } else {
           // Single event
-          setEvents([...events, data]);
+          setEvents((prev) => [...prev, data]);
           // Clear SW API cache so next refetch includes the new event
           if ("caches" in window) {
-            caches.keys().then((names) => {
-              names.forEach((n) => { if (n.includes("-api")) caches.delete(n); });
-            });
+            await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
           }
           setSuccessMsg(null);
         }
@@ -425,21 +427,17 @@ export default function DayViewClient({ date }: { date: string }) {
   async function handleDeleteEvent(id: string) {
     // If it's a pending offline event, just remove it from local state
     if (id.startsWith("offline-")) {
-      setEvents(events.filter((e) => e.id !== id));
+      setEvents((prev) => prev.filter((e) => e.id !== id));
       return;
     }
     // Optimistically remove from UI immediately
-    setEvents(events.filter((e) => e.id !== id));
+    setEvents((prev) => prev.filter((e) => e.id !== id));
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (res.ok) {
         // Clear the SW API cache so stale events data isn't served on next refetch
         if ("caches" in window) {
-          caches.keys().then((names) => {
-            names.forEach((n) => {
-              if (n.includes("-api")) caches.delete(n);
-            });
-          });
+          await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
         }
       } else {
         // Delete failed — refetch to restore the event
@@ -500,7 +498,7 @@ export default function DayViewClient({ date }: { date: string }) {
             color: newColor,
             _pending: true,
           };
-          setEvents(events.map((e) => (e.id === editingEvent.id ? localUpdated : e)));
+          setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? localUpdated : e)));
           setSuccessMsg("Saved offline — will sync when online.");
           setEditingEvent(null);
           setNewTitle("");
@@ -509,12 +507,10 @@ export default function DayViewClient({ date }: { date: string }) {
           setTimeout(() => setSuccessMsg(null), 3000);
           return;
         }
-        setEvents(events.map((e) => (e.id === editingEvent.id ? updated : e)));
+        setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? updated : e)));
         // Clear SW API cache so stale events data isn't served on next refetch
         if ("caches" in window) {
-          caches.keys().then((names) => {
-            names.forEach((n) => { if (n.includes("-api")) caches.delete(n); });
-          });
+          await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
         }
         setEditingEvent(null);
         setNewTitle("");

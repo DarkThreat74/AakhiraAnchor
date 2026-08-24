@@ -310,10 +310,13 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
 
   function getOverlappingEvents(event: CalendarEvent, allEvents: CalendarEvent[]): CalendarEvent[] {
     const start = timeToMinutes(isoToLocalTime(event.startAt));
-    const end = timeToMinutes(isoToLocalTime(event.endAt));
+    let end = timeToMinutes(isoToLocalTime(event.endAt));
+    // Handle events spanning midnight — if end < start, it crossed midnight
+    if (end < start) end += 24 * 60;
     return allEvents.filter((e) => {
       const eStart = timeToMinutes(isoToLocalTime(e.startAt));
-      const eEnd = timeToMinutes(isoToLocalTime(e.endAt));
+      let eEnd = timeToMinutes(isoToLocalTime(e.endAt));
+      if (eEnd < eStart) eEnd += 24 * 60;
       return eStart < end && eEnd > start;
     });
   }

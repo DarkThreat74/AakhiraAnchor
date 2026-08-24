@@ -6,10 +6,21 @@ import 'server-only';
  * See CODEBASE_PATTERNS.md §28 (Environment Variable Management).
  */
 
-function required(key: string, fallback = ''): string {
+function required(key: string, fallback?: string): string {
   const val = process.env[key];
-  if (!val && fallback) return fallback;
-  return val ?? '';
+  if (val) return val;
+  if (fallback !== undefined) return fallback;
+  // No value and no fallback — this is a missing required env var.
+  // Warn loudly in all environments. We don't throw during build (NODE_ENV=production
+  // is set by `next build` for page data collection) because that would break the build
+  // even for features that aren't being used. Features that need this var will fail
+  // at runtime with a clear error from their own validation.
+  if (process.env.NODE_ENV === 'production') {
+    console.error(`[env] CRITICAL: Missing required environment variable: ${key} — this feature will fail at runtime.`);
+  } else {
+    console.warn(`[env] Missing required environment variable: ${key} — some features will not work.`);
+  }
+  return '';
 }
 
 export const env = {

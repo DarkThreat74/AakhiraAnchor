@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import webpush from "web-push";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,11 @@ export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getClientIp(request.headers);
+  if (!checkRateLimit("notif-test", ip, 5, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many test notifications. Please wait a few minutes." }, { status: 429 });
   }
 
   // Configure web-push

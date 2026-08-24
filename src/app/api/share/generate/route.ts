@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { randomInt } from "crypto";
+import { randomBytes } from "crypto";
 import { slugifyName } from "@/lib/slugify";
 
 export const dynamic = "force-dynamic";
@@ -30,8 +30,9 @@ export async function POST(request: NextRequest) {
 
   const nameSlug = slugifyName(userRow?.displayName || "shared");
 
-  // Generate a random 5-digit number (10000–99999)
-  let token = String(randomInt(10000, 100000));
+  // Generate a cryptographically secure 16-byte token (32 hex chars)
+  // This gives 2^128 possible values — not brute-forceable
+  let token = randomBytes(16).toString("hex");
   for (let attempt = 0; attempt < 5; attempt++) {
     const [existing] = await db
       .select({ id: schema.users.id })
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       .where(eq(schema.users.publicShareToken, token))
       .limit(1);
     if (!existing) break;
-    token = String(randomInt(10000, 100000));
+    token = randomBytes(16).toString("hex");
   }
 
   await db

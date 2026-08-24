@@ -74,6 +74,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Compute the number of days the user has been active (from first log to today, capped at 90)
+  // This is the correct denominator for consistency percentage
+  let activeDays = 90;
+  if (allLogs.length > 0) {
+    const sortedDates = allLogs
+      .map((l) => (typeof l.date === "string" ? l.date : String(l.date)))
+      .sort();
+    const firstDateStr = sortedDates[0];
+    const firstDate = new Date(firstDateStr + "T00:00:00");
+    const todayDate = new Date(todayStr + "T00:00:00");
+    const diffMs = todayDate.getTime() - firstDate.getTime();
+    activeDays = Math.min(90, Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)) + 1));
+  }
+
   // Per-prayer analytics
   const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"] as const;
   const perPrayer = prayers.map((prayer) => {
@@ -114,7 +128,7 @@ export async function GET(request: NextRequest) {
       avgTimeMinutes: avgTime,
       avgTimeStr: avgTime !== null ? formatMinutesToTime(avgTime) : null,
       makruhPct,
-      consistencyPct: logs.length > 0 ? Math.round((totalDays / logs.filter((l) => l.prayerName === prayer).length) * 100) : 0,
+      consistencyPct: activeDays > 0 ? Math.round((totalDays / activeDays) * 100) : 0,
     };
   });
 

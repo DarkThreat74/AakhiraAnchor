@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
@@ -50,14 +50,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You can't add yourself." }, { status: 400 });
   }
 
-  // Check if already friends (either direction)
+  // Check if already friends (either direction, since friendship is bidirectional)
   const [existing] = await db
     .select()
     .from(schema.prayerFriends)
     .where(
-      and(
-        eq(schema.prayerFriends.userId, session.userId),
-        eq(schema.prayerFriends.friendId, friendUser.id),
+      or(
+        and(
+          eq(schema.prayerFriends.userId, session.userId),
+          eq(schema.prayerFriends.friendId, friendUser.id),
+        ),
+        and(
+          eq(schema.prayerFriends.userId, friendUser.id),
+          eq(schema.prayerFriends.friendId, session.userId),
+        ),
       ),
     )
     .limit(1);
