@@ -5,17 +5,16 @@ import { useEffect, useRef, useCallback } from "react";
 /**
  * Client-side notification scheduler.
  *
- * Since Vercel Hobby only allows once-daily crons, we can't rely on
- * server-side push for prayer time and reminder notifications.
- * Instead, this component runs in the app layout and schedules
- * local notifications using the service worker's showNotification().
- *
- * It schedules:
+ * Schedules local notifications using the service worker's showNotification():
  * 1. Prayer time notifications — fires at each prayer's start time
  * 2. Reminder notifications — fires 15 min before each reminder's start time
  *
+ * Does NOT request notification permission — that must be done from a user
+ * gesture (button tap in Settings). This component only schedules if
+ * permission is already granted.
+ *
  * Works while the app is open or in a background tab.
- * Re-schedules every time the date changes or the app regains focus.
+ * Re-schedules when the page becomes visible or every 30 minutes.
  */
 
 interface PrayerTimes {
@@ -52,6 +51,7 @@ export default function NotificationScheduler() {
 
   const showNotification = useCallback(async (title: string, body: string, tag: string, url: string) => {
     try {
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) {
         reg.showNotification(title, {
@@ -61,18 +61,30 @@ export default function NotificationScheduler() {
           icon: "/icon.svg",
           badge: "/icon.svg",
         });
-      } else if ("Notification" in window && Notification.permission === "granted") {
+      } else {
         new Notification(title, { body, tag, data: { url }, icon: "/icon.svg" });
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("[Waqt] Notification failed:", err);
     }
   }, []);
 
   const schedulePrayerNotifications = useCallback(async (date: string) => {
     try {
-      const res = await fetch(`/api/prayer-times?date=${date}`);
+      let res = await fetch(`/api/prayer-times?date=${date}`);
+      if (!res.ok) {
+        // Prayer times not cached — trigger a sync, then retry
+        try {
+          await fetch("/api/prayer-times/sync", { method: "POST" });
+          // Wait a moment for the sync to complete
+          await new Promise((r) => setTimeout(r, 2000));
+          res = await fetch(`/api/prayer-times?date=${date}`);
+        } catch {
+          return;
+        }
+      }
       if (!res.ok) return;
+
       const times: PrayerTimes = await res.json();
       if (!times || !times.fajr) return;
 
@@ -106,8 +118,8 @@ export default function NotificationScheduler() {
 
         timersRef.current.push(timer);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("[Waqt] Prayer notification scheduling failed:", err);
     }
   }, [showNotification]);
 
@@ -121,12 +133,10 @@ export default function NotificationScheduler() {
       const now = new Date();
 
       for (const event of events) {
-        // Notify for all event types (block, task, reminder) — 15 min before
         const eventStart = new Date(event.startAt);
         const notifyTime = new Date(eventStart.getTime() - 15 * 60 * 1000);
         const diffMs = notifyTime.getTime() - now.getTime();
 
-        // Only schedule if it's in the future (within next 24 hours) and at least 1 second away
         if (diffMs <= 1000 || diffMs > 24 * 60 * 60 * 1000) continue;
 
         // If the event is less than 15 min away, notify immediately
@@ -154,12 +164,13 @@ export default function NotificationScheduler() {
 
         timersRef.current.push(timer);
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("[Waqt] Reminder notification scheduling failed:", err);
     }
   }, [showNotification]);
 
   const scheduleAll = useCallback(async () => {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
     const today = new Date().toLocaleDateString("en-CA");
     try {
       await Promise.all([
@@ -167,25 +178,20 @@ export default function NotificationScheduler() {
         scheduleReminderNotifications(today),
       ]);
     } catch {
-      // ignore — will retry on next interval
+      // will retry on next interval
     }
   }, [schedulePrayerNotifications, scheduleReminderNotifications]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
 
-    // Only schedule if permission is granted
-    if (Notification.permission !== "granted") {
-      // Request permission on first load
-      Notification.requestPermission().then((perm) => {
-        if (perm === "granted") scheduleAll();
-      });
-      return;
-    }
+    // Only schedule if permission is already granted
+    // Permission is requested from the Settings page (user gesture required)
+    if (Notification.permission !== "granted") return;
 
     scheduleAll();
 
-    // Re-schedule when the page becomes visible again (date might have changed)
+    // Re-schedule when the page becomes visible again
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         clearAllTimers();
@@ -195,7 +201,7 @@ export default function NotificationScheduler() {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Re-schedule every 30 minutes (in case prayer times get cached)
+    // Re-schedule every 30 minutes
     const interval = setInterval(() => {
       clearAllTimers();
       scheduleAll();
@@ -206,6 +212,17 @@ export default function NotificationScheduler() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
+  }, [scheduleAll, clearAllTimers]);
+
+  // Listen for permission changes — when user enables notifications in Settings,
+  // immediately schedule
+  useEffect(() => {
+    const handlePermissionGranted = () => {
+      clearAllTimers();
+      scheduleAll();
+    };
+    window.addEventListener("waqt:notifications-enabled", handlePermissionGranted);
+    return () => window.removeEventListener("waqt:notifications-enabled", handlePermissionGranted);
   }, [scheduleAll, clearAllTimers]);
 
   return null;

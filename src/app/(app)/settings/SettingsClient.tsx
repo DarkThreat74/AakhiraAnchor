@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send } from "lucide-react";
 
 interface PrayerSettings {
   latitude: string;
@@ -111,11 +111,22 @@ export default function SettingsClient({
   const [prayerCode, setPrayerCode] = useState<string | null>(null);
   const [prayerCodeCopied, setPrayerCodeCopied] = useState(false);
 
+  // Notification state
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
+  const [notifEnabling, setNotifEnabling] = useState(false);
+  const [notifMsg, setNotifMsg] = useState<string | null>(null);
+
   // Logout state
   const [loggingOut, setLoggingOut] = useState(false);
 
   // Load share link status on mount
   useEffect(() => {
+    // Check notification permission (deferred to avoid synchronous setState in effect)
+    if ("Notification" in window) {
+      const perm = Notification.permission;
+      requestAnimationFrame(() => setNotifPermission(perm));
+    }
+
     fetch("/api/share/generate")
       .then((r) => r.json())
       .then((data) => {
@@ -417,6 +428,79 @@ export default function SettingsClient({
         }
       }
     }
+  }
+
+  // Enable notifications — must be called from user gesture (button tap)
+  async function handleEnableNotifications() {
+    setNotifEnabling(true);
+    setNotifMsg(null);
+    try {
+      if (!("Notification" in window)) {
+        setNotifMsg("Notifications are not supported on this device.");
+        return;
+      }
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+      if (perm === "granted") {
+        setNotifMsg("Notifications enabled! You'll get alerts at each prayer time and before reminders.");
+        // Tell the scheduler to start scheduling
+        window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
+        // Also register the service worker for push if not already
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg) {
+            // Show a test notification immediately so the user knows it works
+            reg.showNotification("Waqt notifications are on", {
+              body: "You'll be notified at each prayer time and before reminders.",
+              tag: "waqt-test",
+              data: { url: "/calendar/day" },
+              icon: "/icon.svg",
+              badge: "/icon.svg",
+            });
+          }
+        }
+      } else if (perm === "denied") {
+        setNotifMsg("Notifications were blocked. Enable them in your browser settings to receive prayer alerts.");
+      } else {
+        setNotifMsg("Notification permission was dismissed. Tap the button again to enable.");
+      }
+    } catch {
+      setNotifMsg("Could not request notification permission. Try again.");
+    } finally {
+      setNotifEnabling(false);
+      setTimeout(() => setNotifMsg(null), 6000);
+    }
+  }
+
+  // Send a test notification
+  async function handleTestNotification() {
+    setNotifMsg(null);
+    try {
+      if (!("Notification" in window) || Notification.permission !== "granted") {
+        setNotifMsg("Enable notifications first.");
+        return;
+      }
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        reg.showNotification("Test notification from Waqt", {
+          body: "If you can see this, notifications are working correctly.",
+          tag: "waqt-test",
+          data: { url: "/calendar/day" },
+          icon: "/icon.svg",
+          badge: "/icon.svg",
+        });
+        setNotifMsg("Test notification sent. Check your notifications.");
+      } else {
+        new Notification("Test notification from Waqt", {
+          body: "If you can see this, notifications are working correctly.",
+          tag: "waqt-test",
+        });
+        setNotifMsg("Test notification sent.");
+      }
+    } catch {
+      setNotifMsg("Failed to send test notification.");
+    }
+    setTimeout(() => setNotifMsg(null), 4000);
   }
 
   // Logout
@@ -897,6 +981,87 @@ export default function SettingsClient({
           {shareError && (
             <p className="mt-3 text-xs" style={{ color: "var(--color-error)" }}>{shareError}</p>
           )}
+        </div>
+      </section>
+
+      {/* ── Notifications ── */}
+      <section
+        className="overflow-hidden rounded-2xl border"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+      >
+        <div className="border-b px-4 py-3 sm:px-6" style={{ borderColor: "var(--color-paper-3)" }}>
+          <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+            {notifPermission === "granted" ? (
+              <Bell className="h-4 w-4" style={{ color: "var(--color-success)" }} />
+            ) : (
+              <BellOff className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+            )}
+            Notifications
+          </h2>
+        </div>
+        <div className="p-4 sm:p-6">
+          {/* Status */}
+          <div className="mb-4 flex items-center gap-2 text-sm">
+            <span style={{ color: "var(--color-ink-muted)" }}>Status:</span>
+            {notifPermission === "granted" && (
+              <span className="font-medium" style={{ color: "var(--color-success)" }}>Enabled</span>
+            )}
+            {notifPermission === "denied" && (
+              <span className="font-medium" style={{ color: "var(--color-warmth)" }}>Blocked</span>
+            )}
+            {notifPermission === "default" && (
+              <span className="font-medium" style={{ color: "var(--color-ink-soft)" }}>Not set up</span>
+            )}
+          </div>
+
+          {notifPermission === "denied" && (
+            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+              Notifications are blocked in your browser. To enable: open your browser/site settings,
+              find the Notifications permission for this site, and change it to Allow.
+            </p>
+            )}
+
+          {notifPermission === "granted" && (
+            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+              You&apos;ll receive a notification when each prayer time begins, and 15 minutes before
+              your scheduled events and reminders. Notifications work while the app is open or in a
+              background tab.
+            </p>
+            )}
+
+          {notifMsg && (
+            <div className="mb-4 text-xs font-medium" style={{ color: notifMsg.includes("enabled") || notifMsg.includes("working") || notifMsg.includes("sent") ? "var(--color-success)" : "var(--color-warmth)" }}>
+              {notifMsg}
+            </div>
+            )}
+
+          <div className="flex flex-wrap gap-3">
+            {notifPermission !== "granted" && (
+              <button
+                onClick={handleEnableNotifications}
+                disabled={notifEnabling || notifPermission === "denied"}
+                className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+              >
+                {notifEnabling ? (
+                  <><RefreshCw className="h-4 w-4 animate-spin" /> Enabling...</>
+                ) : (
+                  <><Bell className="h-4 w-4" /> Enable notifications</>
+                )}
+              </button>
+            )}
+
+            {notifPermission === "granted" && (
+              <button
+                onClick={handleTestNotification}
+                className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+              >
+                <Send className="h-4 w-4" />
+                Send test notification
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
