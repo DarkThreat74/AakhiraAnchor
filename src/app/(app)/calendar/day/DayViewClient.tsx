@@ -840,23 +840,30 @@ export default function DayViewClient({ date }: { date: string }) {
                   borderLeftWidth: 3,
                 }}
               >
-                <div className="flex h-full items-center justify-between gap-1">
-                  <p className="min-w-0 flex-1 truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
-                    {event.title}
-                    {event._pending && (
-                      <span className="ml-1 inline-block text-[8px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
-                        ●
-                      </span>
-                    )}
-                  </p>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm(event); }}
-                    className="shrink-0 opacity-40 transition-opacity hover:opacity-100"
-                    aria-label="Delete event"
-                    style={{ minHeight: 28, minWidth: 28 }}
-                  >
-                    <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
-                  </button>
+                <div className="flex h-full flex-col items-center justify-between gap-0.5">
+                  <div className="flex w-full items-center justify-between gap-1">
+                    <p className="min-w-0 flex-1 truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
+                      {event.title}
+                      {event._pending && (
+                        <span className="ml-1 inline-block text-[8px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
+                          ●
+                        </span>
+                      )}
+                    </p>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirm(event); }}
+                      className="shrink-0 opacity-40 transition-opacity hover:opacity-100"
+                      aria-label="Delete event"
+                      style={{ minHeight: 28, minWidth: 28 }}
+                    >
+                      <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
+                    </button>
+                  </div>
+                  {endStr && (
+                    <p className="w-full truncate text-center text-[9px] font-normal leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                      {formatTime(startStr)} – {formatTime(endStr)}
+                    </p>
+                  )}
                 </div>
               </div>
             );
