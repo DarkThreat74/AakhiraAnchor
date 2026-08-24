@@ -42,7 +42,13 @@ export function getCheckinStage(
 
   // Parse prayer times as today's timestamps
   const start = parseTimeToday(startTime, now);
-  const end = parseTimeToday(endTime, now);
+  let end = parseTimeToday(endTime, now);
+
+  // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr)
+  // If end < start, the window crosses midnight — add 24h to end
+  if (end < start) {
+    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  }
 
   if (now < start || now >= end) {
     return STAGES.NONE;
@@ -73,7 +79,14 @@ export function getCheckinStage(
  * If so, the prayer should be marked as assumed_prayed.
  */
 export function isWindowClosed(window: PrayerWindow, now: Date): boolean {
-  const end = parseTimeToday(window.endTime, now);
+  const start = parseTimeToday(window.startTime, now);
+  let end = parseTimeToday(window.endTime, now);
+
+  // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr)
+  if (end < start) {
+    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  }
+
   return now >= end;
 }
 

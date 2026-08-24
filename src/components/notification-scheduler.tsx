@@ -94,12 +94,14 @@ export default function NotificationScheduler() {
         const rawTime = times[prayer.key];
         if (!rawTime) continue;
 
+        // Normalize time string — DB returns "HH:MM:SS", we need "HH:MM"
+        const parts = rawTime.split(":").map(Number);
+        const hours = parts[0] || 0;
+        const minutes = parts[1] || 0;
+
         // Asr display time = API time + 1 hour (match the display)
-        let timeStr = rawTime;
-        if (prayer.key === "asr") {
-          const [h, m] = rawTime.split(":").map(Number);
-          timeStr = `${String((h + 1) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-        }
+        const adjustedHours = prayer.key === "asr" ? (hours + 1) % 24 : hours;
+        const timeStr = `${String(adjustedHours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 
         const prayerDate = new Date(`${date}T${timeStr}:00`);
         const diffMs = prayerDate.getTime() - now.getTime();

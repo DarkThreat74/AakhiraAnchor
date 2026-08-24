@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v11";
+const CACHE_VERSION = "waqt-v12";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -245,7 +245,7 @@ self.addEventListener("fetch", (event) => {
           }
 
           // Return a synthetic success response
-          const responseData: Record<string, unknown> = {
+          const responseData = {
             ok: true,
             offline: true,
             tempId: tempId,
@@ -343,7 +343,9 @@ self.addEventListener("fetch", (event) => {
     }
 
     event.respondWith(
-      caches.match(request).then((cached) => {
+      (async () => {
+        const cached = await caches.match(request);
+
         // Fetch fresh version in background to update cache
         const fetchPromise = fetch(request)
           .then((response) => {
@@ -351,16 +353,26 @@ self.addEventListener("fetch", (event) => {
             caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
             return response;
           })
-          .catch(() => cached); // Network failed — rely on cache
+          .catch(() => null); // Network failed — will fall back to cache
 
         // Return cached immediately if available, otherwise wait for network
-        return cached || fetchPromise || caches.match("/calendar/day").then(
-          (dayCached) => dayCached || new Response(
-            "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
-            { status: 200, headers: { "Content-Type": "text/html" } }
-          )
+        if (cached) {
+          return cached;
+        }
+
+        const networkResponse = await fetchPromise;
+        if (networkResponse) return networkResponse;
+
+        // No cache, no network — try the calendar day page as app shell fallback
+        const dayCached = await caches.match("/calendar/day");
+        if (dayCached) return dayCached;
+
+        // Last resort — offline page
+        return new Response(
+          "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
+          { status: 200, headers: { "Content-Type": "text/html" } }
         );
-      })
+      })()
     );
     return;
   }
@@ -369,18 +381,33 @@ self.addEventListener("fetch", (event) => {
   // These have the RSC header. Cache them so offline <Link> navigation works.
   if (request.headers.get("RSC") === "1") {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              const responseClone = response.clone();
-              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
-      })
+      (async () => {
+        const cached = await caches.match(request);
+        if (cached) {
+          // Revalidate in background
+          fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                const responseClone = response.clone();
+                caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+        // No cache — try network
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+          }
+          return response;
+        } catch {
+          // No cache, no network — return empty RSC response
+          return new Response("", { status: 503 });
+        }
+      })()
     );
     return;
   }
@@ -388,18 +415,36 @@ self.addEventListener("fetch", (event) => {
   // ── API GET requests (events, prayer-times): stale-while-revalidate ──
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              const responseClone = response.clone();
-              caches.open(API_CACHE).then((cache) => cache.put(request, responseClone));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
-      })
+      (async () => {
+        const cached = await caches.match(request);
+        if (cached) {
+          // Revalidate in background
+          fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                const responseClone = response.clone();
+                caches.open(API_CACHE).then((cache) => cache.put(request, responseClone));
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+        // No cache — try network
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(API_CACHE).then((cache) => cache.put(request, responseClone));
+          }
+          return response;
+        } catch {
+          // No cache, no network — return empty JSON
+          return new Response(JSON.stringify({ error: "offline" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      })()
     );
     return;
   }
