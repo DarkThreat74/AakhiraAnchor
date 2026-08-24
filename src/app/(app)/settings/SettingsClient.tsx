@@ -115,6 +115,8 @@ export default function SettingsClient({
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const [notifEnabling, setNotifEnabling] = useState(false);
   const [notifMsg, setNotifMsg] = useState<string | null>(null);
+  const [swStatus, setSwStatus] = useState<string>("checking...");
+  const [pushStatus, setPushStatus] = useState<string>("checking...");
 
   // Logout state
   const [loggingOut, setLoggingOut] = useState(false);
@@ -125,6 +127,37 @@ export default function SettingsClient({
     if ("Notification" in window) {
       const perm = Notification.permission;
       requestAnimationFrame(() => setNotifPermission(perm));
+    } else {
+      requestAnimationFrame(() => setNotifPermission("denied"));
+    }
+
+    // Check service worker status
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) {
+          setSwStatus("Registered (scope: " + reg.scope + ")");
+          // Check push subscription
+          if ("PushManager" in window && reg.pushManager) {
+            reg.pushManager.getSubscription().then((sub) => {
+              if (sub) {
+                setPushStatus("Subscribed to push");
+              } else {
+                setPushStatus("Not subscribed to push");
+              }
+            }).catch(() => setPushStatus("Push check failed"));
+          } else {
+            setPushStatus("Push not supported");
+          }
+        } else {
+          setSwStatus("Not registered");
+          setPushStatus("No SW — push unavailable");
+        }
+      }).catch(() => setSwStatus("SW check failed"));
+    } else {
+      requestAnimationFrame(() => {
+        setSwStatus("Not supported");
+        setPushStatus("Not supported");
+      });
     }
 
     fetch("/api/share/generate")
@@ -439,45 +472,58 @@ export default function SettingsClient({
         setNotifMsg("Notifications are not supported on this device.");
         return;
       }
+
+      // Make sure the service worker is registered before requesting permission
+      let reg: ServiceWorkerRegistration | undefined;
+      if ("serviceWorker" in navigator) {
+        reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+          // SW not registered yet — register it now
+          try {
+            reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+            // Wait for it to be ready
+            await navigator.serviceWorker.ready;
+          } catch {
+            // SW registration failed — continue anyway, local notifications may still work
+          }
+        }
+      }
+
       const perm = await Notification.requestPermission();
       setNotifPermission(perm);
       if (perm === "granted") {
         // Subscribe to server-side push (for background notifications)
         let pushSubscribed = false;
         try {
-          if ("serviceWorker" in navigator && "PushManager" in window) {
-            const reg = await navigator.serviceWorker.getRegistration();
-            if (reg) {
-              let subscription = await reg.pushManager.getSubscription();
-              if (!subscription) {
-                const keyRes = await fetch("/api/notifications/vapid-public-key");
-                if (keyRes.ok) {
-                  const { publicKey } = await keyRes.json();
-                  if (publicKey) {
-                    subscription = await reg.pushManager.subscribe({
-                      userVisibleOnly: true,
-                      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
-                    });
-                  }
+          if (reg && "PushManager" in window) {
+            let subscription = await reg.pushManager.getSubscription();
+            if (!subscription) {
+              const keyRes = await fetch("/api/notifications/vapid-public-key");
+              if (keyRes.ok) {
+                const { publicKey } = await keyRes.json();
+                if (publicKey) {
+                  subscription = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+                  });
                 }
               }
-              if (subscription) {
-                await fetch("/api/notifications/subscribe", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(subscription),
-                });
-                pushSubscribed = true;
-              }
+            }
+            if (subscription) {
+              await fetch("/api/notifications/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(subscription),
+              });
+              pushSubscribed = true;
             }
           }
-        } catch {
-          // Push subscription failed — local notifications still work
+        } catch (err) {
+          console.warn("[Waqt] Push subscription failed:", err);
         }
 
-        // Show a test notification immediately
-        if ("serviceWorker" in navigator) {
-          const reg = await navigator.serviceWorker.getRegistration();
+        // Show a test notification immediately so the user knows it works
+        try {
           if (reg) {
             reg.showNotification("Waqt notifications are on", {
               body: pushSubscribed
@@ -488,7 +534,16 @@ export default function SettingsClient({
               icon: "/icon.svg",
               badge: "/icon.svg",
             });
+          } else if ("Notification" in window) {
+            // Fallback: use the Notification constructor directly
+            new Notification("Waqt notifications are on", {
+              body: "You'll be notified at each prayer time and before reminders while the app is open.",
+              tag: "waqt-test",
+              icon: "/icon.svg",
+            });
           }
+        } catch (notifErr) {
+          console.warn("[Waqt] Test notification failed:", notifErr);
         }
 
         setNotifMsg(pushSubscribed
@@ -502,11 +557,32 @@ export default function SettingsClient({
       } else {
         setNotifMsg("Notification permission was dismissed. Tap the button again to enable.");
       }
-    } catch {
+    } catch (err) {
+      console.error("[Waqt] Enable notifications failed:", err);
       setNotifMsg("Could not request notification permission. Try again.");
     } finally {
       setNotifEnabling(false);
       setTimeout(() => setNotifMsg(null), 6000);
+    }
+  }
+
+  // Reset service worker — unregister, clear caches, reload
+  async function handleResetSW() {
+    setNotifMsg("Resetting service worker...");
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ("caches" in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+      setNotifMsg("Service worker reset. Reloading...");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch {
+      setNotifMsg("Reset failed. Try closing all tabs and reopening.");
+      setTimeout(() => setNotifMsg(null), 4000);
     }
   }
 
@@ -1092,6 +1168,20 @@ export default function SettingsClient({
             </div>
             )}
 
+          {/* Diagnostic info */}
+          <div className="mb-4 rounded-lg border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Diagnostics
+            </p>
+            <div className="space-y-1 text-[11px]" style={{ color: "var(--color-ink-soft)" }}>
+              <p><span style={{ color: "var(--color-ink-muted)" }}>Browser support:</span> {"Notification" in window ? "Yes" : "No"}</p>
+              <p><span style={{ color: "var(--color-ink-muted)" }}>Permission:</span> {notifPermission}</p>
+              <p><span style={{ color: "var(--color-ink-muted)" }}>Service worker:</span> {swStatus}</p>
+              <p><span style={{ color: "var(--color-ink-muted)" }}>Push:</span> {pushStatus}</p>
+              <p><span style={{ color: "var(--color-ink-muted)" }}>Platform:</span> {typeof navigator !== "undefined" ? (navigator.userAgent.includes("iPhone") || navigator.userAgent.includes("iPad") ? "iOS (requires Add to Home Screen)" : "Desktop/Android") : "unknown"}</p>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-3">
             {notifPermission !== "granted" && (
               <button
@@ -1128,6 +1218,20 @@ export default function SettingsClient({
                 </button>
               </>
             )}
+          </div>
+
+          {/* Reset button — for users with a broken/cached SW */}
+          <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--color-paper-3)" }}>
+            <p className="mb-2 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+              If notifications aren&apos;t working, try resetting the service worker and re-enabling:
+            </p>
+            <button
+              onClick={handleResetSW}
+              className="text-xs font-medium underline underline-offset-2"
+              style={{ color: "var(--color-ink-muted)" }}
+            >
+              Reset service worker & reload
+            </button>
           </div>
         </div>
       </section>
