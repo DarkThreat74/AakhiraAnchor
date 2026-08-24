@@ -548,7 +548,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             return (
               <div
                 key={event.id}
-                className="absolute z-20 overflow-hidden rounded-lg border p-1.5 sm:p-2"
+                className="absolute z-20 overflow-hidden rounded-lg border"
                 style={{
                   top,
                   height,
@@ -559,10 +559,15 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
                   borderLeftWidth: 3,
                 }}
               >
-                <div className="flex h-full items-center">
-                  <p className="min-w-0 flex-1 truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
+                <div className="flex h-full flex-col items-center justify-center gap-0.5 px-1.5 py-1 sm:px-2">
+                  <p className="w-full truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
                     {event.title}
                   </p>
+                  {endStr && (
+                    <p className="w-full truncate text-center text-[9px] font-normal leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                      {formatTime(startStr)} – {formatTime(endStr)}
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -605,6 +610,21 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
 }) {
   const [eventsByDate, setEventsByDate] = useState<Record<string, CalendarEvent[]>>({});
   const [loading, setLoading] = useState(true);
+  const [maxVisibleEvents, setMaxVisibleEvents] = useState(2);
+
+  useEffect(() => {
+    const updateMaxEvents = () => {
+      const w = window.innerWidth;
+      if (w >= 1280) setMaxVisibleEvents(5);
+      else if (w >= 1024) setMaxVisibleEvents(4);
+      else if (w >= 768) setMaxVisibleEvents(3);
+      else if (w >= 640) setMaxVisibleEvents(3);
+      else setMaxVisibleEvents(2);
+    };
+    updateMaxEvents();
+    window.addEventListener("resize", updateMaxEvents);
+    return () => window.removeEventListener("resize", updateMaxEvents);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -745,7 +765,7 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
 
               {/* Event blocks */}
               <div className="flex flex-col gap-0.5 overflow-hidden">
-                {blockEvents.slice(0, 2).map((event) => {
+                {blockEvents.slice(0, maxVisibleEvents).map((event) => {
                   const time = new Date(event.startAt).toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
@@ -766,29 +786,32 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
                     </div>
                   );
                 })}
-                {blockEvents.length > 2 && (
+                {blockEvents.length > maxVisibleEvents && (
                   <span
                     className="px-1 text-[9px] font-medium sm:text-[10px]"
                     style={{ color: "var(--color-ink-muted)" }}
                   >
-                    +{blockEvents.length - 2} more
+                    +{blockEvents.length - maxVisibleEvents} more
                   </span>
                 )}
 
-                {/* Reminder indicators — colored dots */}
+                {/* Reminder indicators — colored dot + title on one line */}
                 {reminderEvents.length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-0.5">
-                    {reminderEvents.slice(0, 4).map((event) => (
-                      <div
-                        key={event.id}
-                        className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: getReminderColor(event.title) }}
-                        title={event.title}
-                      />
+                  <div className="mt-0.5 flex flex-col gap-0.5">
+                    {reminderEvents.slice(0, maxVisibleEvents).map((event) => (
+                      <div key={event.id} className="flex items-center gap-1 truncate">
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: getReminderColor(event.title) }}
+                        />
+                        <span className="truncate text-[9px] leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-soft)" }}>
+                          {event.title}
+                        </span>
+                      </div>
                     ))}
-                    {reminderEvents.length > 4 && (
-                      <span className="text-[8px]" style={{ color: "var(--color-ink-muted)" }}>
-                        +{reminderEvents.length - 4}
+                    {reminderEvents.length > maxVisibleEvents && (
+                      <span className="text-[9px] sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        +{reminderEvents.length - maxVisibleEvents} more
                       </span>
                     )}
                   </div>

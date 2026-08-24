@@ -54,6 +54,26 @@ export async function GET(request: NextRequest) {
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
   const streak = calculateStreak(logsByDate, todayStr);
 
+  // Last 7 days and last 30 days prayed counts
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const weekAgoStr = sevenDaysAgo.toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const monthAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+  let thisWeekPrayed = 0;
+  let thisMonthPrayed = 0;
+  let lastPrayedDate: string | null = null;
+  for (const log of allLogs) {
+    if (log.status === "prayed" || log.status === "assumed_prayed") {
+      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+      if (dateStr >= weekAgoStr) thisWeekPrayed++;
+      if (dateStr >= monthAgoStr) thisMonthPrayed++;
+      if (!lastPrayedDate || dateStr > lastPrayedDate) lastPrayedDate = dateStr;
+    }
+  }
+
   // Per-prayer analytics
   const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"] as const;
   const perPrayer = prayers.map((prayer) => {
@@ -124,6 +144,9 @@ export async function GET(request: NextRequest) {
     masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
     perPrayer,
     timezone,
+    thisWeekPrayed,
+    thisMonthPrayed,
+    lastPrayedDate,
   });
 }
 

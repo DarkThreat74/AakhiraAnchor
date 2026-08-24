@@ -99,9 +99,23 @@ export async function POST(request: NextRequest) {
   // ── Create user ──
   const passwordHash = await bcrypt.hash(password, 10);
 
+  // Generate a unique 6-character prayer code for friend sharing
+  let prayerCode = "";
+  let codeAttempts = 0;
+  while (codeAttempts < 10) {
+    prayerCode = generatePrayerCode();
+    const [existingCode] = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.prayerCode, prayerCode))
+      .limit(1);
+    if (!existingCode) break;
+    codeAttempts++;
+  }
+
   const [user] = await db
     .insert(schema.users)
-    .values({ email: normalizedEmail, passwordHash })
+    .values({ email: normalizedEmail, passwordHash, prayerCode })
     .returning({ id: schema.users.id, email: schema.users.email });
 
   if (!user) {
@@ -122,4 +136,14 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// Generate a random 6-character prayer code (uppercase letters + digits, no ambiguous chars)
+function generatePrayerCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
 }

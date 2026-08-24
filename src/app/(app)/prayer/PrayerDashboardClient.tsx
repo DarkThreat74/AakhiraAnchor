@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Flame, TrendingUp, MapPin, Clock, Users, UserPlus, Copy, Check } from "lucide-react";
+import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X } from "lucide-react";
 
 interface PerPrayerStats {
   prayer: string;
@@ -22,6 +22,9 @@ interface Analytics {
   masjidPct: number;
   perPrayer: PerPrayerStats[];
   timezone: string;
+  thisWeekPrayed: number;
+  thisMonthPrayed: number;
+  lastPrayedDate: string | null;
 }
 
 interface Friend {
@@ -30,6 +33,10 @@ interface Friend {
   displayName: string | null;
   streak: number;
   totalCompleteDays: number;
+  totalPrayed: number;
+  masjidPct: number;
+  thisWeekPrayed: number;
+  lastPrayedDate: string | null;
 }
 
 interface QadaaInfo {
@@ -49,6 +56,14 @@ const PRAYER_LABELS: Record<string, string> = {
   isha: "Isha",
 };
 
+const PRAYER_COLORS: Record<string, string> = {
+  fajr: "#1e40af",
+  dhuhr: "#c2410c",
+  asr: "#7c3aed",
+  maghrib: "#be185d",
+  isha: "#0e7490",
+};
+
 export default function PrayerDashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -60,14 +75,12 @@ export default function PrayerDashboard() {
   const [friendSuccess, setFriendSuccess] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
-  // Qadaa setup form state
   const [setupFajr, setSetupFajr] = useState(0);
   const [setupDhuhr, setSetupDhuhr] = useState(0);
   const [setupAsr, setSetupAsr] = useState(0);
   const [setupMaghrib, setSetupMaghrib] = useState(0);
   const [setupIsha, setSetupIsha] = useState(0);
   const [qadaaSetting, setQadaaSetting] = useState(false);
-  // Qadaa adjust state
   const [adjustPrayer, setAdjustPrayer] = useState<string>("fajr");
   const [adjustAmount, setAdjustAmount] = useState(1);
 
@@ -98,10 +111,8 @@ export default function PrayerDashboard() {
     })();
   }, []);
 
-  // Refetch when offline items sync
   useEffect(() => {
     const handleSynced = () => {
-      // Refetch all data after sync
       (async () => {
         try {
           const [analyticsRes, friendsRes, qadaaRes] = await Promise.all([
@@ -145,9 +156,9 @@ export default function PrayerDashboard() {
       const data = await res.json();
       if (res.ok && !data.offline) {
         setFriends([...friends, data.friend]);
-        setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}!`);
+        setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}! You can now see each other's stats.`);
         setAddFriendCode("");
-        setTimeout(() => setFriendSuccess(null), 3000);
+        setTimeout(() => setFriendSuccess(null), 4000);
       } else if (data.offline) {
         setFriendSuccess("Saved offline — will sync when online.");
         setAddFriendCode("");
@@ -164,7 +175,6 @@ export default function PrayerDashboard() {
     try {
       const res = await fetch(`/api/prayer-friends/remove?friendId=${friendId}`, { method: "DELETE" });
       if (res.ok) {
-        // Optimistically remove from local list (works both online and offline)
         setFriends(friends.filter((f) => f.id !== friendId));
       }
     } catch {
@@ -193,7 +203,6 @@ export default function PrayerDashboard() {
         setQadaaMsg("Qadaa set up successfully.");
         setTimeout(() => setQadaaMsg(null), 3000);
       } else if (data.offline) {
-        // Offline — set local state from input values
         setQadaa({
           fajrOwed: setupFajr,
           dhuhrOwed: setupDhuhr,
@@ -224,7 +233,6 @@ export default function PrayerDashboard() {
       if (res.ok) {
         const data = await res.json();
         if (data.offline) {
-          // Offline — update local state optimistically
           if (qadaa) {
             const colMap: Record<string, keyof typeof qadaa> = {
               fajr: "fajrOwed", dhuhr: "dhuhrOwed", asr: "asrOwed",
@@ -257,73 +265,88 @@ export default function PrayerDashboard() {
     );
   }
 
+  const myStreak = analytics?.streak || 0;
+  const myWeekPrayed = analytics?.thisWeekPrayed || 0;
+  const myComplete = analytics?.totalCompleteDays || 0;
+  const myMasjidPct = analytics?.masjidPct || 0;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="mb-6 text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--color-ink)" }}>
         Prayer Dashboard
       </h1>
 
-      {/* Streak + overview cards */}
+      {/* ── Overview metrics ── */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           icon={<Flame className="h-4 w-4" />}
-          label="Streak"
-          value={`${analytics?.streak || 0} days`}
+          label="Current Streak"
+          value={`${myStreak}`}
+          sub="days"
           color="var(--color-warmth)"
+        />
+        <StatCard
+          icon={<Calendar className="h-4 w-4" />}
+          label="This Week"
+          value={`${myWeekPrayed}`}
+          sub="prayers"
+          color="var(--color-accent)"
         />
         <StatCard
           icon={<Check className="h-4 w-4" />}
           label="Complete Days"
-          value={`${analytics?.totalCompleteDays || 0}`}
+          value={`${myComplete}`}
+          sub="all 5 prayed"
           color="var(--color-success)"
         />
         <StatCard
           icon={<MapPin className="h-4 w-4" />}
-          label="Masjid %"
-          value={`${analytics?.masjidPct || 0}%`}
-          color="var(--color-accent)"
-        />
-        <StatCard
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Total Prayed"
-          value={`${analytics?.totalPrayed || 0}`}
+          label="Masjid Rate"
+          value={`${myMasjidPct}%`}
+          sub={`${analytics?.totalMasjid || 0} times`}
           color="var(--color-ink-soft)"
         />
       </div>
 
-      {/* Per-prayer analytics */}
+      {/* ── Per-prayer breakdown ── */}
       <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
         <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Per Prayer (last 90 days)</h2>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Per-Prayer Breakdown</h2>
+          <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>Last 90 days of data</p>
         </div>
         <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
-          {analytics?.perPrayer.map((stat) => (
-            <div key={stat.prayer} className="flex items-center justify-between px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-                  {PRAYER_LABELS[stat.prayer] || stat.prayer}
-                </span>
+          {analytics?.perPrayer.map((stat) => {
+            const color = PRAYER_COLORS[stat.prayer] || "var(--color-accent)";
+            return (
+              <div key={stat.prayer} className="px-4 py-3 sm:px-5">
+                {/* Prayer name + color bar */}
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                    {PRAYER_LABELS[stat.prayer] || stat.prayer}
+                  </span>
+                </div>
+                {/* Metrics row */}
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <Metric label="Prayed" value={`${stat.totalPrayed}`} />
+                  <Metric label="Consistency" value={`${stat.consistencyPct}%`} />
+                  <Metric label="Masjid" value={`${stat.masjidPct}%`} />
+                  <Metric label="Avg time" value={stat.avgTimeStr || "—"} />
+                </div>
+                {/* Consistency bar */}
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${stat.consistencyPct}%`, backgroundColor: color }}
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-4 text-xs sm:gap-6">
-                <div className="flex items-center gap-1" style={{ color: "var(--color-ink-muted)" }}>
-                  <Clock className="h-3 w-3" />
-                  <span className="tabular-nums">{stat.avgTimeStr || "—"}</span>
-                </div>
-                <div className="text-center">
-                  <div className="font-medium tabular-nums" style={{ color: "var(--color-ink)" }}>{stat.consistencyPct}%</div>
-                  <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>consistency</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-medium tabular-nums" style={{ color: "var(--color-accent)" }}>{stat.masjidPct}%</div>
-                  <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>masjid</div>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* Qadaa section */}
+      {/* ── Qadaa section ── */}
       {qadaa && !qadaa.setupCompleted && (
         <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
           <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
@@ -381,7 +404,6 @@ export default function PrayerDashboard() {
             <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Qadaa Tracker</h2>
           </div>
           <div className="px-4 py-4 sm:px-5">
-            {/* Per-salah breakdown */}
             <div className="mb-4 grid grid-cols-5 gap-2">
               {([
                 { key: "fajr", label: "Fajr", val: qadaa.fajrOwed },
@@ -399,7 +421,6 @@ export default function PrayerDashboard() {
               ))}
             </div>
 
-            {/* Total */}
             <div className="mb-3 flex items-baseline justify-between border-t pt-3" style={{ borderColor: "var(--color-paper-3)" }}>
               <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Total owed</span>
               <span className="text-xl font-bold tabular-nums" style={{ color: "var(--color-warmth)" }}>
@@ -413,7 +434,6 @@ export default function PrayerDashboard() {
               </div>
             )}
 
-            {/* Adjust controls */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <select
                 value={adjustPrayer}
@@ -469,134 +489,144 @@ export default function PrayerDashboard() {
         </div>
       )}
 
-      {/* Prayer code sharing */}
-      <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-        <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Your Prayer Code</h2>
-        </div>
-        <div className="px-4 py-4 sm:px-5">
-          <p className="mb-3 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-            Share this code with friends so they can see your prayer streaks and you can compete together.
-          </p>
-          <div className="flex items-center gap-2">
-            <div
-              className="flex-1 rounded-lg border px-3 py-2 text-center text-lg font-bold tracking-widest"
-              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)" }}
-            >
-              {prayerCode || "—"}
-            </div>
-            <button
-              onClick={handleCopyCode}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
-            >
-              {copied ? <Check className="h-3.5 w-3.5" style={{ color: "var(--color-success)" }} /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Friends competition section */}
+      {/* ── Friends Competition (separate section) ── */}
       <div className="mb-6 rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
         <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
           <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-            <Users className="h-4 w-4" /> Prayer Competition
+            <Users className="h-4 w-4" /> Friends Competition
           </h2>
+          <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+            Share your code to compete. Adding a friend gives both of you access to each other&apos;s stats.
+          </p>
         </div>
         <div className="px-4 py-4 sm:px-5">
-          {/* Add friend */}
-          <div className="mb-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={addFriendCode}
-                onChange={(e) => setAddFriendCode(e.target.value)}
-                placeholder="Enter friend's code"
-                maxLength={6}
-                className="flex-1 rounded-lg border px-3 py-2 text-sm uppercase tracking-widest"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
-              />
-              <button
-                onClick={handleAddFriend}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
-              >
-                <UserPlus className="h-3.5 w-3.5" /> Add
-              </button>
+          {/* Share code + add friend in one row */}
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                Your code
+              </label>
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex-1 rounded-lg border px-3 py-2 text-center text-base font-bold tracking-widest sm:text-lg"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)" }}
+                >
+                  {prayerCode || "—"}
+                </div>
+                <button
+                  onClick={handleCopyCode}
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" style={{ color: "var(--color-success)" }} /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
             </div>
-            {friendError && <p className="mt-2 text-xs" style={{ color: "var(--color-warmth)" }}>{friendError}</p>}
-            {friendSuccess && <p className="mt-2 text-xs" style={{ color: "var(--color-success)" }}>{friendSuccess}</p>}
+            <div className="flex-1">
+              <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                Add friend
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={addFriendCode}
+                  onChange={(e) => setAddFriendCode(e.target.value)}
+                  placeholder="Enter code"
+                  maxLength={6}
+                  className="flex-1 rounded-lg border px-3 py-2 text-sm uppercase tracking-widest"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 40 }}
+                />
+                <button
+                  onClick={handleAddFriend}
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+                  style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> Add
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Side-by-side comparison */}
+          {friendError && <p className="mb-3 text-xs" style={{ color: "var(--color-warmth)" }}>{friendError}</p>}
+          {friendSuccess && <p className="mb-3 text-xs" style={{ color: "var(--color-success)" }}>{friendSuccess}</p>}
+
+          {/* Leaderboard */}
           {friends.length === 0 ? (
-            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              No friends added yet. Add a friend with their prayer code to compete and compare streaks side by side.
-            </p>
+            <div className="rounded-lg border border-dashed py-6 text-center" style={{ borderColor: "var(--color-paper-3)" }}>
+              <Users className="mx-auto mb-2 h-6 w-6" style={{ color: "var(--color-ink-muted)" }} />
+              <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                No friends yet. Share your code above and add a friend to start competing.
+              </p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {friends.map((friend) => {
-                const myStreak = analytics?.streak || 0;
-                const myComplete = analytics?.totalCompleteDays || 0;
+            <div className="space-y-2">
+              {/* Your stats row */}
+              <div
+                className="flex items-center gap-3 rounded-xl border p-3"
+                style={{
+                  borderColor: "var(--color-accent)",
+                  backgroundColor: "color-mix(in oklab, var(--color-accent) 6%, transparent)",
+                }}
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)" }}>
+                  You
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>You</div>
+                  <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                    {myWeekPrayed} this week · {myComplete} complete days
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center gap-1 text-lg font-bold tabular-nums" style={{ color: "var(--color-accent)" }}>
+                    <Flame className="h-4 w-4" /> {myStreak}
+                  </div>
+                  <div className="text-[9px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
+                </div>
+              </div>
+
+              {/* Friend rows */}
+              {friends.map((friend, idx) => {
                 const imWinning = myStreak >= friend.streak;
                 return (
-                  <div key={friend.id} className="rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)" }}>
-                    {/* VS header */}
-                    <div className="mb-3 flex items-center justify-center">
-                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--color-ink-muted)" }}>
-                        {imWinning ? "You're leading" : `${friend.firstName || friend.displayName || "Friend"} is leading`}
-                      </span>
+                  <div
+                    key={friend.id}
+                    className="group relative flex items-center gap-3 rounded-xl border p-3"
+                    style={{ borderColor: "var(--color-paper-3)" }}
+                  >
+                    {/* Rank badge */}
+                    <div
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                      style={{
+                        backgroundColor: idx === 0 ? "color-mix(in oklab, var(--color-warmth) 20%, transparent)" : "var(--color-paper-2)",
+                        color: idx === 0 ? "var(--color-warmth)" : "var(--color-ink-muted)",
+                      }}
+                    >
+                      {idx + 1}
                     </div>
-
-                    {/* Side-by-side stats */}
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* You */}
-                      <div
-                        className="rounded-lg border p-3 text-center"
-                        style={{
-                          borderColor: imWinning ? "var(--color-accent)" : "var(--color-paper-3)",
-                          backgroundColor: imWinning ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
-                        }}
-                      >
-                        <div className="mb-1 text-xs font-medium" style={{ color: "var(--color-ink)" }}>You</div>
-                        <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--color-accent)" }}>
-                          {myStreak}
-                        </div>
-                        <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
-                        <div className="mt-2 text-xs tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
-                          {myComplete} complete
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                        {friend.firstName || friend.displayName || "Friend"}
                       </div>
-
-                      {/* Friend */}
-                      <div
-                        className="rounded-lg border p-3 text-center"
-                        style={{
-                          borderColor: !imWinning ? "var(--color-warmth)" : "var(--color-paper-3)",
-                          backgroundColor: !imWinning ? "color-mix(in oklab, var(--color-warmth) 8%, transparent)" : "transparent",
-                        }}
-                      >
-                        <div className="mb-1 truncate text-xs font-medium" style={{ color: "var(--color-ink)" }}>
-                          {friend.firstName || friend.displayName || "Friend"}
-                        </div>
-                        <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--color-warmth)" }}>
-                          {friend.streak}
-                        </div>
-                        <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
-                        <div className="mt-2 text-xs tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
-                          {friend.totalCompleteDays} complete
-                        </div>
+                      <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        {friend.thisWeekPrayed} this week · {friend.totalCompleteDays} complete · {friend.masjidPct}% masjid
                       </div>
                     </div>
-
+                    <div className="text-right">
+                      <div className="flex items-center gap-1 text-lg font-bold tabular-nums" style={{ color: imWinning ? "var(--color-ink-soft)" : "var(--color-warmth)" }}>
+                        <Flame className="h-4 w-4" /> {friend.streak}
+                      </div>
+                      <div className="text-[9px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
+                    </div>
                     {/* Remove button */}
                     <button
                       onClick={() => handleRemoveFriend(friend.id)}
-                      className="mt-3 w-full text-center text-[10px] transition-colors"
+                      className="absolute right-1.5 top-1.5 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                      aria-label="Remove friend"
                       style={{ color: "var(--color-ink-muted)" }}
                     >
-                      Remove friend
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 );
@@ -609,7 +639,7 @@ export default function PrayerDashboard() {
   );
 }
 
-function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub: string; color: string }) {
   return (
     <div
       className="rounded-xl border p-3 sm:p-4"
@@ -619,9 +649,21 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
         {icon}
         <span className="text-[10px] font-medium uppercase tracking-wide sm:text-[11px]">{label}</span>
       </div>
-      <div className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-ink)" }}>
-        {value}
+      <div className="flex items-baseline gap-1">
+        <span className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-ink)" }}>
+          {value}
+        </span>
+        <span className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>{sub}</span>
       </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-sm font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>{value}</div>
+      <div className="text-[9px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>{label}</div>
     </div>
   );
 }

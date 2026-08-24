@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-// DELETE /api/prayer-friends/remove?friendId=UUID — remove a prayer friend
+// DELETE /api/prayer-friends/remove?friendId=UUID — remove a prayer friend (both directions)
 export async function DELETE(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -24,12 +24,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Invalid friendId." }, { status: 400 });
   }
 
+  // Remove both directions — you unfriend them, they unfriend you
   await db
     .delete(schema.prayerFriends)
     .where(
-      and(
-        eq(schema.prayerFriends.userId, session.userId),
-        eq(schema.prayerFriends.friendId, friendId),
+      or(
+        and(
+          eq(schema.prayerFriends.userId, session.userId),
+          eq(schema.prayerFriends.friendId, friendId),
+        ),
+        and(
+          eq(schema.prayerFriends.userId, friendId),
+          eq(schema.prayerFriends.friendId, session.userId),
+        ),
       ),
     );
 

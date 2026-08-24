@@ -5,7 +5,7 @@ import { getSessionFromRequest } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/prayer-friends/my-code — get the current user's prayer code
+// GET /api/prayer-friends/my-code — get the current user's prayer code (generate one if missing)
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -18,9 +18,31 @@ export async function GET(request: NextRequest) {
     .where(eq(schema.users.id, session.userId))
     .limit(1);
 
-  if (!user?.prayerCode) {
-    return NextResponse.json({ error: "No prayer code found." }, { status: 404 });
+  if (user?.prayerCode) {
+    return NextResponse.json({ prayerCode: user.prayerCode });
   }
 
-  return NextResponse.json({ prayerCode: user.prayerCode });
+  // Generate a code for existing users who don't have one yet
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    // Check uniqueness
+    const [existing] = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.prayerCode, code))
+      .limit(1);
+    if (!existing) {
+      await db
+        .update(schema.users)
+        .set({ prayerCode: code })
+        .where(eq(schema.users.id, session.userId));
+      return NextResponse.json({ prayerCode: code });
+    }
+  }
+
+  return NextResponse.json({ error: "Could not generate prayer code." }, { status: 500 });
 }

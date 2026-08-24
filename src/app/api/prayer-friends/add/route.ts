@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You can't add yourself." }, { status: 400 });
   }
 
-  // Check if already friends
+  // Check if already friends (either direction)
   const [existing] = await db
     .select()
     .from(schema.prayerFriends)
@@ -66,11 +66,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Already friends." }, { status: 409 });
   }
 
-  // Add the friendship
-  await db.insert(schema.prayerFriends).values({
-    userId: session.userId,
-    friendId: friendUser.id,
-  });
+  // Add bidirectional friendship — both users get access to each other's data
+  await db.insert(schema.prayerFriends).values([
+    { userId: session.userId, friendId: friendUser.id },
+    { userId: friendUser.id, friendId: session.userId },
+  ]);
 
   // Get friend's streak for the response
   const friendLogs = await db
