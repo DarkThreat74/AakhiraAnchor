@@ -2,23 +2,41 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, LogOut, RefreshCw, ShieldCheck, BookOpen, Heart, ListTodo, Mic, LayoutGrid } from "lucide-react";
+import { LogOut, RefreshCw, ShieldCheck, Mic, LayoutGrid, Users, ChevronRight, ArrowLeft } from "lucide-react";
 
-type Tab = "overview" | "lessons" | "dhikr" | "huddle" | "talks";
+type Tab = "overview" | "users" | "talks";
 
 const NAV_ITEMS: Array<{ key: Tab; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }> = [
   { key: "overview", label: "Overview", icon: LayoutGrid },
-  { key: "lessons", label: "Lessons", icon: BookOpen },
-  { key: "dhikr", label: "Dhikr", icon: Heart },
-  { key: "huddle", label: "Huddle Tasks", icon: ListTodo },
+  { key: "users", label: "Users", icon: Users },
   { key: "talks", label: "Talks", icon: Mic },
 ];
 
+interface AdminStats {
+  users: number;
+  talks: number;
+}
+
+interface AdminUser {
+  id: string;
+  email: string;
+  firstName: string | null;
+  displayName: string | null;
+  createdAt: string;
+  role: string;
+  prayerLogCount: number;
+  prayedCount: number;
+  lastCheckin: string | null;
+  eventCount: number;
+  friendCount: number;
+}
+
 export default function AdminPortal() {
   const [tab, setTab] = useState<Tab>("overview");
-  const [stats, setStats] = useState<{ users: number; lessons: number; dhikr: number; huddleTasks: number; talks: number } | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -71,7 +89,7 @@ export default function AdminPortal() {
             <NavButton
               key={item.key}
               active={tab === item.key}
-              onClick={() => setTab(item.key)}
+              onClick={() => { setTab(item.key); setSelectedUser(null); }}
               icon={item.icon}
             >
               {item.label}
@@ -144,7 +162,7 @@ export default function AdminPortal() {
                 <NavButton
                   key={item.key}
                   active={tab === item.key}
-                  onClick={() => { setTab(item.key); setSidebarOpen(false); }}
+                  onClick={() => { setTab(item.key); setSidebarOpen(false); setSelectedUser(null); }}
                   icon={item.icon}
                 >
                   {item.label}
@@ -169,27 +187,29 @@ export default function AdminPortal() {
       <div className="flex flex-1 flex-col lg:pl-60">
         <main className="flex-1 px-5 pb-10 pt-16 sm:px-8 lg:px-10 lg:pt-10">
           {/* Section header */}
-          <div className="mb-8 max-w-3xl">
+          <div className="mb-8 max-w-4xl">
             <h1
               className="text-xl font-semibold tracking-tight sm:text-2xl"
               style={{ color: "var(--color-ink)" }}
             >
-              {NAV_ITEMS.find((n) => n.key === tab)?.label}
+              {selectedUser ? "User Details" : NAV_ITEMS.find((n) => n.key === tab)?.label}
             </h1>
             <p className="mt-1 text-sm" style={{ color: "var(--color-ink-muted)" }}>
-              {tab === "overview" && "Platform summary — user count and content inventory."}
-              {tab === "lessons" && "Curated daily lessons. Every entry must cite a human-verified source."}
-              {tab === "dhikr" && "Dhikr sequences for the tasbih counter. Arabic + transliteration + source."}
-              {tab === "huddle" && "Daily Huddle task pool. Free tier shows is_default_free items only."}
+              {selectedUser
+                ? `${selectedUser.firstName || selectedUser.displayName || selectedUser.email}`
+                : tab === "overview" && "Platform summary."
+              }
+              {tab === "users" && !selectedUser && "All registered accounts. Click any user for details."}
               {tab === "talks" && "External talk links. No self-hosted audio — curation and linking only."}
             </p>
           </div>
 
-          <div className="max-w-3xl">
-            {tab === "overview" && <Overview stats={stats} />}
-            {tab === "lessons" && <LessonsManager />}
-            {tab === "dhikr" && <DhikrManager />}
-            {tab === "huddle" && <HuddleManager />}
+          <div className="max-w-4xl">
+            {tab === "overview" && <Overview stats={stats} onUsersClick={() => setTab("users")} />}
+            {tab === "users" && (selectedUser
+              ? <UserDetail user={selectedUser} onBack={() => setSelectedUser(null)} />
+              : <UsersList onSelect={setSelectedUser} />
+            )}
             {tab === "talks" && <TalksManager />}
           </div>
         </main>
@@ -218,217 +238,181 @@ function NavButton({ active, onClick, icon: Icon, children }: { active: boolean;
 
 // ─── Overview ───
 
-function Overview({ stats }: { stats: { users: number; lessons: number; dhikr: number; huddleTasks: number; talks: number } | null }) {
-  const rows: Array<{ label: string; value: number; note: string }> = [
-    { label: "Users", value: stats?.users ?? 0, note: "Total registered accounts" },
-    { label: "Daily Lessons", value: stats?.lessons ?? 0, note: "Curated content entries" },
-    { label: "Dhikr Sequences", value: stats?.dhikr ?? 0, note: "Tasbih counter sequences" },
-    { label: "Huddle Tasks", value: stats?.huddleTasks ?? 0, note: "Task pool (free + plus)" },
-    { label: "Talks", value: stats?.talks ?? 0, note: "External link entries" },
-  ];
+function Overview({ stats, onUsersClick }: { stats: AdminStats | null; onUsersClick: () => void }) {
+  return (
+    <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+      {/* Users — clickable */}
+      <button
+        onClick={onUsersClick}
+        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-[var(--color-paper-2)]"
+      >
+        <div>
+          <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Users</p>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>Total registered accounts — click to view all</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <p className="text-2xl font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>
+            {stats?.users ?? 0}
+          </p>
+          <ChevronRight className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+        </div>
+      </button>
+
+      <div
+        className="flex items-center justify-between px-5 py-4"
+        style={{ borderTop: "1px solid var(--color-paper-3)" }}
+      >
+        <div>
+          <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Talks</p>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>External link entries</p>
+        </div>
+        <p className="text-2xl font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>
+          {stats?.talks ?? 0}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Users List ───
+
+function UsersList({ onSelect }: { onSelect: (user: AdminUser) => void }) {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/users")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.users) setUsers(data.users);
+        else if (data.error) setError(data.error);
+      })
+      .catch(() => setError("Failed to load users."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--color-ink-muted)" }} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-sm" style={{ color: "var(--color-warmth)" }}>{error}</p>;
+  }
+
+  if (users.length === 0) {
+    return <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>No users registered yet.</p>;
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-      {rows.map((row, i) => (
-        <div
-          key={row.label}
-          className="flex items-center justify-between px-5 py-4"
-          style={{
-            borderTop: i === 0 ? "none" : `1px solid var(--color-paper-3)`,
-          }}
+      {users.map((user, i) => (
+        <button
+          key={user.id}
+          onClick={() => onSelect(user)}
+          className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-[var(--color-paper-2)]"
+          style={{ borderTop: i === 0 ? "none" : "1px solid var(--color-paper-3)" }}
         >
-          <div>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{row.label}</p>
-            <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>{row.note}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+              {user.firstName || user.displayName || "No name set"}
+            </p>
+            <p className="mt-0.5 truncate text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              {user.email}
+            </p>
           </div>
-          <p className="text-2xl font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>
-            {row.value}
-          </p>
-        </div>
+          <div className="flex shrink-0 items-center gap-4">
+            <div className="text-right">
+              <p className="text-xs font-medium tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
+                {user.prayedCount} prayed
+              </p>
+              <p className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                {user.eventCount} events · {user.friendCount} friends
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
+          </div>
+        </button>
       ))}
     </div>
   );
 }
 
-// ─── Lessons Manager ───
+// ─── User Detail ───
 
-function LessonsManager() {
-  const [items, setItems] = useState<Array<{ id: string; content: string; sourceCitation: string; category: string | null }>>([]);
-  const [content, setContent] = useState("");
-  const [source, setSource] = useState("");
-  const [category, setCategory] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+function UserDetail({ user, onBack }: { user: AdminUser; onBack: () => void }) {
+  const rows: Array<{ label: string; value: string }> = [
+    { label: "Email", value: user.email },
+    { label: "Display Name", value: user.displayName || "Not set" },
+    { label: "First Name", value: user.firstName || "Not set" },
+    { label: "User ID", value: user.id },
+    { label: "Joined", value: new Date(user.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) },
+    { label: "Last Prayer Check-in", value: user.lastCheckin ? new Date(user.lastCheckin).toLocaleString("en-US") : "Never" },
+  ];
 
-  const load = useCallback(() => {
-    fetch("/api/admin/lessons").then(r => r.json()).then(setItems).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!content.trim() || !source.trim()) { setError("Content and source are required."); return; }
-    const res = await fetch("/api/admin/lessons", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, sourceCitation: source, category: category || undefined }),
-    });
-    if (res.ok) {
-      setContent(""); setSource(""); setCategory("");
-      load();
-    } else { setError("Failed to add lesson."); }
-  }
+  const stats: Array<{ label: string; value: number }> = [
+    { label: "Total Prayer Logs", value: user.prayerLogCount },
+    { label: "Prayers Marked as Prayed", value: user.prayedCount },
+    { label: "Calendar Events", value: user.eventCount },
+    { label: "Friends Added", value: user.friendCount },
+  ];
 
   return (
-    <div className="flex flex-col gap-8">
-      <AddForm title="Add Daily Lesson" onSubmit={add} error={error}>
-        <Field label="Content" value={content} onChange={setContent} textarea />
-        <Field label="Source Citation" value={source} onChange={setSource} placeholder="e.g. Sahih Bukhari 1:2:7" />
-        <Field label="Category (optional)" value={category} onChange={setCategory} />
-      </AddForm>
+    <div className="flex flex-col gap-6">
+      {/* Back button */}
+      <button
+        onClick={onBack}
+        className="flex w-fit items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
+        style={{ color: "var(--color-ink-muted)" }}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to users
+      </button>
 
-      <ItemList loading={loading} items={items} empty="No lessons yet. Add your first curated lesson above.">
-        {(item) => (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-sm leading-relaxed" style={{ color: "var(--color-ink)" }}>{item.content}</p>
-            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              Source: {item.sourceCitation}{item.category ? ` · ${item.category}` : ""}
-            </p>
-          </div>
-        )}
-      </ItemList>
-    </div>
-  );
-}
-
-// ─── Dhikr Manager ───
-
-function DhikrManager() {
-  const [items, setItems] = useState<Array<{ id: string; phraseArabic: string; phraseTransliteration: string; targetCount: number; sequenceOrder: number; sourceCitation: string }>>([]);
-  const [arabic, setArabic] = useState("");
-  const [translit, setTranslit] = useState("");
-  const [count, setCount] = useState("33");
-  const [order, setOrder] = useState("0");
-  const [source, setSource] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    fetch("/api/admin/dhikr").then(r => r.json()).then(setItems).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!arabic.trim() || !translit.trim() || !source.trim()) { setError("All fields except count/order are required."); return; }
-    const res = await fetch("/api/admin/dhikr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phraseArabic: arabic, phraseTransliteration: translit, targetCount: Number(count), sequenceOrder: Number(order), sourceCitation: source }),
-    });
-    if (res.ok) { setArabic(""); setTranslit(""); setCount("33"); setOrder("0"); setSource(""); load(); }
-    else { setError("Failed to add dhikr."); }
-  }
-
-  return (
-    <div className="flex flex-col gap-8">
-      <AddForm title="Add Dhikr Sequence" onSubmit={add} error={error}>
-        <Field label="Arabic Phrase" value={arabic} onChange={setArabic} />
-        <Field label="Transliteration" value={translit} onChange={setTranslit} placeholder="e.g. SubhanAllah" />
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Target Count" value={count} onChange={setCount} type="number" />
-          <Field label="Sequence Order" value={order} onChange={setOrder} type="number" />
-        </div>
-        <Field label="Source Citation" value={source} onChange={setSource} placeholder="e.g. Sahih Muslim 4:2071" />
-      </AddForm>
-
-      <ItemList loading={loading} items={items} empty="No dhikr sequences yet.">
-        {(item) => (
-          <div className="flex flex-col gap-1">
-            <p className="text-lg leading-snug" style={{ color: "var(--color-ink)", fontFamily: "var(--font-arabic)" }}>
-              {item.phraseArabic}
-            </p>
-            <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-              {item.phraseTransliteration} · {item.targetCount}x · order {item.sequenceOrder}
-            </p>
-            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Source: {item.sourceCitation}</p>
-          </div>
-        )}
-      </ItemList>
-    </div>
-  );
-}
-
-// ─── Huddle Tasks Manager ───
-
-function HuddleManager() {
-  const [items, setItems] = useState<Array<{ id: string; title: string; category: string | null; isDefaultFree: boolean }>>([]);
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [isFree, setIsFree] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    fetch("/api/admin/huddle-tasks").then(r => r.json()).then(setItems).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!title.trim()) { setError("Title is required."); return; }
-    const res = await fetch("/api/admin/huddle-tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, category: category || undefined, isDefaultFree: isFree }),
-    });
-    if (res.ok) { setTitle(""); setCategory(""); setIsFree(false); load(); }
-    else { setError("Failed to add task."); }
-  }
-
-  return (
-    <div className="flex flex-col gap-8">
-      <AddForm title="Add Huddle Task" onSubmit={add} error={error}>
-        <Field label="Title" value={title} onChange={setTitle} />
-        <Field label="Category (optional)" value={category} onChange={setCategory} />
-        <label className="flex items-center gap-2.5 text-sm" style={{ color: "var(--color-ink)" }}>
-          <input
-            type="checkbox"
-            checked={isFree}
-            onChange={(e) => setIsFree(e.target.checked)}
-            className="h-4 w-4 rounded"
-          />
-          Available in free tier
-        </label>
-      </AddForm>
-
-      <ItemList loading={loading} items={items} empty="No huddle tasks yet.">
-        {(item) => (
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>{item.title}</p>
-              <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-                {item.category ? `${item.category} · ` : ""}{item.isDefaultFree ? "Free tier" : "Plus only"}
-              </p>
-            </div>
-            <span
-              className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-              style={{
-                backgroundColor: item.isDefaultFree ? "var(--color-accent-faint)" : "var(--color-paper-3)",
-                color: item.isDefaultFree ? "var(--color-accent)" : "var(--color-ink-muted)",
-              }}
-            >
-              {item.isDefaultFree ? "Free" : "Plus"}
+      {/* User info */}
+      <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+        {rows.map((row, i) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between gap-4 px-5 py-3.5"
+            style={{ borderTop: i === 0 ? "none" : "1px solid var(--color-paper-3)" }}
+          >
+            <span className="shrink-0 text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+              {row.label}
+            </span>
+            <span className="truncate text-sm text-right" style={{ color: "var(--color-ink)" }}>
+              {row.value}
             </span>
           </div>
-        )}
-      </ItemList>
+        ))}
+      </div>
+
+      {/* Activity stats */}
+      <div>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+          Activity
+        </h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-lg border p-4"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+            >
+              <p className="text-2xl font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>
+                {stat.value}
+              </p>
+              <p className="mt-1 text-[11px] leading-tight" style={{ color: "var(--color-ink-muted)" }}>
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -507,42 +491,29 @@ function AddForm({ title, onSubmit, error, children }: { title: string; onSubmit
         {title}
       </h2>
       {children}
-      {error && (
-        <p
-          className="rounded-md px-3 py-2 text-sm"
-          style={{
-            color: "var(--color-error)",
-            backgroundColor: "color-mix(in oklab, var(--color-error) 8%, transparent)",
-          }}
-        >
-          {error}
-        </p>
-      )}
+      {error && <p className="text-xs" style={{ color: "var(--color-warmth)" }}>{error}</p>}
       <button
         type="submit"
-        className="inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
+        className="self-start rounded-md px-4 py-2 text-sm font-medium"
         style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
       >
-        <Plus className="h-4 w-4" />
         Add
       </button>
     </form>
   );
 }
 
-function Field({ label, value, onChange, placeholder, type = "text", textarea = false }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; textarea?: boolean;
-}) {
+function Field({ label, value, onChange, placeholder, type = "text", textarea }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; textarea?: boolean }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>{label}</label>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>{label}</span>
       {textarea ? (
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={3}
-          className="rounded-md border px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
+          className="rounded-md border px-3 py-2 text-sm"
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)" }}
         />
       ) : (
@@ -551,44 +522,32 @@ function Field({ label, value, onChange, placeholder, type = "text", textarea = 
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="rounded-md border px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
+          className="rounded-md border px-3 py-2 text-sm"
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)" }}
         />
       )}
-    </div>
+    </label>
   );
 }
 
-function ItemList<T extends { id: string }>({ loading, items, empty, children }: {
-  loading: boolean; items: T[]; empty: string; children: (item: T) => React.ReactNode;
-}) {
+function ItemList<T>({ loading, items, empty, children }: { loading: boolean; items: T[]; empty: string; children: (item: T) => React.ReactNode }) {
   if (loading) {
     return (
-      <div className="py-12 text-center text-sm" style={{ color: "var(--color-ink-muted)" }}>
-        Loading...
+      <div className="flex items-center justify-center py-8">
+        <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--color-ink-muted)" }} />
       </div>
     );
   }
   if (items.length === 0) {
-    return (
-      <div
-        className="rounded-lg border border-dashed py-12 text-center text-sm"
-        style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
-      >
-        {empty}
-      </div>
-    );
+    return <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>{empty}</p>;
   }
   return (
-    <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--color-paper-3)" }}>
+    <div className="flex flex-col gap-3">
       {items.map((item, i) => (
         <div
-          key={item.id}
-          className="px-5 py-4"
-          style={{
-            backgroundColor: "var(--color-paper)",
-            borderTop: i === 0 ? "none" : `1px solid var(--color-paper-3)`,
-          }}
+          key={i}
+          className="rounded-md border p-4"
+          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
         >
           {children(item)}
         </div>

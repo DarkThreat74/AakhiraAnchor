@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v10";
+const CACHE_VERSION = "waqt-v11";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -303,9 +303,36 @@ self.addEventListener("fetch", (event) => {
   // Offline: serve cached page, then fallback to app shell.
   if (request.mode === "navigate") {
     const pathname = url.pathname;
+
+    // When offline and navigating to "/", redirect to the cached calendar
+    // (the app shell). This makes the PWA open correctly offline.
+    if (pathname === "/") {
+      event.respondWith(
+        (async () => {
+          try {
+            // Try network first — if online, serve the real landing page
+            const response = await fetch(request);
+            const responseClone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+            return response;
+          } catch {
+            // Offline — redirect to the calendar (cached app shell)
+            const calendarCached = await caches.match("/calendar/day");
+            if (calendarCached) return calendarCached;
+            // Fallback to any cached page
+            const anyCached = await caches.match(request);
+            return anyCached || new Response(
+              "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Open the app again once you're back online to reload cached pages.</p></div></body></html>",
+              { status: 200, headers: { "Content-Type": "text/html" } }
+            );
+          }
+        })()
+      );
+      return;
+    }
+
     // Public pages — don't intercept, let the browser handle normally
     if (
-      pathname === "/" ||
       pathname === "/login" ||
       pathname === "/signup" ||
       pathname.startsWith("/admin") ||

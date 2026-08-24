@@ -11,7 +11,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { FadeIn, StaggerGroup, StaggerItem, ScaleIn } from "@/components/animations";
-import UnregisterServiceWorker from "@/components/sw-unregister";
 import { getSession } from "@/lib/auth/session";
 
 export default async function MarketingPage() {
@@ -21,7 +20,6 @@ export default async function MarketingPage() {
 
   return (
     <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
-      <UnregisterServiceWorker />
       {/* ── Nav ── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md"
@@ -201,7 +199,7 @@ export default async function MarketingPage() {
         </FadeIn>
       </section>
 
-      {/* ── Principle band — full width, three principles as numbered prose ── */}
+      {/* ── Features section — what Waqt actually has right now ── */}
       <section
         className="border-y px-6 py-24 sm:px-10 sm:py-32 lg:px-16"
         style={{
@@ -216,7 +214,7 @@ export default async function MarketingPage() {
                 className="text-xs font-medium uppercase tracking-[0.2em]"
                 style={{ color: "var(--color-ink-muted)" }}
               >
-                How it works
+                What&apos;s inside
               </p>
               <span
                 style={{
@@ -227,31 +225,64 @@ export default async function MarketingPage() {
                 }}
                 dir="rtl"
               >
-                كيف يعمل
+                الميزات
               </span>
             </div>
           </FadeIn>
 
-          <StaggerGroup className="grid gap-16 lg:grid-cols-3 lg:gap-12" stagger={0.18}>
+          <StaggerGroup className="grid gap-x-12 gap-y-16 sm:grid-cols-2 lg:grid-cols-3" stagger={0.1}>
             <StaggerItem>
-              <Principle
-                num="01"
-                title="Prayer times become the grid"
-                body="Your day view shows the five prayer windows as background bands. Scheduled events sit on top. Overlaps are permissive — nothing blocks, nothing warns."
+              <Feature
+                title="Prayer-anchored calendar"
+                body="Day and month views with the five daily prayers as fixed background bands. Events, tasks, and reminders sit on top. Overlaps stack side-by-side — nothing blocks."
               />
             </StaggerItem>
             <StaggerItem>
-              <Principle
-                num="02"
-                title="Check in, or let it rest"
-                body="Mark a prayer as prayed when you're ready. If you forget, it resolves quietly as assumed prayed at day's end. No silent penalties, no shame spiral."
+              <Feature
+                title="One-tap prayer check-in"
+                body="Tap any prayer label to log it. The app asks if you went to the masjid, records the exact time, and shows green completion marks in month view."
               />
             </StaggerItem>
             <StaggerItem>
-              <Principle
-                num="03"
-                title="Accountability, not punishment"
-                body="Track an oath ledger and a qadaa backlog on a dedicated page — one deliberate tap away, never on your home screen. The app is a witness, not a collector."
+              <Feature
+                title="Prayer analytics"
+                body="See your consistency percentage, average prayer time, and masjid attendance rate for each of the five prayers — all on one dashboard."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Qadaa tracker"
+                body="Set how many of each prayer you owe — individually, per salah. Log prayed qadaa one at a time. The tracker counts down per prayer, not as a vague total."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Friend competition"
+                body="Share your six-character prayer code with friends. See your streaks side-by-side and know who's leading. Accountability through companionship."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Recurring events & reminders"
+                body="Create events that repeat on selected weekdays. Set reminders that notify you 15 minutes before. Custom colors for every event type."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Public calendar sharing"
+                body="Generate a shareable link with a named URL. Anyone can see your prayer schedule without an account — perfect for family and study groups."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Works fully offline"
+                body="Open the app, add events, log prayers, adjust qadaa — all without internet. Everything syncs automatically the moment you reconnect."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Prayer time notifications"
+                body="Get a notification when each prayer window opens, and a reminder 15 minutes before your scheduled events. Asr is automatically adjusted for your calculation method."
               />
             </StaggerItem>
           </StaggerGroup>
@@ -380,23 +411,17 @@ export default async function MarketingPage() {
   );
 }
 
-function Principle({ num, title, body }: { num: string; title: string; body: string }) {
+function Feature({ title, body }: { title: string; body: string }) {
   return (
-    <div className="flex flex-col gap-4">
-      <span
-        className="text-sm font-mono font-medium tabular-nums"
-        style={{ color: "var(--color-accent)" }}
-      >
-        {num}
-      </span>
+    <div className="flex flex-col gap-3">
       <h2
-        className="text-xl font-semibold tracking-tight"
+        className="text-lg font-semibold tracking-tight"
         style={{ color: "var(--color-ink)" }}
       >
         {title}
       </h2>
       <p
-        className="text-base leading-relaxed"
+        className="text-sm leading-relaxed"
         style={{ color: "var(--color-ink-soft)" }}
       >
         {body}
