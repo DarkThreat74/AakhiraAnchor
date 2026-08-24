@@ -253,32 +253,18 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       minute: "2-digit",
                       hour12: true,
                     });
-                    const endTime = event.endAt
-                      ? new Date(event.endAt).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })
-                      : null;
                     const color = (event.color && event.color.length >= 4 ? event.color : null) || typeColors[event.type] || "var(--color-accent)";
                     return (
                       <div
                         key={event.id}
-                        className="rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
+                        className="truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
                         style={{
                           backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
                           color: color,
                           borderLeft: `2px solid ${color}`,
                         }}
                       >
-                        <div className="truncate">
-                          <span className="tabular-nums">{fmt}</span> {event.title}
-                        </div>
-                        {endTime && (
-                          <div className="truncate text-[8px] font-normal leading-tight sm:text-[9px]" style={{ color: "var(--color-ink-muted)" }}>
-                            {fmt} – {endTime}
-                          </div>
-                        )}
+                        <span className="tabular-nums">{fmt}</span> {event.title}
                       </div>
                     );
                   })}
@@ -291,20 +277,23 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                     </span>
                   )}
 
-                  {/* Reminder indicators — colored dots */}
+                  {/* Reminder indicators — colored dot + title on one line */}
                   {reminderEvents.length > 0 && (
-                    <div className="mt-0.5 flex flex-wrap gap-0.5">
-                      {reminderEvents.slice(0, 4).map((event) => (
-                        <div
-                          key={event.id}
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: getReminderColor(event.title) }}
-                          title={event.title}
-                        />
+                    <div className="mt-0.5 flex flex-col gap-0.5">
+                      {reminderEvents.slice(0, maxVisibleEvents).map((event) => (
+                        <div key={event.id} className="flex items-center gap-1 truncate">
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: getReminderColor(event.title) }}
+                          />
+                          <span className="truncate text-[9px] leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-soft)" }}>
+                            {event.title}
+                          </span>
+                        </div>
                       ))}
-                      {reminderEvents.length > 4 && (
-                        <span className="text-[8px]" style={{ color: "var(--color-ink-muted)" }}>
-                          +{reminderEvents.length - 4}
+                      {reminderEvents.length > maxVisibleEvents && (
+                        <span className="text-[9px] sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                          +{reminderEvents.length - maxVisibleEvents} more
                         </span>
                       )}
                     </div>
