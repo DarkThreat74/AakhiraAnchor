@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 
-import { MapPin, Heart, Bell, ArrowRight, Check, Loader2, User } from "lucide-react";
+import { MapPin, Bell, ArrowRight, Check, Loader2, User } from "lucide-react";
 
-type Step = "name" | "location" | "madhab" | "oath" | "notifications" | "done";
+type Step = "name" | "location" | "madhab" | "notifications" | "done";
 
 export default function OnboardingWizard() {
   const [step, setStep] = useState<Step>("name");
@@ -23,10 +23,6 @@ export default function OnboardingWizard() {
 
   // Madhab state
   const [madhab, setMadhab] = useState<string>("standard");
-
-  // Oath state
-  const [oathAmount, setOathAmount] = useState(5);
-  const [hasOath, setHasOath] = useState(false);
 
   // Notification state
   const [earlyMid, setEarlyMid] = useState("push");
@@ -136,31 +132,6 @@ export default function OnboardingWizard() {
       // Re-sync prayer times with the new madhab (affects Asr time)
       fetch("/api/prayer-times/sync", { method: "POST" }).catch(() => {});
 
-      setStep("oath");
-    } catch {
-      setError("Network error.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function saveOath() {
-    setPending(true);
-    setError(null);
-    try {
-      if (hasOath) {
-        const res = await fetch("/api/onboarding/save-oath", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ oathAmount }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setError(data.error || "Failed to save oath amount.");
-          setPending(false);
-          return;
-        }
-      }
       setStep("notifications");
     } catch {
       setError("Network error.");
@@ -210,7 +181,7 @@ export default function OnboardingWizard() {
     }
   }
 
-  const steps: Step[] = ["name", "location", "oath", "notifications", "done"];
+  const steps: Step[] = ["name", "location", "madhab", "notifications", "done"];
   const currentIdx = steps.indexOf(step);
 
   return (
@@ -450,70 +421,7 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* ── Step 4: Oath ── */}
-      {step === "oath" && (
-        <div className="flex flex-col items-center text-center">
-          <div
-            className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl"
-            style={{ backgroundColor: "var(--color-accent-faint)" }}
-          >
-            <Heart className="h-7 w-7" style={{ color: "var(--color-accent)" }} />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--color-ink)" }}>
-            Oath amount
-          </h1>
-          <p className="mt-4 max-w-md text-base leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
-            Choose how much you owe per missed prayer. This is a personal
-            commitment — the app tracks it, it doesn&apos;t collect it. You can
-            change this later.
-          </p>
-
-          <div className="mt-8 w-full max-w-sm">
-            <label className="flex items-center gap-3 text-left">
-              <input
-                type="checkbox"
-                checked={hasOath}
-                onChange={(e) => setHasOath(e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <span className="text-sm" style={{ color: "var(--color-ink)" }}>
-                I want to track an oath
-              </span>
-            </label>
-
-            {hasOath && (
-              <div className="mt-6">
-                <label className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-                  Amount per missed prayer ($)
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="50"
-                  value={oathAmount}
-                  onChange={(e) => setOathAmount(Number(e.target.value))}
-                  className="mt-2 w-full"
-                />
-                <p className="mt-2 text-2xl font-semibold" style={{ color: "var(--color-ink)" }}>
-                  ${oathAmount}
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={saveOath}
-              disabled={pending}
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
-            >
-              {pending ? "Saving..." : "Continue"}
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Step 5: Notifications ── */}
+      {/* ── Step 4: Notifications ── */}
       {step === "notifications" && (
         <div className="flex flex-col items-center text-center">
           <div

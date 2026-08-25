@@ -40,13 +40,10 @@ const PRAYER_NAMES: Array<{
   { key: "isha", label: "Isha", color: "var(--color-accent)" },
 ];
 
-// Asr display time = API time + 1 hour
+// Asr time is already correct from the API (madhab-aware). No adjustment needed.
 function getDisplayAsrTime(apiTime: string): string {
-  const [h, m] = apiTime.split(":").map(Number);
-  const adjusted = h * 60 + m + 60;
-  const nh = Math.floor(adjusted / 60) % 24;
-  const nm = adjusted % 60;
-  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+  const parts = apiTime.split(" ")[0].split(":");
+  return `${parts[0]}:${parts[1]}`;
 }
 
 const REMINDER_COLORS = [

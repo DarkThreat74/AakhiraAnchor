@@ -24,11 +24,21 @@ export interface PrayerTimings {
 }
 
 /**
- * Parse "HH:MM" into minutes since midnight.
+ * Parse "HH:MM" or "HH:MM:SS" into minutes since midnight.
  */
 export function parseMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
+  const cleaned = time.split(" ")[0].trim();
+  const [h, m] = cleaned.split(":").map(Number);
   return h * 60 + m;
+}
+
+/**
+ * Parse a time string into "HH:MM" format (stripping seconds and timezone).
+ */
+export function parseTime(time: string): string {
+  const cleaned = time.split(" ")[0].trim();
+  const parts = cleaned.split(":");
+  return `${parts[0]}:${parts[1]}`;
 }
 
 /**
@@ -44,11 +54,10 @@ export function getCurrentMinutesInTimezone(timezone: string): number {
 
 /**
  * Get the end time (in minutes since midnight) for a prayer's window.
- * Asr is adjusted +1 hour (display time), so Dhuhr ends at adjusted Asr.
  *
  * Windows:
  * - Fajr → Sunrise
- * - Dhuhr → Asr (adjusted +1hr)
+ * - Dhuhr → Asr
  * - Asr  → Maghrib
  * - Maghrib → Isha
  * - Isha → Fajr (next day) — can extend past midnight
@@ -56,12 +65,11 @@ export function getCurrentMinutesInTimezone(timezone: string): number {
  * For Isha, the end time may be > 1440 (next day's Fajr in minutes from today's midnight).
  */
 export function getPrayerWindowEnd(prayer: PrayerKey, timings: PrayerTimings): number {
-  const asrAdjusted = parseMinutes(timings.asr) + 60;
   switch (prayer) {
     case "fajr":
       return parseMinutes(timings.sunrise);
     case "dhuhr":
-      return asrAdjusted;
+      return parseMinutes(timings.asr);
     case "asr":
       return parseMinutes(timings.maghrib);
     case "maghrib":
@@ -76,12 +84,8 @@ export function getPrayerWindowEnd(prayer: PrayerKey, timings: PrayerTimings): n
 
 /**
  * Get the start time (in minutes since midnight) for a prayer's window.
- * Asr is adjusted +1 hour.
  */
 export function getPrayerWindowStart(prayer: PrayerKey, timings: PrayerTimings): number {
-  if (prayer === "asr") {
-    return parseMinutes(timings.asr) + 60;
-  }
   return parseMinutes(timings[prayer]);
 }
 
@@ -186,15 +190,12 @@ export function shouldShowMasjidQuestion(
 }
 
 /**
- * Calculate the Asr time to display — API time + 1 hour.
+ * Get the display Asr time. With proper madhab selection (school=0/1),
+ * the AlAdhan API already returns the correct Asr time, so no adjustment is needed.
  * Returns "HH:MM" format.
  */
 export function getDisplayAsrTime(apiAsrTime: string): string {
-  const minutes = parseMinutes(apiAsrTime);
-  const adjusted = minutes + 60;
-  const h = Math.floor(adjusted / 60) % 24;
-  const m = adjusted % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return parseTime(apiAsrTime);
 }
 
 /**

@@ -14,8 +14,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // Check if the user has set their display name and madhab — if not, show a red dot on Settings
-  // Wrap in try-catch so a DB failure doesn't crash the entire layout
+  // Check if the user has completed all required settings:
+  //   1. Display name
+  //   2. Location (latitude/longitude)
+  //   3. Calculation method
+  //   4. Madhab
+  // If any are missing, show a red dot on Settings.
+  // Wrap in try-catch so a DB failure doesn't crash the entire layout.
   let needsSettings = false;
   try {
     const [user] = await db
@@ -25,15 +30,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .limit(1);
     needsSettings = !user?.displayName;
 
-    // Also check if madhab is set in prayer settings
     if (!needsSettings) {
       const [settings] = await db
-        .select({ madhab: schema.prayerSettings.madhab })
+        .select({
+          latitude: schema.prayerSettings.latitude,
+          longitude: schema.prayerSettings.longitude,
+          calculationMethod: schema.prayerSettings.calculationMethod,
+          madhab: schema.prayerSettings.madhab,
+        })
         .from(schema.prayerSettings)
         .where(eq(schema.prayerSettings.userId, session.userId))
         .limit(1);
-      // Show dot if no settings row at all, or if madhab is null/empty
-      if (!settings || !settings.madhab) needsSettings = true;
+      // Show dot if no settings row, no location, no calculation method, or no madhab
+      if (!settings) needsSettings = true;
+      else if (!settings.latitude || !settings.longitude) needsSettings = true;
+      else if (!settings.calculationMethod) needsSettings = true;
+      else if (!settings.madhab) needsSettings = true;
     }
   } catch {
     // If the query fails, don't show the dot — better to render the app than crash

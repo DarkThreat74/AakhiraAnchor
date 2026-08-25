@@ -116,22 +116,19 @@ export function getPrayerWindow(
   prayerName: PrayerWindow["prayerName"],
   timings: { fajr: string; sunrise: string; dhuhr: string; asr: string; maghrib: string; isha: string },
 ): PrayerWindow {
-  // Asr display time = API time + 1 hour
-  // The Asr prayer window starts at the adjusted time
-  const asrParts = timings.asr.split(":").map(Number);
-  const asrAdjusted = `${String((asrParts[0] + 1) % 24).padStart(2, "0")}:${String(asrParts[1]).padStart(2, "0")}`;
-
+  // With proper madhab selection, the AlAdhan API returns the correct Asr time.
+  // No +1 hour adjustment needed.
   const startTimes: Record<PrayerWindow["prayerName"], string> = {
     fajr: timings.fajr,
     dhuhr: timings.dhuhr,
-    asr: asrAdjusted,
+    asr: timings.asr,
     maghrib: timings.maghrib,
     isha: timings.isha,
   };
 
   const endTimes: Record<PrayerWindow["prayerName"], string> = {
     fajr: timings.sunrise,
-    dhuhr: asrAdjusted, // Dhuhr ends when Asr (adjusted) starts
+    dhuhr: timings.asr, // Dhuhr ends when Asr starts
     asr: timings.maghrib,
     maghrib: timings.isha,
     // Isha ends at next day's Fajr — represented as fajr time + 24h in minutes
