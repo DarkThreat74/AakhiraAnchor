@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, X, Loader2, MapPin } from "lucide-react";
 import { shouldShowMasjidQuestion, getPrayerWindowState, getPrayerWindowStart, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
+import { getSunnahsForFard, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
   prayerLabel: string;
   date: string;
   timezone: string;
+  madhab?: string;
   timings: PrayerTimings;
   onClose: () => void;
   onCheckedIn: (result: { status: string; wentToMasjid: boolean | null }) => void;
@@ -20,14 +22,17 @@ export default function PrayerCheckinPopup({
   prayerLabel,
   date,
   timezone,
+  madhab = "standard",
   timings,
   onClose,
   onCheckedIn,
   existingStatus,
 }: PrayerCheckinPopup) {
-  const [step, setStep] = useState<"main" | "masjid">("main");
+  const [step, setStep] = useState<"main" | "masjid" | "sunnah">("main");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sunnahLogs, setSunnahLogs] = useState<Record<string, boolean>>({});
+  const [sunnahLoading, setSunnahLoading] = useState<string | null>(null);
 
   // Get current time in user's timezone
   const now = new Date();
@@ -40,6 +45,9 @@ export default function PrayerCheckinPopup({
   const windowOpen = windowState === "open";
   const alreadyPrayed = existingStatus === "prayed";
 
+  // Sunnah definitions for this prayer
+  const sunnahDefs = getSunnahsForFard(prayer, madhab);
+
   // Format the start time for the "hasn't started yet" message
   let startTimeStr = "";
   if (windowState === "before") {
@@ -50,6 +58,26 @@ export default function PrayerCheckinPopup({
     const displayH = startH === 0 ? 12 : startH > 12 ? startH - 12 : startH;
     startTimeStr = `${displayH}:${String(startM).padStart(2, "0")} ${period}`;
   }
+
+  // Fetch existing sunnah logs when popup opens
+  useEffect(() => {
+    if (sunnahDefs.length === 0) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/prayer-log/sunnah?date=${date}`);
+        if (res.ok) {
+          const data = await res.json();
+          const map: Record<string, boolean> = {};
+          for (const log of data) {
+            if (log.prayed) map[log.sunnahKey] = true;
+          }
+          setSunnahLogs(map);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [date, sunnahDefs.length]);
 
   async function checkIn(wentToMasjid: boolean | null) {
     setLoading(true);
@@ -68,7 +96,13 @@ export default function PrayerCheckinPopup({
 
       if (res.ok) {
         const data = await res.json();
-        onCheckedIn({ status: data.status, wentToMasjid: data.wentToMasjid });
+        // If there are sunnahs for this prayer, show the sunnah step
+        if (sunnahDefs.length > 0) {
+          setStep("sunnah");
+          setLoading(false);
+        } else {
+          onCheckedIn({ status: data.status, wentToMasjid: data.wentToMasjid });
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to check in.");
@@ -77,6 +111,30 @@ export default function PrayerCheckinPopup({
     } catch {
       setError("Network error.");
       setLoading(false);
+    }
+  }
+
+  async function handleToggleSunnah(sunnah: SunnahDefinition) {
+    const isLogged = sunnahLogs[sunnah.key] === true;
+    setSunnahLoading(sunnah.key);
+    try {
+      const res = await fetch("/api/prayer-log/sunnah", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, sunnahKey: sunnah.key, prayed: !isLogged }),
+      });
+      if (res.ok) {
+        setSunnahLogs((prev) => ({ ...prev, [sunnah.key]: !isLogged }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Failed to update sunnah.");
+        setTimeout(() => setError(null), 4000);
+      }
+    } catch {
+      setError("Network error.");
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setSunnahLoading(null);
     }
   }
 
@@ -232,6 +290,18 @@ export default function PrayerCheckinPopup({
                 You prayed {prayerLabel}. In sha&apos; Allah.
               </span>
             </div>
+            {sunnahDefs.length > 0 && (
+              <button
+                onClick={() => setStep("sunnah")}
+                className="mb-2 w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
+                style={{
+                  borderColor: "var(--color-accent)",
+                  color: "var(--color-accent)",
+                }}
+              >
+                Log sunnah prayers
+              </button>
+            )}
             <button
               onClick={handleUndo}
               disabled={loading}
@@ -287,6 +357,77 @@ export default function PrayerCheckinPopup({
               style={{ color: "var(--color-ink-muted)" }}
             >
               Back
+            </button>
+          </>
+        )}
+
+        {step === "sunnah" && (
+          <>
+            <div
+              className="mb-4 flex items-center gap-2 rounded-lg border p-3"
+              style={{
+                borderColor: "var(--color-success)",
+                backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)",
+              }}
+            >
+              <Check className="h-4 w-4 shrink-0" style={{ color: "var(--color-success)" }} />
+              <span className="text-sm font-medium" style={{ color: "var(--color-success)" }}>
+                {prayerLabel} logged. Did you pray any sunnahs?
+              </span>
+            </div>
+
+            <div className="mb-4 space-y-2">
+              {sunnahDefs.map((sunnah) => {
+                const isLogged = sunnahLogs[sunnah.key] === true;
+                const isLoading = sunnahLoading === sunnah.key;
+                return (
+                  <button
+                    key={sunnah.key}
+                    onClick={() => handleToggleSunnah(sunnah)}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-50"
+                    style={{
+                      borderColor: isLogged ? "var(--color-success)" : "var(--color-paper-3)",
+                      backgroundColor: isLogged ? "color-mix(in oklab, var(--color-success) 8%, transparent)" : "transparent",
+                    }}
+                  >
+                    <div
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2"
+                      style={{
+                        borderColor: isLogged ? "var(--color-success)" : "var(--color-paper-3)",
+                        backgroundColor: isLogged ? "var(--color-success)" : "transparent",
+                      }}
+                    >
+                      {isLogged && <Check className="h-3.5 w-3.5" style={{ color: "var(--color-paper)" }} />}
+                      {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "var(--color-ink-muted)" }} />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                        {sunnah.label}
+                      </div>
+                      <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        {sunnah.position === "before" ? "Before fard" : sunnah.position === "after" ? "After fard" : "Standalone"}
+                        {" · "}
+                        {sunnah.category === "muakkadah" ? "Confirmed Sunnah" :
+                         sunnah.category === "ghayr_muakkadah" ? "Non-confirmed" :
+                         sunnah.category === "wajib" ? "Wajib" :
+                         sunnah.category === "raghibah" ? "Raghibah" : "Recommended"}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => onCheckedIn({ status: "prayed", wentToMasjid: null })}
+              className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                color: "var(--color-ink-soft)",
+              }}
+            >
+              Done
             </button>
           </>
         )}

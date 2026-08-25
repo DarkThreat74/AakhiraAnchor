@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { MapPin, Heart, Bell, ArrowRight, Check, Loader2, User } from "lucide-react";
 
-type Step = "name" | "location" | "oath" | "notifications" | "done";
+type Step = "name" | "location" | "madhab" | "oath" | "notifications" | "done";
 
 export default function OnboardingWizard() {
   const [step, setStep] = useState<Step>("name");
@@ -20,6 +20,9 @@ export default function OnboardingWizard() {
   const [lng, setLng] = useState<number | null>(null);
   const [timezone, setTimezone] = useState("");
   const [locationStatus, setLocationStatus] = useState<"idle" | "getting" | "done">("idle");
+
+  // Madhab state
+  const [madhab, setMadhab] = useState<string>("standard");
 
   // Oath state
   const [oathAmount, setOathAmount] = useState(5);
@@ -78,7 +81,7 @@ export default function OnboardingWizard() {
     setPending(true);
     setError(null);
     try {
-      // Save prayer settings
+      // Save prayer settings (with default madhab — will be updated in madhab step)
       const res = await fetch("/api/onboarding/save-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,6 +89,7 @@ export default function OnboardingWizard() {
           latitude: lat.toString(),
           longitude: lng.toString(),
           timezone,
+          madhab,
         }),
       });
 
@@ -97,6 +101,39 @@ export default function OnboardingWizard() {
       }
 
       // Trigger prayer times sync (non-blocking)
+      fetch("/api/prayer-times/sync", { method: "POST" }).catch(() => {});
+
+      setStep("madhab");
+    } catch {
+      setError("Network error.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveMadhab() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/onboarding/save-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: lat!.toString(),
+          longitude: lng!.toString(),
+          timezone,
+          madhab,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to save madhab.");
+        setPending(false);
+        return;
+      }
+
+      // Re-sync prayer times with the new madhab (affects Asr time)
       fetch("/api/prayer-times/sync", { method: "POST" }).catch(() => {});
 
       setStep("oath");
@@ -321,7 +358,99 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* ── Step 3: Oath ── */}
+      {/* ── Step 3: Madhab ── */}
+      {step === "madhab" && (
+        <div className="flex flex-col items-center text-center">
+          <div
+            className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: "color-mix(in oklab, var(--color-accent) 12%, transparent)" }}
+          >
+            <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--color-accent)" }}>
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </div>
+
+          <h2 className="mb-2 text-xl font-semibold" style={{ color: "var(--color-ink)" }}>
+            Which school do you follow?
+          </h2>
+          <p className="mb-6 max-w-sm text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            This determines how your Asr prayer time is calculated and which sunnah prayers are tracked.
+          </p>
+
+          <div className="mb-6 w-full max-w-sm space-y-3">
+            <button
+              onClick={() => setMadhab("standard")}
+              className="flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors"
+              style={{
+                borderColor: madhab === "standard" ? "var(--color-accent)" : "var(--color-paper-3)",
+                backgroundColor: madhab === "standard" ? "color-mix(in oklab, var(--color-accent) 6%, transparent)" : "transparent",
+              }}
+            >
+              <div
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2"
+                style={{
+                  borderColor: madhab === "standard" ? "var(--color-accent)" : "var(--color-paper-3)",
+                  backgroundColor: madhab === "standard" ? "var(--color-accent)" : "transparent",
+                }}
+              >
+                {madhab === "standard" && <div className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--color-paper)" }} />}
+              </div>
+              <div>
+                <div className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                  Standard (Shafi&apos;i, Maliki, Hanbali)
+                </div>
+                <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                  Asr begins when shadow length equals object length
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setMadhab("hanafi")}
+              className="flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors"
+              style={{
+                borderColor: madhab === "hanafi" ? "var(--color-accent)" : "var(--color-paper-3)",
+                backgroundColor: madhab === "hanafi" ? "color-mix(in oklab, var(--color-accent) 6%, transparent)" : "transparent",
+              }}
+            >
+              <div
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2"
+                style={{
+                  borderColor: madhab === "hanafi" ? "var(--color-accent)" : "var(--color-paper-3)",
+                  backgroundColor: madhab === "hanafi" ? "var(--color-accent)" : "transparent",
+                }}
+              >
+                {madhab === "hanafi" && <div className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--color-paper)" }} />}
+              </div>
+              <div>
+                <div className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                  Hanafi
+                </div>
+                <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                  Asr begins when shadow length is twice the object length (later Asr)
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {error && (
+            <div className="mb-4 text-xs font-medium" style={{ color: "var(--color-warmth)" }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={saveMadhab}
+            disabled={pending}
+            className="inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+          >
+            {pending ? "Saving..." : "Continue"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Step 4: Oath ── */}
       {step === "oath" && (
         <div className="flex flex-col items-center text-center">
           <div
@@ -384,7 +513,7 @@ export default function OnboardingWizard() {
         </div>
       )}
 
-      {/* ── Step 4: Notifications ── */}
+      {/* ── Step 5: Notifications ── */}
       {step === "notifications" && (
         <div className="flex flex-col items-center text-center">
           <div

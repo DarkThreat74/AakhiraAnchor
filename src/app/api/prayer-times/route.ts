@@ -44,5 +44,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(cached);
+  // Also fetch the user's madhab so the client can show correct sunnah definitions
+  const [settings] = await db
+    .select({ madhab: schema.prayerSettings.madhab })
+    .from(schema.prayerSettings)
+    .where(eq(schema.prayerSettings.userId, session.userId))
+    .limit(1);
+
+  return NextResponse.json({ ...cached, madhab: settings?.madhab || "standard" });
 }

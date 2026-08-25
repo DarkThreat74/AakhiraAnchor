@@ -113,6 +113,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [prayerLogs, setPrayerLogs] = useState<Array<{ prayerName: string; status: string; wentToMasjid: boolean | null }>>([]);
   const [checkinPopup, setCheckinPopup] = useState<{ prayer: PrayerKey; label: string } | null>(null);
   const [userTimezone, setUserTimezone] = useState("America/Chicago");
+  const [userMadhab, setUserMadhab] = useState<string>("standard");
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +142,10 @@ export default function DayViewClient({ date }: { date: string }) {
 
         if (prayerRes?.ok) {
           const prayerData = await prayerRes.json();
-          if (!cancelled) setPrayerTimes(prayerData);
+          if (!cancelled) {
+            setPrayerTimes(prayerData);
+            if (prayerData.madhab) setUserMadhab(prayerData.madhab);
+          }
         } else {
           if (!cancelled) setPrayerTimes(null);
           try {
@@ -150,7 +154,10 @@ export default function DayViewClient({ date }: { date: string }) {
               const retryRes = await fetch(`/api/prayer-times?date=${date}`);
               if (retryRes.ok) {
                 const retryData = await retryRes.json();
-                if (!cancelled) setPrayerTimes(retryData);
+                if (!cancelled) {
+                  setPrayerTimes(retryData);
+                  if (retryData.madhab) setUserMadhab(retryData.madhab);
+                }
               }
             }
           } catch {
@@ -1177,6 +1184,7 @@ export default function DayViewClient({ date }: { date: string }) {
           prayerLabel={checkinPopup.label}
           date={date}
           timezone={userTimezone}
+          madhab={userMadhab}
           timings={{
             fajr: prayerTimes.fajr,
             sunrise: prayerTimes.sunrise,
