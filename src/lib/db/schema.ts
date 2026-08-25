@@ -177,6 +177,30 @@ export const prayerLog = pgTable(
   ],
 );
 
+// ─── Sunnah Log (tracks sunnah/nafl prayers associated with fard prayers) ───
+
+export const sunnahLog = pgTable(
+  'sunnah_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    // e.g. "fajr_before", "dhuhr_before", "dhuhr_after", "witr"
+    sunnahKey: text('sunnah_key').notNull(),
+    // The fard prayer this sunnah is associated with (for ordering checks)
+    associatedFard: prayerName('associated_fard').notNull(),
+    prayed: boolean('prayed').default(false).notNull(),
+    loggedAt: timestamp('logged_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('sunnah_log_user_date_key_idx').on(
+      table.userId,
+      table.date,
+      table.sunnahKey,
+    ),
+  ],
+);
+
 // ─── Oath Settings ───
 
 export const oathSettings = pgTable('oath_settings', {

@@ -26,7 +26,7 @@ export interface PrayerTimings {
 /**
  * Parse "HH:MM" into minutes since midnight.
  */
-function parseMinutes(time: string): number {
+export function parseMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }

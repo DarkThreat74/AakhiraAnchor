@@ -95,6 +95,11 @@ export default function SettingsClient({
   const [savingMethod, setSavingMethod] = useState(false);
   const [methodMsg, setMethodMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Madhab state
+  const [selectedMadhab, setSelectedMadhab] = useState<string>(initialSettings?.madhab || "standard");
+  const [savingMadhab, setSavingMadhab] = useState(false);
+  const [madhabMsg, setMadhabMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   // Prayer times sync state
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -296,6 +301,7 @@ export default function SettingsClient({
           longitude: prayerSettings.longitude,
           timezone: prayerSettings.timezone,
           calculationMethod: selectedMethod,
+          madhab: selectedMadhab,
         }),
       });
 
@@ -324,6 +330,48 @@ export default function SettingsClient({
       setMethodMsg({ ok: false, text: "Network error." });
     } finally {
       setSavingMethod(false);
+    }
+  }
+
+  // Save madhab only
+  async function handleSaveMadhab() {
+    if (!prayerSettings) return;
+    setSavingMadhab(true);
+    setMadhabMsg(null);
+
+    try {
+      const res = await fetch("/api/onboarding/save-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: prayerSettings.latitude,
+          longitude: prayerSettings.longitude,
+          timezone: prayerSettings.timezone,
+          calculationMethod: selectedMethod,
+          madhab: selectedMadhab,
+        }),
+      });
+
+      if (res.ok) {
+        setPrayerSettings({ ...prayerSettings, madhab: selectedMadhab });
+        setMadhabMsg({ ok: true, text: "Madhab saved. Re-syncing prayer times..." });
+
+        const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          setMadhabMsg({ ok: true, text: `Madhab updated. Prayer times re-synced (${syncData.daysCached} days).` });
+          await refreshPrayerTimes();
+        } else {
+          setMadhabMsg({ ok: true, text: "Madhab saved. Click Sync to update prayer times." });
+        }
+      } else {
+        const data = await res.json();
+        setMadhabMsg({ ok: false, text: data.error || "Failed to save madhab." });
+      }
+    } catch {
+      setMadhabMsg({ ok: false, text: "Network error." });
+    } finally {
+      setSavingMadhab(false);
     }
   }
 
@@ -978,6 +1026,67 @@ export default function SettingsClient({
             >
               {methodMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
               <span>{methodMsg.text}</span>
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* ── Madhab ── */}
+      <section
+        className="mb-4 overflow-hidden rounded-2xl border sm:mb-6"
+        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Madhab (School of Thought)
+            </h2>
+            {(!prayerSettings?.madhab || prayerSettings.madhab === "standard") && !selectedMadhab && (
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: "#dc2626" }}
+                title="Please select your madhab"
+                aria-label="Madhab not set — please select your school of thought"
+              />
+            )}
+          </div>
+
+          <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+            Determines how Asr prayer time is calculated and which sunnah prayers are tracked. Hanafi uses a later Asr time; all others use the standard (Shafi&apos;i) calculation.
+          </p>
+
+          <div className="flex flex-col gap-2">
+            <select
+              value={selectedMadhab}
+              onChange={(e) => setSelectedMadhab(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                backgroundColor: "var(--color-paper)",
+                color: "var(--color-ink)",
+                minHeight: 44,
+              }}
+            >
+              <option value="standard">Standard (Shafi&apos;i, Maliki, Hanbali)</option>
+              <option value="hanafi">Hanafi</option>
+            </select>
+            <button
+              onClick={handleSaveMadhab}
+              disabled={savingMadhab || !prayerSettings || selectedMadhab === prayerSettings?.madhab}
+              className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)] disabled:opacity-40 sm:w-auto sm:self-start"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+            >
+              {savingMadhab ? "Saving..." : "Save madhab"}
+            </button>
+          </div>
+
+          {madhabMsg && (
+            <p
+              className="mt-3 flex items-start gap-1.5 text-xs"
+              style={{ color: madhabMsg.ok ? "var(--color-success)" : "var(--color-error)" }}
+            >
+              {madhabMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
+              <span>{madhabMsg.text}</span>
             </p>
           )}
         </div>

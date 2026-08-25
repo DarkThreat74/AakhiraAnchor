@@ -14,25 +14,36 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // Check if the user has set their display name — if not, show a red dot on Settings
+  // Check if the user has set their display name and madhab — if not, show a red dot on Settings
   // Wrap in try-catch so a DB failure doesn't crash the entire layout
-  let needsName = false;
+  let needsSettings = false;
   try {
     const [user] = await db
       .select({ displayName: schema.users.displayName })
       .from(schema.users)
       .where(eq(schema.users.id, session.userId))
       .limit(1);
-    needsName = !user?.displayName;
+    needsSettings = !user?.displayName;
+
+    // Also check if madhab is set in prayer settings
+    if (!needsSettings) {
+      const [settings] = await db
+        .select({ madhab: schema.prayerSettings.madhab })
+        .from(schema.prayerSettings)
+        .where(eq(schema.prayerSettings.userId, session.userId))
+        .limit(1);
+      // Show dot if no settings row at all, or if madhab is null/empty
+      if (!settings || !settings.madhab) needsSettings = true;
+    }
   } catch {
     // If the query fails, don't show the dot — better to render the app than crash
-    needsName = false;
+    needsSettings = false;
   }
 
   const navItems = [
     { label: "Calendar", href: "/calendar/day", icon: Calendar, alert: false },
     { label: "Prayer", href: "/prayer", icon: Flame, alert: false },
-    { label: "Settings", href: "/settings", icon: Settings, alert: needsName },
+    { label: "Settings", href: "/settings", icon: Settings, alert: needsSettings },
   ];
 
   return (

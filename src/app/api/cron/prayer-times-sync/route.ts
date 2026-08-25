@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
         month,
         year,
         settings.calculationMethod,
+        settings.madhab === "hanafi" ? 1 : 0,
       );
 
       // Batch upsert — single query per user instead of N+1

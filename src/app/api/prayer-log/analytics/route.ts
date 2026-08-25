@@ -28,9 +28,9 @@ export async function GET(request: NextRequest) {
       ),
     );
 
-  // Get user's prayer settings for timezone
+  // Get user's prayer settings for timezone + madhab
   const [settings] = await db
-    .select({ timezone: schema.prayerSettings.timezone })
+    .select({ timezone: schema.prayerSettings.timezone, madhab: schema.prayerSettings.madhab })
     .from(schema.prayerSettings)
     .where(eq(schema.prayerSettings.userId, session.userId))
     .limit(1);
@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
     masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
     perPrayer,
     timezone,
+    madhab: settings?.madhab || "standard",
     thisWeekPrayed,
     thisMonthPrayed,
     lastPrayedDate,

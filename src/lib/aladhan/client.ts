@@ -42,6 +42,7 @@ export interface AlAdhanDayResponse {
 /**
  * Fetch a full month of prayer times from AlAdhan.
  * Returns array of daily timings.
+ * @param school 0 = Shafi'i (standard), 1 = Hanafi — affects Asr calculation
  */
 export async function fetchMonthPrayerTimes(
   latitude: number,
@@ -49,8 +50,9 @@ export async function fetchMonthPrayerTimes(
   month: number, // 1-12
   year: number,
   method = 2, // 2 = ISNA
+  school: 0 | 1 = 0, // 0 = Shafi'i, 1 = Hanafi
 ): Promise<AlAdhanDayResponse["data"]> {
-  const url = `${env.aladhanBaseUrl}/calendar/${year}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}`;
+  const url = `${env.aladhanBaseUrl}/calendar/${year}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school}`;
 
   const res = await fetch(url, {
     headers: { Accept: "application/json" },

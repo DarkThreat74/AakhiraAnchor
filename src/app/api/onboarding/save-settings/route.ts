@@ -25,11 +25,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { latitude, longitude, timezone, calculationMethod } = body as {
+  const { latitude, longitude, timezone, calculationMethod, madhab } = body as {
     latitude?: string;
     longitude?: string;
     timezone?: string;
     calculationMethod?: number;
+    madhab?: string;
   };
 
   if (!latitude || !longitude || !timezone) {
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
   const validMethods = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
   const method = calculationMethod && validMethods.includes(calculationMethod) ? calculationMethod : 2;
 
+  // Validate madhab
+  const validMadhabs = ["standard", "hanafi"];
+  const madhabVal = madhab && validMadhabs.includes(madhab) ? madhab : "standard";
+
   // Upsert prayer settings
   const [existing] = await db
     .select()
@@ -63,7 +68,7 @@ export async function POST(request: NextRequest) {
   if (existing) {
     await db
       .update(schema.prayerSettings)
-      .set({ latitude, longitude, timezone, calculationMethod: method, updatedAt: new Date() })
+      .set({ latitude, longitude, timezone, calculationMethod: method, madhab: madhabVal, updatedAt: new Date() })
       .where(eq(schema.prayerSettings.userId, session.userId));
   } else {
     await db.insert(schema.prayerSettings).values({
@@ -72,8 +77,9 @@ export async function POST(request: NextRequest) {
       longitude,
       timezone,
       calculationMethod: method,
+      madhab: madhabVal,
     });
   }
 
-  return NextResponse.json({ ok: true, calculationMethod: method });
+  return NextResponse.json({ ok: true, calculationMethod: method, madhab: madhabVal });
 }

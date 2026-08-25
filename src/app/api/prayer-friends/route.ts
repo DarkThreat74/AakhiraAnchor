@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { calculateStreak } from "@/lib/prayer/checkin";
@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
     masjidPct: number;
     thisWeekPrayed: number;
     lastPrayedDate: string | null;
+    todayLogs: Array<{ prayerName: string; status: string }>;
+    todaySunnahs: string[];
+    timezone: string;
   }> = [];
 
   // 7 days ago for weekly count
@@ -95,6 +98,32 @@ export async function GET(request: NextRequest) {
 
     const streak = calculateStreak(logsByDate, todayStr);
 
+    // Get today's prayer logs for this friend
+    const todayLogs = await db
+      .select({
+        prayerName: schema.prayerLog.prayerName,
+        status: schema.prayerLog.status,
+      })
+      .from(schema.prayerLog)
+      .where(
+        and(
+          eq(schema.prayerLog.userId, f.friendId),
+          eq(schema.prayerLog.date, todayStr),
+        ),
+      );
+
+    // Get today's sunnah logs for this friend
+    const todaySunnahLogs = await db
+      .select({ sunnahKey: schema.sunnahLog.sunnahKey })
+      .from(schema.sunnahLog)
+      .where(
+        and(
+          eq(schema.sunnahLog.userId, f.friendId),
+          eq(schema.sunnahLog.date, todayStr),
+          eq(schema.sunnahLog.prayed, true),
+        ),
+      );
+
     friends.push({
       id: friendUser.id,
       firstName: friendUser.firstName,
@@ -105,6 +134,9 @@ export async function GET(request: NextRequest) {
       masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
       thisWeekPrayed,
       lastPrayedDate,
+      todayLogs: todayLogs.map((l) => ({ prayerName: l.prayerName, status: l.status })),
+      todaySunnahs: todaySunnahLogs.map((l) => l.sunnahKey),
+      timezone,
     });
   }
 
