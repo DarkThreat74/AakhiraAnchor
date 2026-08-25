@@ -196,11 +196,18 @@ export default function SettingsClient({
         const results = await res.json();
         if (results.length > 0) {
           const result = results[0];
+          // Look up the timezone from the coordinates using a free keyless API
           let timezone = "UTC";
           try {
-            timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+            const tzRes = await fetch(
+              `https://api.latlng.work/v1/timezone?lat=${result.lat}&lng=${result.lon}`,
+            );
+            if (tzRes.ok) {
+              const tzData = await tzRes.json();
+              if (tzData.timezone) timezone = tzData.timezone;
+            }
           } catch {
-            // keep UTC
+            // Fall back to UTC if timezone lookup fails
           }
 
           setLocationResult({

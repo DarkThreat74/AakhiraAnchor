@@ -41,10 +41,28 @@ export default function OnboardingWizard() {
     }
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLat(position.coords.latitude);
-        setLng(position.coords.longitude);
-        setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      async (position) => {
+        const latVal = position.coords.latitude;
+        const lngVal = position.coords.longitude;
+        setLat(latVal);
+        setLng(lngVal);
+        // Look up timezone from coordinates for accuracy (handles VPN/misconfigured system tz)
+        try {
+          const tzRes = await fetch(
+            `https://api.latlng.work/v1/timezone?lat=${latVal}&lng=${lngVal}`,
+          );
+          if (tzRes.ok) {
+            const tzData = await tzRes.json();
+            if (tzData.timezone) {
+              setTimezone(tzData.timezone);
+              setLocationStatus("done");
+              return;
+            }
+          }
+        } catch {
+          // Fall back to browser timezone
+        }
+        setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
         setLocationStatus("done");
       },
       (err) => {
