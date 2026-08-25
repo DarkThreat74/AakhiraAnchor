@@ -608,6 +608,7 @@ export default function PrayerDashboard() {
                 prayerTimes={prayerTimes}
                 currentTime={currentTime}
                 madhab={madhab}
+                timezone={analytics?.timezone || null}
               />
               {/* Friends */}
               {friends.length === 0 ? (
@@ -629,6 +630,7 @@ export default function PrayerDashboard() {
                     prayerTimes={prayerTimes}
                     currentTime={currentTime}
                     madhab={madhab}
+                    timezone={friend.timezone}
                   />
                 ))
               )}
@@ -1019,6 +1021,7 @@ function ComparisonRow({
   prayerTimes,
   currentTime,
   madhab,
+  timezone,
 }: {
   name: string;
   isMe: boolean;
@@ -1028,6 +1031,7 @@ function ComparisonRow({
   prayerTimes: PrayerTimes | null;
   currentTime: Date;
   madhab: string;
+  timezone: string | null;
 }) {
   const sunnahDefs = getSunnahsForMadhab(madhab);
   const prayedCount = PRAYER_ORDER.filter((p) => {
@@ -1035,10 +1039,30 @@ function ComparisonRow({
     return log?.status === "prayed" || log?.status === "assumed_prayed";
   }).length;
 
-  // Determine which prayer time we're currently at
+  // Determine which prayer time we're currently at.
+  // For the viewer (isMe), use their local time + their prayer times.
+  // For friends, use the friend's timezone to get their current local time,
+  // but compare against the viewer's prayer times as an approximation
+  // (since we don't fetch each friend's prayer times individually).
   const currentPrayerIdx = (() => {
     if (!prayerTimes) return -1;
-    const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+    let currentMinutes: number;
+    if (isMe || !timezone) {
+      // Use viewer's local time
+      currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+    } else {
+      // Use friend's timezone to get their current local time
+      try {
+        const friendTimeStr = new Date().toLocaleTimeString("en-US", {
+          timeZone: timezone,
+          hour12: false,
+        });
+        const [h, m] = friendTimeStr.split(":").map(Number);
+        currentMinutes = h * 60 + m;
+      } catch {
+        currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+      }
+    }
     for (let i = PRAYER_ORDER.length - 1; i >= 0; i--) {
       const timeStr = prayerTimes[PRAYER_ORDER[i]];
       if (!timeStr) continue;
@@ -1061,6 +1085,22 @@ function ComparisonRow({
         <div className="flex items-center gap-1 text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
           <Flame className="h-3 w-3" style={{ color: "var(--color-warmth)" }} />
           <span className="tabular-nums">{streak}d</span>
+          {!isMe && timezone && (
+            <span className="ml-1 tabular-nums" title={timezone}>
+              {(() => {
+                try {
+                  return new Date().toLocaleTimeString("en-US", {
+                    timeZone: timezone,
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  });
+                } catch {
+                  return "";
+                }
+              })()}
+            </span>
+          )}
         </div>
       </div>
 
