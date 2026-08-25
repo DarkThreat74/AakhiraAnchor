@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, X, Loader2, MapPin } from "lucide-react";
-import { shouldShowMasjidQuestion, isPrayerWindowOpen, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
+import { shouldShowMasjidQuestion, getPrayerWindowState, getPrayerWindowStart, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
@@ -36,8 +36,20 @@ export default function PrayerCheckinPopup({
   const currentMinutes = timeMatch ? parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]) : now.getHours() * 60 + now.getMinutes();
 
   const showMasjid = shouldShowMasjidQuestion(prayer, currentMinutes, timings);
-  const windowOpen = isPrayerWindowOpen(prayer, currentMinutes, timings);
+  const windowState = getPrayerWindowState(prayer, currentMinutes, timings);
+  const windowOpen = windowState === "open";
   const alreadyPrayed = existingStatus === "prayed";
+
+  // Format the start time for the "hasn't started yet" message
+  let startTimeStr = "";
+  if (windowState === "before") {
+    const startMinutes = getPrayerWindowStart(prayer, timings);
+    const startH = Math.floor(startMinutes / 60);
+    const startM = startMinutes % 60;
+    const period = startH >= 12 ? "PM" : "AM";
+    const displayH = startH === 0 ? 12 : startH > 12 ? startH - 12 : startH;
+    startTimeStr = `${displayH}:${String(startM).padStart(2, "0")} ${period}`;
+  }
 
   async function checkIn(wentToMasjid: boolean | null) {
     setLoading(true);
@@ -143,12 +155,25 @@ export default function PrayerCheckinPopup({
 
         {step === "main" && !alreadyPrayed && !windowOpen && (
           <div className="text-center">
-            <p className="mb-3 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-              The {prayerLabel} window has ended.
-            </p>
-            <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              You can no longer log this prayer. In sha&apos; Allah, catch the next one on time.
-            </p>
+            {windowState === "before" ? (
+              <>
+                <p className="mb-3 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                  {prayerLabel} hasn&apos;t started yet.
+                </p>
+                <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                  It begins at {startTimeStr}. Check back then, in sha&apos; Allah.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mb-3 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                  The {prayerLabel} window has ended.
+                </p>
+                <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                  You can no longer log this prayer. In sha&apos; Allah, catch the next one on time.
+                </p>
+              </>
+            )}
             <button
               onClick={onClose}
               className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
