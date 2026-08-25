@@ -18,8 +18,8 @@ export async function GET(
   }
 
   const { token } = await params;
-  // Token is a 32-character hex string (128-bit crypto-random)
-  if (!token || !/^[a-f0-9]{32}$/.test(token)) {
+  // Token is a 5-digit numeric code (or legacy 32-char hex)
+  if (!token || !/^(\d{5}|[a-f0-9]{32})$/.test(token)) {
     return NextResponse.json({ error: "Invalid link." }, { status: 400 });
   }
 

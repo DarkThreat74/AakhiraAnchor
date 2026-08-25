@@ -1,49 +1,23 @@
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import PublicCalendarClient from "@/app/user/public/[token]/PublicCalendarClient";
 import { slugifyName } from "@/lib/slugify";
 
 export const dynamic = "force-dynamic";
 
-// Generate metadata for the public calendar page
-export async function generateMetadata({
+// Legacy route — redirects to /[name]/[code]/public
+export default async function LegacyNamedPublicCalendarPage({
   params,
 }: {
   params: Promise<{ name: string; token: string }>;
 }) {
   const { token } = await params;
 
-  const [user] = await db
-    .select({ id: schema.users.id, displayName: schema.users.displayName })
-    .from(schema.users)
-    .where(eq(schema.users.publicShareToken, token))
-    .limit(1);
-
-  if (!user) {
-    return { title: "Calendar not found — Waqt" };
-  }
-
-  const name = user.displayName || "Shared";
-  return {
-    title: `${name}'s calendar — Waqt`,
-    description: `${name}'s prayer-centered calendar. Read-only shared view.`,
-  };
-}
-
-export default async function NamedPublicCalendarPage({
-  params,
-}: {
-  params: Promise<{ name: string; token: string }>;
-}) {
-  const { name, token } = await params;
-
-  // Token is a 32-character hex string (128-bit crypto-random)
-  if (!token || !/^[a-f0-9]{32}$/.test(token)) {
+  // Token may be an old 32-char hex string or a new 5-digit code
+  if (!token || !(/^([a-f0-9]{32}|\d{5})$/.test(token))) {
     notFound();
   }
 
-  // Verify the token exists and get the display name
   const [user] = await db
     .select({ id: schema.users.id, displayName: schema.users.displayName })
     .from(schema.users)
@@ -54,12 +28,6 @@ export default async function NamedPublicCalendarPage({
     notFound();
   }
 
-  // If the name in the URL doesn't match the user's slugified name,
-  // redirect to the correct URL (handles old links or name changes)
-  const expectedSlug = slugifyName(user.displayName || "shared");
-  if (name !== expectedSlug) {
-    redirect(`/user/${expectedSlug}/${token}`);
-  }
-
-  return <PublicCalendarClient token={token} displayName={user.displayName || "Shared"} />;
+  const slug = slugifyName(user.displayName || "shared");
+  redirect(`/${slug}/${token}/public`);
 }

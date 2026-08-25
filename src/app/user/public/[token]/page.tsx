@@ -5,7 +5,7 @@ import { slugifyName } from "@/lib/slugify";
 
 export const dynamic = "force-dynamic";
 
-// Legacy route — redirects to /user/[name]/[token]
+// Legacy route — redirects to /[name]/[code]/public
 export default async function LegacyPublicCalendarPage({
   params,
 }: {
@@ -13,12 +13,11 @@ export default async function LegacyPublicCalendarPage({
 }) {
   const { token } = await params;
 
-  // Token is a 32-character hex string (128-bit crypto-random)
-  if (!token || !/^[a-f0-9]{32}$/.test(token)) {
+  // Token may be an old 32-char hex string or a new 5-digit code
+  if (!token || !(/^([a-f0-9]{32}|\d{5})$/.test(token))) {
     notFound();
   }
 
-  // Look up the user by token to get their display name for the redirect
   const [user] = await db
     .select({ id: schema.users.id, displayName: schema.users.displayName })
     .from(schema.users)
@@ -29,7 +28,6 @@ export default async function LegacyPublicCalendarPage({
     notFound();
   }
 
-  // Redirect to the new named URL
   const slug = slugifyName(user.displayName || "shared");
-  redirect(`/user/${slug}/${token}`);
+  redirect(`/${slug}/${token}/public`);
 }
