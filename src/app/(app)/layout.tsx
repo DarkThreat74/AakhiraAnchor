@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/lib/db/client";
 import { Calendar, Settings, Flame } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
@@ -8,15 +10,23 @@ import NotificationScheduler from "@/components/notification-scheduler";
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 export const dynamic = "force-dynamic";
 
-const navItems = [
-  { label: "Calendar", href: "/calendar/day", icon: Calendar },
-  { label: "Prayer", href: "/prayer", icon: Flame },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
-
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
+
+  // Check if the user has set their display name — if not, show a red dot on Settings
+  const [user] = await db
+    .select({ displayName: schema.users.displayName })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.userId))
+    .limit(1);
+  const needsName = !user?.displayName;
+
+  const navItems = [
+    { label: "Calendar", href: "/calendar/day", icon: Calendar, alert: false },
+    { label: "Prayer", href: "/prayer", icon: Flame, alert: false },
+    { label: "Settings", href: "/settings", icon: Settings, alert: needsName },
+  ];
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "var(--color-paper)" }}>
@@ -80,7 +90,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
 }
 
-function NavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }) {
+function NavItem({ label, href, icon: Icon, alert }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; alert?: boolean }) {
   return (
     <Link
       href={href}
@@ -88,13 +98,22 @@ function NavItem({ label, href, icon: Icon }: { label: string; href: string; ico
       className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
       style={{ color: "var(--color-ink-soft)" }}
     >
-      <Icon className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+      <span className="relative">
+        <Icon className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+        {alert && (
+          <span
+            className="absolute -right-1 -top-1 h-2 w-2 rounded-full"
+            style={{ backgroundColor: "#dc2626" }}
+            aria-label="Action needed"
+          />
+        )}
+      </span>
       {label}
     </Link>
   );
 }
 
-function MobileNavItem({ label, href, icon: Icon }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }) {
+function MobileNavItem({ label, href, icon: Icon, alert }: { label: string; href: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; alert?: boolean }) {
   return (
     <Link
       href={href}
@@ -102,7 +121,16 @@ function MobileNavItem({ label, href, icon: Icon }: { label: string; href: strin
       className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium"
       style={{ color: "var(--color-ink-muted)" }}
     >
-      <Icon className="h-5 w-5" />
+      <span className="relative">
+        <Icon className="h-5 w-5" />
+        {alert && (
+          <span
+            className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full"
+            style={{ backgroundColor: "#dc2626" }}
+            aria-label="Action needed"
+          />
+        )}
+      </span>
       {label}
     </Link>
   );

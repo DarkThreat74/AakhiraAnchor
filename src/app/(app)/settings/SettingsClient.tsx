@@ -706,6 +706,14 @@ export default function SettingsClient({
             <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
               Name
             </h2>
+            {!displayName && (
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: "#dc2626" }}
+                title="Please set your name"
+                aria-label="Name not set — please fill in your name"
+              />
+            )}
           </div>
 
           <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
