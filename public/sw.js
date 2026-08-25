@@ -94,10 +94,8 @@ async function syncOutbox() {
   if (outbox.length === 0) return;
 
   let syncedCount = 0;
-  let failed = false;
 
   for (const item of outbox) {
-    if (failed) break;
     try {
       const res = await fetch(item.url, {
         method: item.method,
@@ -121,9 +119,9 @@ async function syncOutbox() {
         }));
       }
     } catch {
-      // Still offline — stop trying, will retry on next sync
-      failed = true;
-      break;
+      // Network error on this item — leave it in the outbox for next sync
+      // and continue trying the remaining items (one failure doesn't mean all will fail)
+      continue;
     }
   }
 

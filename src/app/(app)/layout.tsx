@@ -15,12 +15,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect("/login");
 
   // Check if the user has set their display name — if not, show a red dot on Settings
-  const [user] = await db
-    .select({ displayName: schema.users.displayName })
-    .from(schema.users)
-    .where(eq(schema.users.id, session.userId))
-    .limit(1);
-  const needsName = !user?.displayName;
+  // Wrap in try-catch so a DB failure doesn't crash the entire layout
+  let needsName = false;
+  try {
+    const [user] = await db
+      .select({ displayName: schema.users.displayName })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
+    needsName = !user?.displayName;
+  } catch {
+    // If the query fails, don't show the dot — better to render the app than crash
+    needsName = false;
+  }
 
   const navItems = [
     { label: "Calendar", href: "/calendar/day", icon: Calendar, alert: false },

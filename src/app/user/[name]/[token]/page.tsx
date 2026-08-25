@@ -38,8 +38,8 @@ export default async function NamedPublicCalendarPage({
 }) {
   const { name, token } = await params;
 
-  // 5-digit numeric token
-  if (!token || !/^\d{5}$/.test(token)) {
+  // Token is a 32-character hex string (128-bit crypto-random)
+  if (!token || !/^[a-f0-9]{32}$/.test(token)) {
     notFound();
   }
 

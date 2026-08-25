@@ -94,11 +94,17 @@ export default function OnboardingWizard() {
     setError(null);
     try {
       if (hasOath) {
-        await fetch("/api/onboarding/save-oath", {
+        const res = await fetch("/api/onboarding/save-oath", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ oathAmount }),
         });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || "Failed to save oath amount.");
+          setPending(false);
+          return;
+        }
       }
       setStep("notifications");
     } catch {
@@ -112,7 +118,7 @@ export default function OnboardingWizard() {
     setPending(true);
     setError(null);
     try {
-      await fetch("/api/onboarding/save-notifications", {
+      const notifRes = await fetch("/api/onboarding/save-notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,13 +127,25 @@ export default function OnboardingWizard() {
           otherReminders,
         }),
       });
+      if (!notifRes.ok) {
+        const data = await notifRes.json().catch(() => ({}));
+        setError(data.error || "Failed to save notification preferences.");
+        setPending(false);
+        return;
+      }
 
       // Mark onboarding complete (and save display name)
-      await fetch("/api/onboarding/complete", {
+      const completeRes = await fetch("/api/onboarding/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ displayName }),
       });
+      if (!completeRes.ok) {
+        const data = await completeRes.json().catch(() => ({}));
+        setError(data.error || "Failed to complete onboarding.");
+        setPending(false);
+        return;
+      }
 
       setStep("done");
     } catch {

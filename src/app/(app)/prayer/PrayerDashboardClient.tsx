@@ -73,6 +73,7 @@ export default function PrayerDashboard() {
   const [addFriendCode, setAddFriendCode] = useState("");
   const [friendError, setFriendError] = useState<string | null>(null);
   const [friendSuccess, setFriendSuccess] = useState<string | null>(null);
+  const [addingFriend, setAddingFriend] = useState(false);
   const [copied, setCopied] = useState(false);
   const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
   const [setupFajr, setSetupFajr] = useState(0);
@@ -147,6 +148,7 @@ export default function PrayerDashboard() {
     if (!addFriendCode.trim()) return;
     setFriendError(null);
     setFriendSuccess(null);
+    setAddingFriend(true);
     try {
       const res = await fetch("/api/prayer-friends/add", {
         method: "POST",
@@ -155,7 +157,7 @@ export default function PrayerDashboard() {
       });
       const data = await res.json();
       if (res.ok && !data.offline) {
-        setFriends([...friends, data.friend]);
+        setFriends((prev) => [...prev, data.friend]);
         setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}! You can now see each other's stats.`);
         setAddFriendCode("");
         setTimeout(() => setFriendSuccess(null), 4000);
@@ -168,6 +170,8 @@ export default function PrayerDashboard() {
       }
     } catch {
       setFriendError("Network error.");
+    } finally {
+      setAddingFriend(false);
     }
   }
 
@@ -175,7 +179,7 @@ export default function PrayerDashboard() {
     try {
       const res = await fetch(`/api/prayer-friends/remove?friendId=${friendId}`, { method: "DELETE" });
       if (res.ok) {
-        setFriends(friends.filter((f) => f.id !== friendId));
+        setFriends((prev) => prev.filter((f) => f.id !== friendId));
       }
     } catch {
       // ignore
@@ -315,7 +319,7 @@ export default function PrayerDashboard() {
           <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>Last 90 days of data</p>
         </div>
         <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
-          {analytics?.perPrayer.map((stat) => {
+          {(analytics?.perPrayer || []).map((stat) => {
             const color = PRAYER_COLORS[stat.prayer] || "var(--color-accent)";
             return (
               <div key={stat.prayer} className="px-4 py-3 sm:px-5">
@@ -539,10 +543,11 @@ export default function PrayerDashboard() {
                 />
                 <button
                   onClick={handleAddFriend}
-                  className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+                  disabled={addingFriend || !addFriendCode.trim()}
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50"
                   style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
                 >
-                  <UserPlus className="h-3.5 w-3.5" /> Add
+                  <UserPlus className="h-3.5 w-3.5" /> {addingFriend ? "Adding..." : "Add"}
                 </button>
               </div>
             </div>

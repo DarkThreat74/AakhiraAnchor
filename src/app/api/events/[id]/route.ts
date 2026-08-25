@@ -73,9 +73,26 @@ export async function PATCH(
     updates.endAt = endDate;
   }
 
-  // Validate that end > start if both provided
-  if (updates.startAt && updates.endAt) {
-    if ((updates.endAt as Date) <= (updates.startAt as Date)) {
+  // Validate that end > start
+  // If only one of startAt/endAt is updated, we need to check against the existing value
+  if (updates.startAt || updates.endAt) {
+    // Fetch the existing event to compare against if needed
+    const [existing] = await db
+      .select({ startAt: schema.events.startAt, endAt: schema.events.endAt, type: schema.events.type })
+      .from(schema.events)
+      .where(and(eq(schema.events.id, id), eq(schema.events.userId, session.userId)))
+      .limit(1);
+
+    if (!existing) {
+      return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+
+    const effectiveStart = (updates.startAt as Date) || existing.startAt;
+    const effectiveEnd = (updates.endAt as Date) || existing.endAt;
+
+    // For blocks and tasks, end must be after start. Reminders can have end == start.
+    const effectiveType = (updates.type as string) || existing.type;
+    if (effectiveType !== "reminder" && effectiveEnd <= effectiveStart) {
       return NextResponse.json({ error: "End time must be after start time." }, { status: 400 });
     }
   }
