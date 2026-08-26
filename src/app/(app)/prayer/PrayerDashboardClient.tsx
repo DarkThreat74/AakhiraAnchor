@@ -666,7 +666,7 @@ export default function PrayerDashboard() {
                         {/* Sunnah / Nafl pills */}
                         {prayerSunnahs.length > 0 && (
                           <div className="mt-2 space-y-1.5">
-                            {/* Before sunnahs */}
+                            {/* Before sunnahs — disabled until fard time starts */}
                             {beforeSunnahs.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {beforeSunnahs.map((s) => (
@@ -675,11 +675,13 @@ export default function PrayerDashboard() {
                                     sunnah={s}
                                     prayed={todaySunnahs.includes(s.key)}
                                     onToggle={() => handleToggleSunnah(s.key)}
+                                    disabled={!timeStarted}
+                                    disabledReason={`${PRAYER_LABELS[prayer]} hasn't started yet`}
                                   />
                                 ))}
                               </div>
                             )}
-                            {/* After sunnahs */}
+                            {/* After sunnahs — disabled until fard is prayed */}
                             {afterSunnahs.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {afterSunnahs.map((s) => (
@@ -688,6 +690,8 @@ export default function PrayerDashboard() {
                                     sunnah={s}
                                     prayed={todaySunnahs.includes(s.key)}
                                     onToggle={() => handleToggleSunnah(s.key)}
+                                    disabled={!prayed}
+                                    disabledReason={`Log ${PRAYER_LABELS[prayer]} as prayed first`}
                                   />
                                 ))}
                               </div>
@@ -695,14 +699,26 @@ export default function PrayerDashboard() {
                             {/* Standalone (Witr, Duha) */}
                             {standaloneSunnahs.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
-                                {standaloneSunnahs.map((s) => (
-                                  <SunnahPill
-                                    key={s.key}
-                                    sunnah={s}
-                                    prayed={todaySunnahs.includes(s.key)}
-                                    onToggle={() => handleToggleSunnah(s.key)}
-                                  />
-                                ))}
+                                {standaloneSunnahs.map((s) => {
+                                  // Witr requires Isha to be prayed
+                                  // Duha requires Fajr time to have started (and is locked at Dhuhr)
+                                  const standaloneDisabled = s.key === "witr"
+                                    ? !isPrayed("isha")
+                                    : !timeStarted;
+                                  const standaloneReason = s.key === "witr"
+                                    ? "Log Isha as prayed first"
+                                    : `${PRAYER_LABELS[prayer]} hasn't started yet`;
+                                  return (
+                                    <SunnahPill
+                                      key={s.key}
+                                      sunnah={s}
+                                      prayed={todaySunnahs.includes(s.key)}
+                                      onToggle={() => handleToggleSunnah(s.key)}
+                                      disabled={standaloneDisabled}
+                                      disabledReason={standaloneReason}
+                                    />
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -1315,24 +1331,29 @@ function SunnahPill({
   sunnah,
   prayed,
   onToggle,
+  disabled = false,
+  disabledReason = "",
 }: {
   sunnah: SunnahDefinition;
   prayed: boolean;
   onToggle: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   const cat = SUNNAH_CATEGORY_STYLES[sunnah.category] || SUNNAH_CATEGORY_STYLES.nafl;
 
   return (
     <button
-      onClick={onToggle}
-      className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors active:scale-95 sm:text-[11px]"
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
+      className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[11px]"
       style={{
         borderColor: prayed ? cat.border : "var(--color-paper-3)",
         color: prayed ? cat.text : "var(--color-ink-muted)",
         backgroundColor: prayed ? cat.bg : "transparent",
         minHeight: 28,
       }}
-      title={`${cat.label} — ${sunnah.label}`}
+      title={disabled ? disabledReason : `${cat.label} — ${sunnah.label}`}
     >
       {prayed ? (
         <Check className="h-3 w-3 shrink-0" />

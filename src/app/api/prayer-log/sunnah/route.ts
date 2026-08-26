@@ -103,7 +103,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. Time-based lock: can't log this sunnah once the next fard's time has started
+  // 2. Time-based checks: can't log this sunnah until the fard time has started,
+  //    and can't log it once the next fard's time has started (lock)
   // Get cached prayer times for this date
   const [cache] = await db
     .select()
@@ -137,7 +138,34 @@ export async function POST(request: NextRequest) {
       isha: parseMinutes(timings.isha),
     };
 
-    // Check if the lock prayer has started
+    // 2a. "before" sunnahs: the associated fard's time must have started
+    //     (you can't pray "4 before Dhuhr" before Dhuhr time actually comes in)
+    if (sunnah.position === "before") {
+      const fardStartMinutes = prayerMinutes[sunnah.associatedFard];
+      if (currentMinutes < fardStartMinutes) {
+        const fardLabel = sunnah.associatedFard.charAt(0).toUpperCase() + sunnah.associatedFard.slice(1);
+        return NextResponse.json(
+          { error: `${fardLabel} hasn't started yet — you can't log this sunnah until ${fardLabel} time comes in.` },
+          { status: 403 },
+        );
+      }
+    }
+
+    // 2b. "after" sunnahs: also require the fard time to have started
+    //     (redundant with the fard-log check above, but catches the case where
+    //     the fard was logged as assumed_prayed without the time actually starting)
+    if (sunnah.position === "after") {
+      const fardStartMinutes = prayerMinutes[sunnah.associatedFard];
+      if (currentMinutes < fardStartMinutes) {
+        const fardLabel = sunnah.associatedFard.charAt(0).toUpperCase() + sunnah.associatedFard.slice(1);
+        return NextResponse.json(
+          { error: `${fardLabel} hasn't started yet.` },
+          { status: 403 },
+        );
+      }
+    }
+
+    // 2c. Check if the lock prayer has started (sunnah window has closed)
     if (sunnah.locksAt) {
       const lockMinutes = prayerMinutes[sunnah.locksAt];
       // Special case: Witr locks at Fajr — but Fajr is the FIRST prayer of the day
