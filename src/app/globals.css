@@ -84,6 +84,11 @@
 
 html {
   overflow-x: clip;
+  /* Prevent iOS Safari text auto-resize on orientation change */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Use dvh for mobile viewport (accounts for Safari dynamic toolbars) */
+  height: 100dvh;
 }
 
 body {
@@ -91,6 +96,24 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   overflow-x: clip;
+  /* Remove iOS tap highlight gray box */
+  -webkit-tap-highlight-color: transparent;
+  /* Smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent iOS input zoom — inputs must be >= 16px font */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: inherit;
+  }
 }
 
 /* Focus rings — visible, accessible, token-driven */

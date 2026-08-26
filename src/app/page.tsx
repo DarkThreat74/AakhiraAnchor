@@ -19,7 +19,7 @@ export default async function MarketingPage() {
   if (session) redirect("/calendar/day");
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
+    <div className="flex min-h-dvh flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
       {/* ── Nav ── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md"
@@ -55,7 +55,7 @@ export default async function MarketingPage() {
 
       {/* ── Hero — full viewport, Arabic calligraphy background ── */}
       <section
-        className="relative flex min-h-screen items-center overflow-hidden pt-20"
+        className="relative flex min-h-dvh items-center overflow-hidden pt-20"
         style={{
           backgroundColor: "color-mix(in oklab, var(--color-paper) 70%, var(--color-accent-faint))",
         }}

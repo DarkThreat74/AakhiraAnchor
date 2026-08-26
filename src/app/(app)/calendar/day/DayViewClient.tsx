@@ -39,10 +39,10 @@ const PRAYER_NAMES: Array<{
 }> = [
   { key: "fajr", label: "Fajr", color: "var(--color-accent)", isPrayer: true },
   { key: "sunrise", label: "Sunrise", color: "var(--color-warmth)", isPrayer: false },
-  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)", isPrayer: true },
-  { key: "asr", label: "Asr", color: "var(--color-accent)", isPrayer: true },
-  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)", isPrayer: true },
-  { key: "isha", label: "Isha", color: "var(--color-accent)", isPrayer: true },
+  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)", isPrayer: false },
+  { key: "asr", label: "Asr", color: "var(--color-accent)", isPrayer: false },
+  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)", isPrayer: false },
+  { key: "isha", label: "Isha", color: "var(--color-accent)", isPrayer: false },
 ];
 
 // Color palette for reminders — each reminder gets a distinct color

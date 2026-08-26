@@ -114,7 +114,7 @@ export default function PublicCalendarClient({ token, displayName }: { token: st
   }
 
   return (
-    <div className="min-h-screen overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
+    <div className="min-h-dvh overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
       {/* ── Header ── */}
       <header
         className="border-b"

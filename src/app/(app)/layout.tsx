@@ -65,7 +65,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: "var(--color-paper)" }}>
+    <div className="flex min-h-dvh" style={{ backgroundColor: "var(--color-paper)" }}>
       {/* ── Skip link for keyboard users (WCAG 2.4.1) ── */}
       <a href="#main-content" className="skip-link">
         Skip to main content

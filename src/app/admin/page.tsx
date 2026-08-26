@@ -59,14 +59,14 @@ export default function AdminPortal() {
 
   if (!authChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: "var(--color-paper-2)" }}>
+      <div className="flex min-h-dvh items-center justify-center" style={{ backgroundColor: "var(--color-paper-2)" }}>
         <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--color-ink-muted)" }} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
+    <div className="flex min-h-dvh overflow-x-clip" style={{ backgroundColor: "var(--color-paper-2)" }}>
       {/* ── Sidebar (desktop) ── */}
       <aside
         className="fixed left-0 top-0 bottom-0 hidden w-60 flex-col border-r lg:flex"
@@ -555,3 +555,4 @@ function ItemList<T>({ loading, items, empty, children }: { loading: boolean; it
     </div>
   );
 }
+
