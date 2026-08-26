@@ -28,10 +28,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { date, sunnahKey, prayed } = body as {
+  const { date, sunnahKey, prayed, _offlineTimestamp } = body as {
     date?: string;
     sunnahKey?: string;
     prayed?: boolean;
+    _offlineTimestamp?: number;
   };
 
   if (!date || !sunnahKey) {
@@ -103,11 +104,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. Time-based check: "before" sunnahs require the fard time to have started
-  //    (you can't pray "4 before Dhuhr" before Dhuhr time actually comes in)
-  //    No lock checks — users can log sunnahs/nafls at any time after the fard starts.
-  //    This is essential for offline use (outbox syncs after windows have passed).
-  //    The only restriction kept is: "after" sunnahs require the fard to be logged as prayed.
+  // 2. Time-based checks:
+  //    a. "before" sunnahs: fard time must have started
+  //    b. Lock check: can't log after the next fard starts (window closed)
+  //       EXCEPT Duha (user wants late Duha logging allowed)
+  //    c. Witr special case: locks at Fajr (Isha window ends when Fajr starts)
+  //
+  //    Offline support: if _offlineTimestamp is present (from SW outbox sync),
+  //    check the window against that time instead of current time.
+  //    This ensures offline logs made during the window aren't rejected on sync.
   const [cache] = await db
     .select()
     .from(schema.prayerTimesCache)
@@ -129,7 +134,15 @@ export async function POST(request: NextRequest) {
       isha: cache.isha,
     };
 
-    const currentMinutes = getCurrentMinutesInTimezone(settings.timezone);
+    // Use offline timestamp if present (outbox sync), otherwise current time
+    const currentMinutes = _offlineTimestamp
+      ? (() => {
+          const d = new Date(_offlineTimestamp);
+          const localStr = d.toLocaleString("en-US", { timeZone: settings.timezone, hour12: false });
+          const match = localStr.match(/(\d+):(\d+)/);
+          return match ? parseInt(match[1]) * 60 + parseInt(match[2]) : getCurrentMinutesInTimezone(settings.timezone);
+        })()
+      : getCurrentMinutesInTimezone(settings.timezone);
 
     const prayerMinutes: Record<FardPrayer, number> = {
       fajr: parseMinutes(timings.fajr),
@@ -139,7 +152,7 @@ export async function POST(request: NextRequest) {
       isha: parseMinutes(timings.isha),
     };
 
-    // "before" sunnahs: the associated fard's time must have started
+    // 2a. "before" sunnahs: the associated fard's time must have started
     if (sunnah.position === "before") {
       const fardStartMinutes = prayerMinutes[sunnah.associatedFard];
       if (currentMinutes < fardStartMinutes) {
@@ -148,6 +161,32 @@ export async function POST(request: NextRequest) {
           { error: `${fardLabel} hasn't started yet — you can't log this sunnah until ${fardLabel} time comes in.` },
           { status: 403 },
         );
+      }
+    }
+
+    // 2b. Lock check: can't log after the lock prayer starts (window closed)
+    //     EXCEPT Duha — user wants late Duha logging allowed
+    if (sunnah.locksAt && sunnah.key !== "duha") {
+      const lockMinutes = prayerMinutes[sunnah.locksAt];
+      // Witr locks at Fajr — Isha's window ends when Fajr starts
+      // Special case: if current time is after midnight but before Fajr,
+      // we're still in Isha's window so Witr should still be loggable
+      if (sunnah.key === "witr" && sunnah.locksAt === "fajr") {
+        if (currentMinutes >= lockMinutes && currentMinutes < prayerMinutes.isha) {
+          return NextResponse.json(
+            { error: "Witr can no longer be logged — Fajr has started." },
+            { status: 403 },
+          );
+        }
+      } else {
+        // Normal case: locked when the next prayer starts
+        if (currentMinutes >= lockMinutes) {
+          const lockLabel = sunnah.locksAt.charAt(0).toUpperCase() + sunnah.locksAt.slice(1);
+          return NextResponse.json(
+            { error: `This sunnah can no longer be logged — ${lockLabel} has started.` },
+            { status: 403 },
+          );
+        }
       }
     }
   }

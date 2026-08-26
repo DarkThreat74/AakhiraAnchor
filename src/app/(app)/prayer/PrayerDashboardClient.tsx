@@ -756,8 +756,9 @@ export default function PrayerDashboard() {
                                 {beforeSunnahs.map((s) => {
                                   const sunnahPrayed = todaySunnahs.includes(s.key);
                                   const windowPassed = currentMinutes >= windowEndMinutes;
-                                  // When offline, don't disable (can't verify server-side)
-                                  const disabled = !isOnline ? false : sunnahPrayed
+                                  // Grey out when window passed (allow un-logging if already prayed)
+                                  // Duha is exempt from lock — it can be logged late
+                                  const disabled = sunnahPrayed
                                     ? false // allow un-logging
                                     : !timeStarted || windowPassed;
                                   const reason = !timeStarted
@@ -784,8 +785,7 @@ export default function PrayerDashboard() {
                                 {afterSunnahs.map((s) => {
                                   const sunnahPrayed = todaySunnahs.includes(s.key);
                                   const windowPassed = currentMinutes >= windowEndMinutes;
-                                  // When offline, don't disable based on window (only keep fard-prereq)
-                                  const disabled = !isOnline ? false : sunnahPrayed
+                                  const disabled = sunnahPrayed
                                     ? false
                                     : !prayed || windowPassed;
                                   const reason = !prayed
@@ -815,21 +815,33 @@ export default function PrayerDashboard() {
                                   let standaloneReason = "";
 
                                   if (s.key === "witr") {
-                                    // Witr requires Isha to be prayed (but allow un-logging)
-                                    // When offline, skip this check
-                                    standaloneDisabled = !isOnline ? false : sunnahPrayed ? false : !isPrayed("isha");
-                                    standaloneReason = "Log Isha as prayed first";
+                                    // Witr requires Isha to be prayed
+                                    // Witr locks at Fajr (Isha window ends when Fajr starts)
+                                    const [fh, fm] = prayerTimes.fajr.split(" ")[0].split(":").map(Number);
+                                    const fajrMin = fh * 60 + fm;
+                                    const [ih, im] = prayerTimes.isha.split(" ")[0].split(":").map(Number);
+                                    const ishaMin = ih * 60 + im;
+                                    // Witr is locked when Fajr starts AND current time is before Isha
+                                    // (after Isha, we're in the next night's Witr window)
+                                    const witrLocked = currentMinutes >= fajrMin && currentMinutes < ishaMin;
+                                    standaloneDisabled = sunnahPrayed
+                                      ? false // allow un-logging
+                                      : !isPrayed("isha") || witrLocked;
+                                    standaloneReason = witrLocked
+                                      ? "Witr window has ended — Fajr has started"
+                                      : "Log Isha as prayed first";
                                   } else if (s.key === "duha") {
+                                    // Duha: only disabled before Fajr starts
+                                    // After Dhuhr, grey out but STILL allow logging (user's request)
                                     const [dh, dm] = prayerTimes.dhuhr.split(" ")[0].split(":").map(Number);
                                     const dhuhrMin = dh * 60 + dm;
                                     const afterDhuhr = currentMinutes >= dhuhrMin;
-                                    // When offline, don't disable
-                                    standaloneDisabled = !isOnline ? false : !timeStarted;
+                                    standaloneDisabled = !timeStarted; // only disabled before Fajr starts
                                     standaloneReason = afterDhuhr
                                       ? "Duha time has passed — logging late"
                                       : `${PRAYER_LABELS[prayer]} hasn't started yet`;
                                   } else {
-                                    standaloneDisabled = !isOnline ? false : !timeStarted;
+                                    standaloneDisabled = !timeStarted;
                                     standaloneReason = `${PRAYER_LABELS[prayer]} hasn't started yet`;
                                   }
 

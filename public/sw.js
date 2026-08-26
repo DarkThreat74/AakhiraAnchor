@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v12";
+const CACHE_VERSION = "waqt-v13";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -97,10 +97,16 @@ async function syncOutbox() {
 
   for (const item of outbox) {
     try {
+      // Add _offlineTimestamp to the body so the server can check windows
+      // against when the action was originally performed, not sync time
+      const bodyToSend = item.body
+        ? JSON.stringify({ ...item.body, _offlineTimestamp: item.timestamp })
+        : undefined;
+
       const res = await fetch(item.url, {
         method: item.method,
         headers: item.headers || { "Content-Type": "application/json" },
-        body: item.body ? JSON.stringify(item.body) : undefined,
+        body: bodyToSend,
         credentials: "include",
       });
 
