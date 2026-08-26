@@ -268,8 +268,8 @@ export default function PrayerDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: addFriendCode.trim().toUpperCase() }),
       });
-      const data = await res.json();
-      if (res.ok && !data.offline) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && !data.offline && data.friend) {
         setFriends((prev) => [...prev, data.friend]);
         setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}! You can now see each other's stats.`);
         setAddFriendCode("");
@@ -338,7 +338,7 @@ export default function PrayerDashboard() {
           isha: setupIsha,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && !data.offline) {
         setQadaa(data);
         setQadaaMsg("Qadaa set up successfully.");

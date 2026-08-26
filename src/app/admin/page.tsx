@@ -429,7 +429,11 @@ function TalksManager() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    fetch("/api/admin/talks").then(r => r.json()).then(setItems).finally(() => setLoading(false));
+    fetch("/api/admin/talks")
+      .then(r => r.json())
+      .then(setItems)
+      .catch(() => { /* ignore — loading will be cleared in finally */ })
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);

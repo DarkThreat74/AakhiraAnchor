@@ -37,17 +37,22 @@ export default function LoginForm() {
   const checkTrustedDevice = useCallback(async (email: string) => {
     if (!fingerprintHash || !email) return;
     setCheckingDevice(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch("/api/auth/check-device", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, fingerprintHash }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({ trusted: false }));
       setTrustedDevice(!!data.trusted);
     } catch {
       setTrustedDevice(false);
     } finally {
+      clearTimeout(timeoutId);
       setCheckingDevice(false);
     }
   }, [fingerprintHash]);
@@ -62,6 +67,9 @@ export default function LoginForm() {
     const formData = new FormData(form);
     const email = String(formData.get("email") || "").trim().toLowerCase();
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -71,7 +79,10 @@ export default function LoginForm() {
           fingerprintHash: fingerprintHash || undefined,
           renderedAt: renderedAtRef.current,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -84,10 +95,15 @@ export default function LoginForm() {
       play("success");
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/calendar/day";
-    } catch {
-      setError("Network error. Check your connection and try again.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        setError("Network error. Check your connection and try again.");
+      }
       play("error");
     } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }
@@ -101,6 +117,10 @@ export default function LoginForm() {
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
 
+    // AbortController timeout — prevents the button from getting stuck if server is slow
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -111,7 +131,10 @@ export default function LoginForm() {
           fingerprintHash: fingerprintHash || undefined,
           renderedAt: renderedAtRef.current,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       let data: { error?: string; ok?: boolean; trustedDevice?: boolean } = {};
       const text = await res.text();
@@ -130,10 +153,15 @@ export default function LoginForm() {
       // the new session cookie and avoids client-side routing issues.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/calendar/day";
-    } catch {
-      setError("Network error. Check your connection and try again.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        setError("Network error. Check your connection and try again.");
+      }
       play("error");
     } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }
@@ -148,14 +176,20 @@ export default function LoginForm() {
     const formData = new FormData(form);
     const email = String(formData.get("email") || "").trim().toLowerCase();
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "check", email, renderedAt: renderedAtRef.current }),
+        signal: controller.signal,
       });
 
-      const data: { exists?: boolean; error?: string } = await res.json();
+      clearTimeout(timeoutId);
+
+      const data: { exists?: boolean; error?: string } = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setError(data.error || "Something went wrong. Please try again.");
@@ -169,9 +203,14 @@ export default function LoginForm() {
       } else {
         setError("No account found with that email.");
       }
-    } catch {
-      setError("Network error. Check your connection and try again.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        setError("Network error. Check your connection and try again.");
+      }
     } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }
@@ -187,6 +226,9 @@ export default function LoginForm() {
     const password = String(formData.get("password") || "");
     const confirm = String(formData.get("confirm") || "");
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const res = await fetch("/api/auth/reset-password", {
         method: "POST",
@@ -198,9 +240,12 @@ export default function LoginForm() {
           confirm,
           renderedAt: renderedAtRef.current,
         }),
+        signal: controller.signal,
       });
 
-      const data: { ok?: boolean; error?: string } = await res.json();
+      clearTimeout(timeoutId);
+
+      const data: { ok?: boolean; error?: string } = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setError(data.error || "Something went wrong. Please try again.");
@@ -208,9 +253,14 @@ export default function LoginForm() {
       }
 
       setMode("forgot-done");
-    } catch {
-      setError("Network error. Check your connection and try again.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out. Check your connection and try again.");
+      } else {
+        setError("Network error. Check your connection and try again.");
+      }
     } finally {
+      clearTimeout(timeoutId);
       setPending(false);
     }
   }
