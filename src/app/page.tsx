@@ -34,7 +34,7 @@ export default async function MarketingPage() {
               وقت
             </span>
           </div>
-          <nav className="flex items-center gap-8 text-sm">
+          <nav className="flex items-center gap-8 text-sm" aria-label="Marketing navigation">
             <Link
               href="/login"
               className="transition-opacity hover:opacity-60"
@@ -386,6 +386,7 @@ export default async function MarketingPage() {
       {/* ── Footer ── */}
       <footer
         className="border-t px-6 py-8 text-xs sm:px-10 lg:px-16"
+        aria-label="Site footer"
         style={{
           borderColor: "var(--color-paper-3)",
           color: "var(--color-ink-muted)",

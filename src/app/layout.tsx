@@ -16,10 +16,12 @@ const amiri = Amiri({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://waqt.app"),
   title: "Waqt — Prayer-centered life tracker",
   description:
     "A calendar and accountability system where the five daily prayers are the fixed anchor everything else is scheduled around.",
   manifest: "/manifest.webmanifest",
+  applicationName: "Waqt",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -32,6 +34,24 @@ export const metadata: Metadata = {
       { url: "/icon.svg", type: "image/svg+xml" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  openGraph: {
+    title: "Waqt — Prayer-centered life tracker",
+    description:
+      "A calendar and accountability system where the five daily prayers are the fixed anchor everything else is scheduled around.",
+    type: "website",
+    siteName: "Waqt",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary",
+    title: "Waqt — Prayer-centered life tracker",
+    description:
+      "A calendar and accountability system where the five daily prayers are the fixed anchor everything else is scheduled around.",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 

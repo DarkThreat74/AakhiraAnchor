@@ -11,6 +11,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^1.1.0
         version: 1.1.0
+      autoskills:
+        specifier: ^0.3.6
+        version: 0.3.6
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1284,6 +1287,11 @@ packages:
   async-function@1.0.0:
     resolution: {integrity: sha512-hsU18Ae8CDTR6Kgu9DYf0EbCr/a5iGL0rytQDobUcdpYOKokk8LEjVphnXkDkgpi0wYVsqrXuP0bZxJaTqdgoA==}
     engines: {node: '>= 0.4'}
+
+  autoskills@0.3.6:
+    resolution: {integrity: sha512-yNcj7Y/USPyJINxCWDaVVu17UaFokWgGtpX57PQUOA4i3s3vIDezaGZ/64KyMGb5CsLTvMb/L8WOX6R/ozhWIg==}
+    engines: {node: '>=22.6.0'}
+    hasBin: true
 
   available-typed-arrays@1.0.7:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
@@ -3698,6 +3706,8 @@ snapshots:
   ast-types-flow@0.0.8: {}
 
   async-function@1.0.0: {}
+
+  autoskills@0.3.6: {}
 
   available-typed-arrays@1.0.7:
     dependencies:

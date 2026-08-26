@@ -10,21 +10,24 @@ export default async function SettingsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  // Fetch user's display name
-  const [userRow] = await db
-    .select({ displayName: schema.users.displayName })
-    .from(schema.users)
-    .where(eq(schema.users.id, session.userId))
-    .limit(1);
+  // Parallelize independent queries (user + prayer settings)
+  const [userRow, prayerSettingsRow] = await Promise.all([
+    db
+      .select({ displayName: schema.users.displayName })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1),
+    db
+      .select()
+      .from(schema.prayerSettings)
+      .where(eq(schema.prayerSettings.userId, session.userId))
+      .limit(1),
+  ]);
 
-  // Fetch prayer settings
-  const [prayerSettings] = await db
-    .select()
-    .from(schema.prayerSettings)
-    .where(eq(schema.prayerSettings.userId, session.userId))
-    .limit(1);
+  const [user] = userRow;
+  const [prayerSettings] = prayerSettingsRow;
 
-  // Fetch today's prayer times if settings exist
+  // Fetch today's prayer times if settings exist (depends on prayerSettings for timezone)
   let todayPrayerTimes: {
     fajr: string; sunrise: string; dhuhr: string;
     asr: string; maghrib: string; isha: string;
@@ -66,7 +69,7 @@ export default async function SettingsPage() {
 
   return (
     <SettingsClient
-      displayName={userRow?.displayName || null}
+      displayName={user?.displayName || null}
       prayerSettings={prayerSettings || null}
       todayPrayerTimes={todayPrayerTimes}
     />

@@ -44,3 +44,6 @@ next-env.d.ts
 # Embedded skill repos
 .devin/skills/hallmark/
 .devin/skills/*/
+.claude/skills/
+.agents/skills/
+skills-lock.json

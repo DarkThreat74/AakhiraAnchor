@@ -1,0 +1,14 @@
+# Waqt — robots.txt
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /settings
+Disallow: /onboarding
+Disallow: /calendar
+Disallow: /prayer
+
+# Public calendar shares are indexable
+Allow: /user/public/
+
+Sitemap: https://waqt.app/sitemap.xml

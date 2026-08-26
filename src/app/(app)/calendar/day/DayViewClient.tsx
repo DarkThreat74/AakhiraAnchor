@@ -764,7 +764,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />
                 <button
                   onClick={(e: React.MouseEvent) => { e.stopPropagation(); openEditForm(event); }}
-                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-transform hover:scale-105 sm:px-2 sm:text-[10px]"
+                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-opacity hover:opacity-80 sm:px-2 sm:text-[10px]"
                   style={{
                     backgroundColor: "var(--color-paper)",
                     color: color,

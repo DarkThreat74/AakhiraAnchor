@@ -192,7 +192,7 @@ export default function OnboardingWizard() {
           {steps.slice(0, -1).map((s, i) => (
             <div
               key={s}
-              className="h-1.5 rounded-full transition-all duration-300"
+              className="h-1.5 rounded-full transition-[background-color] duration-300"
               style={{
                 width: i === currentIdx ? 24 : 6,
                 backgroundColor: i <= currentIdx ? "var(--color-accent)" : "var(--color-paper-3)",

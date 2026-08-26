@@ -23,15 +23,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Wrap in try-catch so a DB failure doesn't crash the entire layout.
   let needsSettings = false;
   try {
-    const [user] = await db
-      .select({ displayName: schema.users.displayName })
-      .from(schema.users)
-      .where(eq(schema.users.id, session.userId))
-      .limit(1);
-    needsSettings = !user?.displayName;
-
-    if (!needsSettings) {
-      const [settings] = await db
+    // Parallelize user + prayer settings queries (no dependency between them)
+    const [userRows, settingsRows] = await Promise.all([
+      db
+        .select({ displayName: schema.users.displayName })
+        .from(schema.users)
+        .where(eq(schema.users.id, session.userId))
+        .limit(1),
+      db
         .select({
           latitude: schema.prayerSettings.latitude,
           longitude: schema.prayerSettings.longitude,
@@ -40,7 +39,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         })
         .from(schema.prayerSettings)
         .where(eq(schema.prayerSettings.userId, session.userId))
-        .limit(1);
+        .limit(1),
+    ]);
+
+    const [user] = userRows;
+    needsSettings = !user?.displayName;
+
+    if (!needsSettings) {
+      const [settings] = settingsRows;
       // Show dot if no settings row, no location, no calculation method, or no madhab
       if (!settings) needsSettings = true;
       else if (!settings.latitude || !settings.longitude) needsSettings = true;
@@ -60,10 +66,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "var(--color-paper)" }}>
+      {/* ── Skip link for keyboard users (WCAG 2.4.1) ── */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       {/* ── Desktop sidebar ── */}
       <aside
         className="fixed left-0 top-0 bottom-0 hidden w-56 flex-col border-r lg:flex"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+        aria-label="Primary navigation"
       >
         <div className="flex items-center px-6 py-6">
           <span className="text-lg font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
@@ -71,7 +83,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-3">
+        <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Main">
           {navItems.map((item) => (
             <NavItem key={item.href} {...item} />
           ))}
@@ -94,7 +106,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-x-hidden pb-16 lg:pb-0">
+        <main id="main-content" className="flex-1 overflow-x-hidden pb-16 lg:pb-0">
           {children}
         </main>
       </div>
@@ -107,6 +119,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
+        aria-label="Mobile navigation"
       >
         {navItems.map((item) => (
           <MobileNavItem key={item.href} {...item} />

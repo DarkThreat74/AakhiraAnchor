@@ -486,7 +486,7 @@ export default function PrayerDashboard() {
                 >
                   {/* Progress fill */}
                   <div
-                    className="absolute bottom-0 left-0 right-0 rounded-full transition-all duration-500"
+                    className="absolute bottom-0 left-0 right-0 rounded-full transition-[height] duration-500"
                     style={{
                       height: `${dayProgress}%`,
                       background: "linear-gradient(to top, var(--color-accent), color-mix(in oklab, var(--color-accent) 60%, var(--color-warmth)))",
@@ -701,7 +701,7 @@ export default function PrayerDashboard() {
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
                       <div
-                        className="h-full rounded-full transition-all"
+                        className="h-full rounded-full transition-[width] duration-500"
                         style={{ width: `${stat.consistencyPct}%`, backgroundColor: color }}
                       />
                     </div>
