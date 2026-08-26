@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor } from "lucide-react";
 
 interface PrayerSettings {
   latitude: string;
@@ -80,6 +80,27 @@ export default function SettingsClient({
 }) {
   const [prayerSettings, setPrayerSettings] = useState<PrayerSettings | null>(initialSettings);
   const [todayPrayerTimes, setTodayPrayerTimes] = useState<PrayerTimes | null>(initialTimes);
+
+  // Theme state: "light" | "dark" | "system"
+  // Lazy initializer reads localStorage once — no effect needed
+  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
+    if (typeof window === "undefined") return "system";
+    const stored = localStorage.getItem("waqt:theme");
+    if (stored === "light" || stored === "dark") return stored;
+    return "system";
+  });
+
+  function handleThemeChange(next: "light" | "dark" | "system") {
+    setTheme(next);
+    if (next === "system") {
+      localStorage.removeItem("waqt:theme");
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+    } else {
+      localStorage.setItem("waqt:theme", next);
+      document.documentElement.setAttribute("data-theme", next);
+    }
+  }
 
   // Display name state
   const [displayName, setDisplayName] = useState(initialDisplayName || "");
@@ -707,6 +728,63 @@ export default function SettingsClient({
 
       {/* ── Single unified settings card ── */}
       <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+        {/* ── Appearance: Theme ── */}
+        <div className="p-4 sm:p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Sun className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent)" }} />
+            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Appearance</h2>
+          </div>
+
+          <div className="mb-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              Theme
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => handleThemeChange("light")}
+              className="flex flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
+              style={{
+                borderColor: theme === "light" ? "var(--color-accent)" : "var(--color-paper-3)",
+                backgroundColor: theme === "light" ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
+              }}
+            >
+              <Sun className="h-4 w-4" style={{ color: theme === "light" ? "var(--color-accent)" : "var(--color-ink-muted)" }} />
+              <span className="text-xs font-medium" style={{ color: theme === "light" ? "var(--color-accent)" : "var(--color-ink-muted)" }}>
+                Light
+              </span>
+            </button>
+            <button
+              onClick={() => handleThemeChange("dark")}
+              className="flex flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
+              style={{
+                borderColor: theme === "dark" ? "var(--color-accent)" : "var(--color-paper-3)",
+                backgroundColor: theme === "dark" ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
+              }}
+            >
+              <Moon className="h-4 w-4" style={{ color: theme === "dark" ? "var(--color-accent)" : "var(--color-ink-muted)" }} />
+              <span className="text-xs font-medium" style={{ color: theme === "dark" ? "var(--color-accent)" : "var(--color-ink-muted)" }}>
+                Dark
+              </span>
+            </button>
+            <button
+              onClick={() => handleThemeChange("system")}
+              className="flex flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
+              style={{
+                borderColor: theme === "system" ? "var(--color-accent)" : "var(--color-paper-3)",
+                backgroundColor: theme === "system" ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
+              }}
+            >
+              <Monitor className="h-4 w-4" style={{ color: theme === "system" ? "var(--color-accent)" : "var(--color-ink-muted)" }} />
+              <span className="text-xs font-medium" style={{ color: theme === "system" ? "var(--color-accent)" : "var(--color-ink-muted)" }}>
+                System
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+
         {/* ── Profile: Name + Prayer Code ── */}
         <div className="p-4 sm:p-6">
           <div className="mb-4 flex items-center gap-2">

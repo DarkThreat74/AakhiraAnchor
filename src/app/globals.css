@@ -65,9 +65,27 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Dark mode — warm dark, not zinc */
+/* Dark mode — warm dark, not zinc
+ * Triggered by:
+ *   1. User preference: <html data-theme="dark">
+ *   2. System preference: prefers-color-scheme: dark (when no explicit override)
+ */
+:root[data-theme="dark"] {
+  --color-ink: oklch(0.92 0.01 80);
+  --color-ink-soft: oklch(0.78 0.01 75);
+  --color-ink-muted: oklch(0.58 0.01 70);
+  --color-paper: oklch(0.16 0.01 60);
+  --color-paper-2: oklch(0.20 0.01 60);
+  --color-paper-3: oklch(0.25 0.01 60);
+  --color-accent: oklch(0.62 0.08 195);
+  --color-accent-soft: oklch(0.72 0.06 195);
+  --color-accent-faint: oklch(0.28 0.02 195);
+  --color-warmth: oklch(0.68 0.08 45);
+  --color-warmth-faint: oklch(0.28 0.02 45);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --color-ink: oklch(0.92 0.01 80);
     --color-ink-soft: oklch(0.78 0.01 75);
     --color-ink-muted: oklch(0.58 0.01 70);

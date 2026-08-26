@@ -486,6 +486,62 @@ export default function PrayerDashboard() {
             {/* ── Vertical Timeline ── */}
             {prayerTimes ? (
               <div className="px-4 py-2 sm:px-5">
+                {/* ── Day progress bar: Fajr → Isha ── */}
+                {(() => {
+                  const [fh, fm] = prayerTimes.fajr.split(" ")[0].split(":").map(Number);
+                  const [ih, im] = prayerTimes.isha.split(" ")[0].split(":").map(Number);
+                  const fajrMin = fh * 60 + fm;
+                  const ishaMin = ih * 60 + im;
+                  const curMin = currentTime.getHours() * 60 + currentTime.getMinutes();
+                  const dayDuration = ishaMin - fajrMin;
+                  const dayElapsed = Math.min(Math.max(curMin - fajrMin, 0), dayDuration);
+                  const dayPct = dayDuration > 0 ? (dayElapsed / dayDuration) * 100 : 0;
+                  const beforeDay = curMin < fajrMin;
+
+                  return (
+                    <div className="mb-3 mt-1">
+                      <div className="mb-1 flex items-center justify-between text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                        <span>Fajr {format12h(prayerTimes.fajr)}</span>
+                        <span style={{ color: beforeDay ? "var(--color-ink-muted)" : "var(--color-accent)" }}>
+                          {beforeDay ? "Day hasn't started" : `${Math.floor(dayPct)}% through the day`}
+                        </span>
+                        <span>Isha {format12h(prayerTimes.isha)}</span>
+                      </div>
+                      <div
+                        className="relative h-2 w-full overflow-hidden rounded-full"
+                        style={{ backgroundColor: "var(--color-paper-2)" }}
+                      >
+                        {/* Prayer markers on the bar */}
+                        {PRAYER_ORDER.map((p) => {
+                          const [ph, pm] = prayerTimes[p].split(" ")[0].split(":").map(Number);
+                          const pMin = ph * 60 + pm;
+                          const pct = ((pMin - fajrMin) / dayDuration) * 100;
+                          if (pct < 0 || pct > 100) return null;
+                          return (
+                            <div
+                              key={p}
+                              className="absolute top-0 h-full w-px"
+                              style={{
+                                left: `${pct}%`,
+                                backgroundColor: isPrayed(p) ? PRAYER_COLORS[p] : "var(--color-paper-3)",
+                              }}
+                            />
+                          );
+                        })}
+                        {/* Progress fill */}
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${dayPct}%`,
+                            backgroundColor: "var(--color-accent)",
+                            opacity: beforeDay ? 0.3 : 0.6,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {PRAYER_ORDER.map((prayer, idx) => {
                   const prayed = isPrayed(prayer);
                   const status = getPrayerStatus(prayer);
@@ -666,53 +722,95 @@ export default function PrayerDashboard() {
                         {/* Sunnah / Nafl pills */}
                         {prayerSunnahs.length > 0 && (
                           <div className="mt-2 space-y-1.5">
-                            {/* Before sunnahs — disabled until fard time starts */}
+                            {/* Before sunnahs */}
                             {beforeSunnahs.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
-                                {beforeSunnahs.map((s) => (
-                                  <SunnahPill
-                                    key={s.key}
-                                    sunnah={s}
-                                    prayed={todaySunnahs.includes(s.key)}
-                                    onToggle={() => handleToggleSunnah(s.key)}
-                                    disabled={!timeStarted}
-                                    disabledReason={`${PRAYER_LABELS[prayer]} hasn't started yet`}
-                                  />
-                                ))}
+                                {beforeSunnahs.map((s) => {
+                                  const sunnahPrayed = todaySunnahs.includes(s.key);
+                                  // Disabled if fard hasn't started, OR if window passed (but allow un-logging)
+                                  const windowPassed = currentMinutes >= windowEndMinutes;
+                                  const disabled = sunnahPrayed
+                                    ? false // allow un-logging
+                                    : !timeStarted || windowPassed;
+                                  const reason = !timeStarted
+                                    ? `${PRAYER_LABELS[prayer]} hasn't started yet`
+                                    : windowPassed
+                                      ? `${PRAYER_LABELS[prayer]} window has ended`
+                                      : "";
+                                  return (
+                                    <SunnahPill
+                                      key={s.key}
+                                      sunnah={s}
+                                      prayed={sunnahPrayed}
+                                      onToggle={() => handleToggleSunnah(s.key)}
+                                      disabled={disabled}
+                                      disabledReason={reason}
+                                    />
+                                  );
+                                })}
                               </div>
                             )}
-                            {/* After sunnahs — disabled until fard is prayed */}
+                            {/* After sunnahs */}
                             {afterSunnahs.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
-                                {afterSunnahs.map((s) => (
-                                  <SunnahPill
-                                    key={s.key}
-                                    sunnah={s}
-                                    prayed={todaySunnahs.includes(s.key)}
-                                    onToggle={() => handleToggleSunnah(s.key)}
-                                    disabled={!prayed}
-                                    disabledReason={`Log ${PRAYER_LABELS[prayer]} as prayed first`}
-                                  />
-                                ))}
+                                {afterSunnahs.map((s) => {
+                                  const sunnahPrayed = todaySunnahs.includes(s.key);
+                                  const windowPassed = currentMinutes >= windowEndMinutes;
+                                  // Disabled if fard not prayed, OR if window passed (but allow un-logging)
+                                  const disabled = sunnahPrayed
+                                    ? false
+                                    : !prayed || windowPassed;
+                                  const reason = !prayed
+                                    ? `Log ${PRAYER_LABELS[prayer]} as prayed first`
+                                    : windowPassed
+                                      ? `${PRAYER_LABELS[prayer]} window has ended`
+                                      : "";
+                                  return (
+                                    <SunnahPill
+                                      key={s.key}
+                                      sunnah={s}
+                                      prayed={sunnahPrayed}
+                                      onToggle={() => handleToggleSunnah(s.key)}
+                                      disabled={disabled}
+                                      disabledReason={reason}
+                                    />
+                                  );
+                                })}
                               </div>
                             )}
                             {/* Standalone (Witr, Duha) */}
                             {standaloneSunnahs.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {standaloneSunnahs.map((s) => {
-                                  // Witr requires Isha to be prayed
-                                  // Duha requires Fajr time to have started (and is locked at Dhuhr)
-                                  const standaloneDisabled = s.key === "witr"
-                                    ? !isPrayed("isha")
-                                    : !timeStarted;
-                                  const standaloneReason = s.key === "witr"
-                                    ? "Log Isha as prayed first"
-                                    : `${PRAYER_LABELS[prayer]} hasn't started yet`;
+                                  const sunnahPrayed = todaySunnahs.includes(s.key);
+                                  let standaloneDisabled = false;
+                                  let standaloneReason = "";
+
+                                  if (s.key === "witr") {
+                                    // Witr requires Isha to be prayed (but allow un-logging)
+                                    standaloneDisabled = sunnahPrayed ? false : !isPrayed("isha");
+                                    standaloneReason = "Log Isha as prayed first";
+                                  } else if (s.key === "duha") {
+                                    // Duha: requires Fajr time to have started
+                                    // After Dhuhr starts, visually grey out but STILL allow logging
+                                    // (user explicitly wants to allow late Duha logging)
+                                    const [dh, dm] = prayerTimes.dhuhr.split(" ")[0].split(":").map(Number);
+                                    const dhuhrMin = dh * 60 + dm;
+                                    const afterDhuhr = currentMinutes >= dhuhrMin;
+                                    standaloneDisabled = !timeStarted; // only disabled before Fajr starts
+                                    standaloneReason = afterDhuhr
+                                      ? "Duha time has passed — logging late"
+                                      : `${PRAYER_LABELS[prayer]} hasn't started yet`;
+                                  } else {
+                                    standaloneDisabled = !timeStarted;
+                                    standaloneReason = `${PRAYER_LABELS[prayer]} hasn't started yet`;
+                                  }
+
                                   return (
                                     <SunnahPill
                                       key={s.key}
                                       sunnah={s}
-                                      prayed={todaySunnahs.includes(s.key)}
+                                      prayed={sunnahPrayed}
                                       onToggle={() => handleToggleSunnah(s.key)}
                                       disabled={standaloneDisabled}
                                       disabledReason={standaloneReason}

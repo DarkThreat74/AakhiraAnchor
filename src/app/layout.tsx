@@ -65,11 +65,17 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Inline script — runs before paint to prevent flash of wrong theme
+  const themeScript = `(function(){try{var t=localStorage.getItem("waqt:theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches)){document.documentElement.setAttribute("data-theme","dark")}else{document.documentElement.setAttribute("data-theme","light")}}catch(e){}})()`;
+
   return (
     <html
       lang="en"
       className={`${spectral.variable} ${amiri.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-dvh flex flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
         <UISFXProvider>{children}</UISFXProvider>
       </body>

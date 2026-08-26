@@ -168,10 +168,14 @@ export async function POST(request: NextRequest) {
     // 2c. Check if the lock prayer has started (sunnah window has closed)
     if (sunnah.locksAt) {
       const lockMinutes = prayerMinutes[sunnah.locksAt];
-      // Special case: Witr locks at Fajr — but Fajr is the FIRST prayer of the day
-      // If current time is after midnight but before Fajr, we're still in "Isha's window"
-      // so Witr should still be loggable
-      if (sunnah.key === "witr" && sunnah.locksAt === "fajr") {
+      // Special case: Duha — user wants to allow late logging even after Dhuhr starts
+      // (the UI greys it out but still permits it)
+      if (sunnah.key === "duha") {
+        // Duha only requires Fajr time to have started; no lock enforcement
+      } else if (sunnah.key === "witr" && sunnah.locksAt === "fajr") {
+        // Witr locks at Fajr — but Fajr is the FIRST prayer of the day
+        // If current time is after midnight but before Fajr, we're still in "Isha's window"
+        // so Witr should still be loggable
         // Witr is locked only when Fajr starts (currentMinutes >= Fajr AND currentMinutes < Isha)
         if (currentMinutes >= lockMinutes && currentMinutes < prayerMinutes.isha) {
           return NextResponse.json(
