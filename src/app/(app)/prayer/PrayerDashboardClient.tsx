@@ -399,8 +399,22 @@ export default function PrayerDashboard() {
             }
           }
           setQadaaMsg("Saved offline — will sync when online.");
-        } else {
+        } else if (data && typeof data.fajrOwed === "number") {
+          // Server returned updated ledger — update local state
           setQadaa(data);
+          setQadaaMsg(delta > 0
+            ? `Added ${delta} to ${PRAYER_LABELS[adjustPrayer]} qadaa.`
+            : `Logged ${Math.abs(delta)} ${PRAYER_LABELS[adjustPrayer]} qadaa as prayed.`);
+        } else if (qadaa) {
+          // Server responded ok but didn't return expected shape — optimistically update
+          const colMap: Record<string, keyof typeof qadaa> = {
+            fajr: "fajrOwed", dhuhr: "dhuhrOwed", asr: "asrOwed",
+            maghrib: "maghribOwed", isha: "ishaOwed",
+          };
+          const col = colMap[adjustPrayer];
+          if (col) {
+            setQadaa({ ...qadaa, [col]: Math.max(0, (qadaa[col] as number) + delta) });
+          }
           setQadaaMsg(delta > 0
             ? `Added ${delta} to ${PRAYER_LABELS[adjustPrayer]} qadaa.`
             : `Logged ${Math.abs(delta)} ${PRAYER_LABELS[adjustPrayer]} qadaa as prayed.`);

@@ -55,23 +55,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Qadaa not set up yet." }, { status: 404 });
   }
 
-  // Map prayer name to column
+  // Map prayer name to Drizzle property name and DB column name
   const columnMap = {
-    fajr: "fajr_owed",
-    dhuhr: "dhuhr_owed",
-    asr: "asr_owed",
-    maghrib: "maghrib_owed",
-    isha: "isha_owed",
+    fajr: { prop: "fajrOwed", col: "fajr_owed" },
+    dhuhr: { prop: "dhuhrOwed", col: "dhuhr_owed" },
+    asr: { prop: "asrOwed", col: "asr_owed" },
+    maghrib: { prop: "maghribOwed", col: "maghrib_owed" },
+    isha: { prop: "ishaOwed", col: "isha_owed" },
   } as const;
 
-  const colName = columnMap[prayerName];
+  const { prop, col } = columnMap[prayerName];
 
   // Atomic increment/decrement using SQL GREATEST to prevent negative values
   // This avoids the read-then-update race condition
   const [updated] = await db
     .update(schema.qadaaLedger)
     .set({
-      [colName]: sql`GREATEST(${sql.raw(colName)} + ${cappedAmount}, 0)`,
+      [prop]: sql`GREATEST(${sql.raw(col)} + ${cappedAmount}, 0)`,
       updatedAt: new Date(),
     })
     .where(eq(schema.qadaaLedger.userId, session.userId))
