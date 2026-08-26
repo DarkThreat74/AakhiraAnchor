@@ -442,7 +442,7 @@ export default function PrayerDashboard() {
       </h1>
 
       {/* ── Tab navigation ── */}
-      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border p-1" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
+      <div className="mb-6 grid grid-cols-4 gap-1 rounded-xl border p-1" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
         {([
           { key: "comparison" as Tab, label: "Today" },
           { key: "stats" as Tab, label: "Stats" },
@@ -452,7 +452,7 @@ export default function PrayerDashboard() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className="flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:text-sm"
+            className="truncate rounded-lg px-1 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm"
             style={{
               backgroundColor: activeTab === tab.key ? "var(--color-paper)" : "transparent",
               color: activeTab === tab.key ? "var(--color-ink)" : "var(--color-ink-muted)",

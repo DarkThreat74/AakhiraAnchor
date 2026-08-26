@@ -145,22 +145,23 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
     <div>
       {/* Month header with day/month toggle */}
       <div className="border-b" style={{ borderColor: "var(--color-paper-3)" }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           <Link
             href={`/calendar/month?year=${prevYear}&month=${prevMonth}`}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
+            aria-label="Previous month"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
 
-          <div className="flex flex-1 items-center justify-center gap-4">
-            <h1 className="text-base font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:flex-row sm:justify-center sm:gap-4">
+            <h1 className="truncate text-sm font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
               {monthNames[month - 1]} {year}
             </h1>
 
             <div
-              className="flex rounded-lg border"
+              className="flex shrink-0 rounded-lg border"
               style={{ borderColor: "var(--color-paper-3)" }}
             >
               <Link
@@ -184,6 +185,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             href={`/calendar/month?year=${nextYear}&month=${nextMonth}`}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
+            aria-label="Next month"
           >
             <ChevronRight className="h-5 w-5" />
           </Link>

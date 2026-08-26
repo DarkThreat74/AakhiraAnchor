@@ -148,7 +148,7 @@ function MobileNavItem({ label, href, icon: Icon, alert }: { label: string; href
     <Link
       href={href}
       prefetch
-      className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium"
+      className="flex min-w-0 flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium"
       style={{ color: "var(--color-ink-muted)" }}
     >
       <span className="relative">
@@ -161,7 +161,7 @@ function MobileNavItem({ label, href, icon: Icon, alert }: { label: string; href
           />
         )}
       </span>
-      {label}
+      <span className="truncate">{label}</span>
     </Link>
   );
 }

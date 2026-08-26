@@ -47,20 +47,21 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
     <div>
       {/* Date header with day/month toggle */}
       <div className="border-b" style={{ borderColor: "var(--color-paper-3)" }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           {/* Prev day */}
           <Link
             href={`/calendar/day?date=${prevStr}`}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
+            aria-label="Previous day"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
 
           {/* Date + view toggle */}
-          <div className="flex flex-1 items-center justify-center gap-4">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:flex-row sm:justify-center sm:gap-4">
             <div className="text-center">
-              <h1 className="text-base font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
+              <h1 className="truncate text-sm font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
                 {formattedDate}
               </h1>
               {date === today && (
@@ -68,9 +69,9 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
               )}
             </div>
 
-            {/* Day/Month toggle — visible on all screen sizes */}
+            {/* Day/Month toggle */}
             <div
-              className="flex rounded-lg border"
+              className="flex shrink-0 rounded-lg border"
               style={{ borderColor: "var(--color-paper-3)" }}
             >
               <Link
@@ -95,6 +96,7 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
             href={`/calendar/day?date=${nextStr}`}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
+            aria-label="Next day"
           >
             <ChevronRight className="h-5 w-5" />
           </Link>
