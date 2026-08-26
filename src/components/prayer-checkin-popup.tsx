@@ -68,7 +68,8 @@ export default function PrayerCheckinPopup({
       try {
         const res = await fetch(`/api/prayer-log/sunnah?date=${date}`);
         if (res.ok) {
-          const data = await res.json();
+          const data = await res.json().catch(() => []);
+          if (!Array.isArray(data)) return;
           const map: Record<string, boolean> = {};
           for (const log of data) {
             if (log.prayed) map[log.sunnahKey] = true;
@@ -97,7 +98,7 @@ export default function PrayerCheckinPopup({
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         // If there are sunnahs for this prayer, show the sunnah step
         if (sunnahDefs.length > 0) {
           setStep("sunnah");
@@ -164,7 +165,7 @@ export default function PrayerCheckinPopup({
         wentToMasjid: false,
       }),
     })
-      .then((res) => res.json())
+      .then((res) => res.json().catch(() => ({})))
       .then(() => {
         play("undo");
         onCheckedIn({ status: "pending", wentToMasjid: null });

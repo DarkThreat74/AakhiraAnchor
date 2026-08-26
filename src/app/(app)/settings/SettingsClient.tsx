@@ -222,8 +222,8 @@ export default function SettingsClient({
         { headers: { Accept: "application/json" } },
       );
       if (res.ok) {
-        const results = await res.json();
-        if (results.length > 0) {
+        const results = await res.json().catch(() => []);
+        if (Array.isArray(results) && results.length > 0) {
           const result = results[0];
           let timezone = "UTC";
           try {
@@ -272,7 +272,7 @@ export default function SettingsClient({
         }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setPrayerSettings({
           latitude: locationResult.lat,
           longitude: locationResult.lng,
@@ -283,8 +283,8 @@ export default function SettingsClient({
         setLocationMsg({ ok: true, text: "Location saved. Syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          setLocationMsg({ ok: true, text: `Location saved. Prayer times synced (${syncData.daysCached} days).` });
+          const syncData = await syncRes.json().catch(() => ({}));
+          setLocationMsg({ ok: true, text: `Location saved. Prayer times synced (${syncData.daysCached ?? 0} days).` });
           await refreshPrayerTimes();
         } else {
           setLocationMsg({ ok: true, text: "Location saved. Click Sync to fetch prayer times." });
@@ -317,13 +317,13 @@ export default function SettingsClient({
         }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setPrayerSettings({ ...prayerSettings, calculationMethod: data.calculationMethod || selectedMethod });
         setMethodMsg({ ok: true, text: "Method saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          setMethodMsg({ ok: true, text: `Method updated. Prayer times re-synced (${syncData.daysCached} days).` });
+          const syncData = await syncRes.json().catch(() => ({}));
+          setMethodMsg({ ok: true, text: `Method updated. Prayer times re-synced (${syncData.daysCached ?? 0} days).` });
           await refreshPrayerTimes();
         } else {
           setMethodMsg({ ok: true, text: "Method saved. Click Sync to update prayer times." });
@@ -360,14 +360,14 @@ export default function SettingsClient({
         setMadhabMsg({ ok: true, text: "Madhab saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          setMadhabMsg({ ok: true, text: `Madhab updated. Prayer times re-synced (${syncData.daysCached} days).` });
+          const syncData = await syncRes.json().catch(() => ({}));
+          setMadhabMsg({ ok: true, text: `Madhab updated. Prayer times re-synced (${syncData.daysCached ?? 0} days).` });
           await refreshPrayerTimes();
         } else {
           setMadhabMsg({ ok: true, text: "Madhab saved. Click Sync to update prayer times." });
         }
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setMadhabMsg({ ok: false, text: data.error || "Failed to save madhab." });
       }
     } catch {
@@ -383,7 +383,8 @@ export default function SettingsClient({
     try {
       const res = await fetch(`/api/prayer-times?date=${today}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
+        if (!data) return;
         const fmt = (t: string) => {
           const [h, m] = t.split(":").map(Number);
           const hour = h % 12 || 12;
@@ -409,9 +410,9 @@ export default function SettingsClient({
     setSyncMsg(null);
     try {
       const res = await fetch("/api/prayer-times/sync", { method: "POST" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setSyncMsg({ ok: true, text: `Synced ${data.daysCached} days of prayer times.` });
+        setSyncMsg({ ok: true, text: `Synced ${data.daysCached ?? 0} days of prayer times.` });
         await refreshPrayerTimes();
       } else {
         setSyncMsg({ ok: false, text: data.error || "Sync failed." });
@@ -428,7 +429,7 @@ export default function SettingsClient({
     setShareError(null);
     try {
       const res = await fetch("/api/share/generate", { method: "POST" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.token) {
         setShareEnabled(true);
         setShareUrl(`${window.location.origin}${data.url}`);
@@ -450,7 +451,7 @@ export default function SettingsClient({
         setShareEnabled(false);
         setShareUrl(null);
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setShareError(data.error || "Failed to disable sharing.");
       }
     } catch {
@@ -621,7 +622,7 @@ export default function SettingsClient({
     setNotifMsg(null);
     try {
       const res = await fetch("/api/notifications/test", { method: "POST" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.sent > 0) {
         setNotifMsg(`Server push test sent (${data.sent} delivered). Check your notifications.`);
       } else if (res.ok && data.sent === 0) {
@@ -690,14 +691,14 @@ export default function SettingsClient({
         body: JSON.stringify({ displayName: nameInput }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setDisplayName(data.displayName);
         setEditingName(false);
         setNameMsg({ ok: true, text: "Name updated." });
         if (shareEnabled) {
           const shareRes = await fetch("/api/share/generate");
           if (shareRes.ok) {
-            const shareData = await shareRes.json();
+            const shareData = await shareRes.json().catch(() => ({}));
             if (shareData.url) {
               setShareUrl(`${window.location.origin}${shareData.url}`);
             }
@@ -705,7 +706,7 @@ export default function SettingsClient({
         }
         setTimeout(() => setNameMsg(null), 3000);
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setNameMsg({ ok: false, text: data.error || "Failed to save name." });
       }
     } catch {

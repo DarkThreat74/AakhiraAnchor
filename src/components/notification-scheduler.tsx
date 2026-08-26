@@ -112,7 +112,8 @@ export default function NotificationScheduler() {
       }
       if (!res.ok) return;
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data) return;
       // The API returns { ...cached, madhab } — extract just the prayer times
       const times: PrayerTimes = {
         fajr: data.fajr,
@@ -171,7 +172,8 @@ export default function NotificationScheduler() {
       const res = await fetch(`/api/prayer-times?date=${today}`);
       if (!res.ok) return;
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data) return;
       const times: PrayerTimes = {
         fajr: data.fajr,
         sunrise: data.sunrise,
@@ -250,7 +252,7 @@ export default function NotificationScheduler() {
     try {
       const res = await fetch(`/api/events?date=${date}`);
       if (!res.ok) return;
-      const events: CalendarEvent[] = await res.json();
+      const events: CalendarEvent[] = await res.json().catch(() => null);
       if (!events || !Array.isArray(events)) return;
 
       const now = new Date();

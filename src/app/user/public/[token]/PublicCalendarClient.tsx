@@ -637,7 +637,8 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
 
         const res = await fetch(`/api/public/${token}/events?from=${fromStr}&to=${toStr}`);
         if (res.ok && !cancelled) {
-          const events: CalendarEvent[] = await res.json();
+          const events: CalendarEvent[] = await res.json().catch(() => []);
+          if (!Array.isArray(events)) return;
           const grouped: Record<string, CalendarEvent[]> = {};
           for (const event of events) {
             const eventDate = event.startAt.split("T")[0];

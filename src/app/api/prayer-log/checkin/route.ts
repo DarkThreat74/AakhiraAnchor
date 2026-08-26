@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-// Window check helpers no longer needed server-side — users can log at any time
 
 export const dynamic = "force-dynamic";
 

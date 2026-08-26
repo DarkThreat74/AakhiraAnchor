@@ -219,7 +219,8 @@ export default function DayViewClient({ date }: { date: string }) {
         try {
           const res = await fetch(`/api/events?date=${date}`);
           if (res.ok) {
-            const data = await res.json();
+            const data = await res.json().catch(() => []);
+            if (!Array.isArray(data)) return;
             const filtered = data.filter((e: { startAt: string }) => {
               const d = new Date(e.startAt);
               const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -240,7 +241,8 @@ export default function DayViewClient({ date }: { date: string }) {
         try {
           const res = await fetch(`/api/events?date=${date}`);
           if (res.ok) {
-            const data = await res.json();
+            const data = await res.json().catch(() => []);
+            if (!Array.isArray(data)) return;
             const filtered = data.filter((e: { startAt: string }) => {
               const d = new Date(e.startAt);
               const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -358,7 +360,7 @@ export default function DayViewClient({ date }: { date: string }) {
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         // Offline response — event was queued in the SW outbox
         if (data.offline && data._pending) {
@@ -432,7 +434,7 @@ export default function DayViewClient({ date }: { date: string }) {
           setTimeout(() => setSuccessMsg(null), 3000);
         }
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to create event.");
         play("error");
       }
@@ -506,7 +508,7 @@ export default function DayViewClient({ date }: { date: string }) {
       });
 
       if (res.ok) {
-        const updated = await res.json();
+        const updated = await res.json().catch(() => ({}));
         // Offline response — update was queued in the SW outbox
         if (updated.offline) {
           // Update the local event with the new values and mark as pending
@@ -543,7 +545,7 @@ export default function DayViewClient({ date }: { date: string }) {
         setNewNotify(true);
         setError(null);
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to update event.");
       }
     } catch {

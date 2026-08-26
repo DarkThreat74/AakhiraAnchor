@@ -118,7 +118,7 @@ async function subscribeToPush(registration: ServiceWorkerRegistration) {
     // Get VAPID public key from server
     const res = await fetch("/api/notifications/vapid-public-key");
     if (!res.ok) return;
-    const { publicKey } = await res.json();
+    const { publicKey } = await res.json().catch(() => ({ publicKey: null }));
     if (!publicKey) return;
 
     // Subscribe

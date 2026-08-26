@@ -90,7 +90,7 @@ export default function OnboardingWizard() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to save location.");
         setPending(false);
         return;
@@ -123,7 +123,7 @@ export default function OnboardingWizard() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to save madhab.");
         setPending(false);
         return;
