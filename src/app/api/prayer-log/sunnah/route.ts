@@ -103,9 +103,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. Time-based checks: can't log this sunnah until the fard time has started,
-  //    and can't log it once the next fard's time has started (lock)
-  // Get cached prayer times for this date
+  // 2. Time-based check: "before" sunnahs require the fard time to have started
+  //    (you can't pray "4 before Dhuhr" before Dhuhr time actually comes in)
+  //    No lock checks — users can log sunnahs/nafls at any time after the fard starts.
+  //    This is essential for offline use (outbox syncs after windows have passed).
+  //    The only restriction kept is: "after" sunnahs require the fard to be logged as prayed.
   const [cache] = await db
     .select()
     .from(schema.prayerTimesCache)
@@ -129,7 +131,6 @@ export async function POST(request: NextRequest) {
 
     const currentMinutes = getCurrentMinutesInTimezone(settings.timezone);
 
-    // Determine which prayer time has started
     const prayerMinutes: Record<FardPrayer, number> = {
       fajr: parseMinutes(timings.fajr),
       dhuhr: parseMinutes(timings.dhuhr),
@@ -138,8 +139,7 @@ export async function POST(request: NextRequest) {
       isha: parseMinutes(timings.isha),
     };
 
-    // 2a. "before" sunnahs: the associated fard's time must have started
-    //     (you can't pray "4 before Dhuhr" before Dhuhr time actually comes in)
+    // "before" sunnahs: the associated fard's time must have started
     if (sunnah.position === "before") {
       const fardStartMinutes = prayerMinutes[sunnah.associatedFard];
       if (currentMinutes < fardStartMinutes) {
@@ -148,50 +148,6 @@ export async function POST(request: NextRequest) {
           { error: `${fardLabel} hasn't started yet — you can't log this sunnah until ${fardLabel} time comes in.` },
           { status: 403 },
         );
-      }
-    }
-
-    // 2b. "after" sunnahs: also require the fard time to have started
-    //     (redundant with the fard-log check above, but catches the case where
-    //     the fard was logged as assumed_prayed without the time actually starting)
-    if (sunnah.position === "after") {
-      const fardStartMinutes = prayerMinutes[sunnah.associatedFard];
-      if (currentMinutes < fardStartMinutes) {
-        const fardLabel = sunnah.associatedFard.charAt(0).toUpperCase() + sunnah.associatedFard.slice(1);
-        return NextResponse.json(
-          { error: `${fardLabel} hasn't started yet.` },
-          { status: 403 },
-        );
-      }
-    }
-
-    // 2c. Check if the lock prayer has started (sunnah window has closed)
-    if (sunnah.locksAt) {
-      const lockMinutes = prayerMinutes[sunnah.locksAt];
-      // Special case: Duha — user wants to allow late logging even after Dhuhr starts
-      // (the UI greys it out but still permits it)
-      if (sunnah.key === "duha") {
-        // Duha only requires Fajr time to have started; no lock enforcement
-      } else if (sunnah.key === "witr" && sunnah.locksAt === "fajr") {
-        // Witr locks at Fajr — but Fajr is the FIRST prayer of the day
-        // If current time is after midnight but before Fajr, we're still in "Isha's window"
-        // so Witr should still be loggable
-        // Witr is locked only when Fajr starts (currentMinutes >= Fajr AND currentMinutes < Isha)
-        if (currentMinutes >= lockMinutes && currentMinutes < prayerMinutes.isha) {
-          return NextResponse.json(
-            { error: "Witr can no longer be logged — Fajr has started." },
-            { status: 403 },
-          );
-        }
-      } else {
-        // Normal case: locked when the next prayer starts
-        if (currentMinutes >= lockMinutes) {
-          const lockLabel = sunnah.locksAt.charAt(0).toUpperCase() + sunnah.locksAt.slice(1);
-          return NextResponse.json(
-            { error: `This sunnah can no longer be logged — ${lockLabel} has started.` },
-            { status: 403 },
-          );
-        }
       }
     }
   }

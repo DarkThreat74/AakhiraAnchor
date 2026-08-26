@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X } from "lucide-react";
+import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X, WifiOff } from "lucide-react";
 import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 
 interface PerPrayerStats {
@@ -127,6 +127,19 @@ export default function PrayerDashboard() {
   const [madhab, setMadhab] = useState<string>("standard");
   const [sunnahError, setSunnahError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
+
+  // Track online/offline status
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
 
   const todayStr = new Date().toLocaleDateString("en-CA");
 
@@ -435,6 +448,21 @@ export default function PrayerDashboard() {
         Prayer
       </h1>
 
+      {/* Offline indicator */}
+      {!isOnline && (
+        <div
+          className="mb-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"
+          style={{
+            borderColor: "var(--color-warmth)",
+            backgroundColor: "color-mix(in oklab, var(--color-warmth) 8%, transparent)",
+            color: "var(--color-warmth)",
+          }}
+        >
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          <span>You&apos;re offline. Prayer logs and sunnahs will sync when you reconnect.</span>
+        </div>
+      )}
+
       {/* ── Tab navigation ── */}
       <div className="mb-6 grid grid-cols-4 gap-1 rounded-xl border p-1" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
         {([
@@ -727,9 +755,9 @@ export default function PrayerDashboard() {
                               <div className="flex flex-wrap gap-1.5">
                                 {beforeSunnahs.map((s) => {
                                   const sunnahPrayed = todaySunnahs.includes(s.key);
-                                  // Disabled if fard hasn't started, OR if window passed (but allow un-logging)
                                   const windowPassed = currentMinutes >= windowEndMinutes;
-                                  const disabled = sunnahPrayed
+                                  // When offline, don't disable (can't verify server-side)
+                                  const disabled = !isOnline ? false : sunnahPrayed
                                     ? false // allow un-logging
                                     : !timeStarted || windowPassed;
                                   const reason = !timeStarted
@@ -756,8 +784,8 @@ export default function PrayerDashboard() {
                                 {afterSunnahs.map((s) => {
                                   const sunnahPrayed = todaySunnahs.includes(s.key);
                                   const windowPassed = currentMinutes >= windowEndMinutes;
-                                  // Disabled if fard not prayed, OR if window passed (but allow un-logging)
-                                  const disabled = sunnahPrayed
+                                  // When offline, don't disable based on window (only keep fard-prereq)
+                                  const disabled = !isOnline ? false : sunnahPrayed
                                     ? false
                                     : !prayed || windowPassed;
                                   const reason = !prayed
@@ -788,21 +816,20 @@ export default function PrayerDashboard() {
 
                                   if (s.key === "witr") {
                                     // Witr requires Isha to be prayed (but allow un-logging)
-                                    standaloneDisabled = sunnahPrayed ? false : !isPrayed("isha");
+                                    // When offline, skip this check
+                                    standaloneDisabled = !isOnline ? false : sunnahPrayed ? false : !isPrayed("isha");
                                     standaloneReason = "Log Isha as prayed first";
                                   } else if (s.key === "duha") {
-                                    // Duha: requires Fajr time to have started
-                                    // After Dhuhr starts, visually grey out but STILL allow logging
-                                    // (user explicitly wants to allow late Duha logging)
                                     const [dh, dm] = prayerTimes.dhuhr.split(" ")[0].split(":").map(Number);
                                     const dhuhrMin = dh * 60 + dm;
                                     const afterDhuhr = currentMinutes >= dhuhrMin;
-                                    standaloneDisabled = !timeStarted; // only disabled before Fajr starts
+                                    // When offline, don't disable
+                                    standaloneDisabled = !isOnline ? false : !timeStarted;
                                     standaloneReason = afterDhuhr
                                       ? "Duha time has passed — logging late"
                                       : `${PRAYER_LABELS[prayer]} hasn't started yet`;
                                   } else {
-                                    standaloneDisabled = !timeStarted;
+                                    standaloneDisabled = !isOnline ? false : !timeStarted;
                                     standaloneReason = `${PRAYER_LABELS[prayer]} hasn't started yet`;
                                   }
 

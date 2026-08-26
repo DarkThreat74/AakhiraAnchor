@@ -235,17 +235,36 @@ export default function PrayerCheckinPopup({
                   The {prayerLabel} window has ended.
                 </p>
                 <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-                  You can no longer log this prayer. In sha&apos; Allah, catch the next one on time.
+                  You can still log it if you prayed but couldn&apos;t check in earlier.
                 </p>
               </>
             )}
-            <button
-              onClick={onClose}
-              className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
-              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
-            >
-              Close
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePrayedYes}
+                disabled={loading}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{
+                  borderColor: "var(--color-success)",
+                  backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)",
+                  color: "var(--color-success)",
+                }}
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Yes, I prayed
+              </button>
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{
+                  borderColor: "var(--color-paper-3)",
+                  color: "var(--color-ink-muted)",
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
 

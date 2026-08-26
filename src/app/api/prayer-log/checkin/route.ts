@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { getPrayerWindowState, getCurrentMinutesInTimezone, getPrayerWindowStart, type PrayerTimings, type PrayerKey } from "@/lib/prayer/checkin";
+// Window check helpers no longer needed server-side — users can log at any time
 
 export const dynamic = "force-dynamic";
 
@@ -51,66 +51,10 @@ export async function POST(request: NextRequest) {
   const validStatuses = ["prayed", "missed", "pending", "assumed_prayed"];
   const finalStatus = validStatuses.includes(status || "") ? status : "prayed";
 
-  // ── Window check: don't allow logging "prayed" after the prayer window has ended ──
-  // "pending" (undo) is always allowed.
-  if (finalStatus === "prayed") {
-    // Get user's prayer settings (timezone)
-    const [settings] = await db
-      .select({ timezone: schema.prayerSettings.timezone })
-      .from(schema.prayerSettings)
-      .where(eq(schema.prayerSettings.userId, session.userId))
-      .limit(1);
-
-    if (settings?.timezone) {
-      // Get cached prayer times for this date
-      const [cache] = await db
-        .select()
-        .from(schema.prayerTimesCache)
-        .where(
-          and(
-            eq(schema.prayerTimesCache.userId, session.userId),
-            eq(schema.prayerTimesCache.date, date),
-          ),
-        )
-        .limit(1);
-
-      if (cache) {
-        const timings: PrayerTimings = {
-          fajr: cache.fajr,
-          sunrise: cache.sunrise,
-          dhuhr: cache.dhuhr,
-          asr: cache.asr,
-          maghrib: cache.maghrib,
-          isha: cache.isha,
-        };
-
-        const currentMinutes = getCurrentMinutesInTimezone(settings.timezone);
-
-        const state = getPrayerWindowState(prayerName as PrayerKey, currentMinutes, timings);
-        if (state !== "open") {
-          const prayerLabel = prayerName.charAt(0).toUpperCase() + prayerName.slice(1);
-          if (state === "before") {
-            // Format the start time for the message
-            const startMinutes = getPrayerWindowStart(prayerName as PrayerKey, timings);
-            const startH = Math.floor(startMinutes / 60);
-            const startM = startMinutes % 60;
-            const period = startH >= 12 ? "PM" : "AM";
-            const displayH = startH === 0 ? 12 : startH > 12 ? startH - 12 : startH;
-            const timeStr = `${displayH}:${String(startM).padStart(2, "0")} ${period}`;
-            return NextResponse.json(
-              { error: `${prayerLabel} hasn't started yet. It begins at ${timeStr}.` },
-              { status: 403 },
-            );
-          }
-          return NextResponse.json(
-            { error: `The ${prayerLabel} prayer window has ended. You can no longer log this prayer.` },
-            { status: 403 },
-          );
-        }
-      }
-      // If no cached prayer times, fail open (allow the check-in)
-    }
-  }
+  // Note: No window check — users can log prayers at any time.
+  // This is essential for offline use (when the outbox syncs, the window
+  // may have passed) and for users who prayed but couldn't log at the time.
+  // The cron job handles auto-resolution (assumed_prayed) for unmarked prayers.
 
   // Upsert prayer log entry
   const [existing] = await db
