@@ -20,7 +20,7 @@ export interface SunnahDefinition {
   rakats: number;
   position: SunnahPosition;
   associatedFard: FardPrayer;
-  category: "muakkadah" | "ghayr_muakkadah" | "wajib" | "raghibah" | "nafl_muakkadah";
+  category: "muakkadah" | "ghayr_muakkadah" | "wajib" | "raghibah" | "nafl_muakkadah" | "nafl";
   /** The next fard prayer that locks this sunnah (e.g., Dhuhr sunnahs lock at Asr) */
   locksAt: FardPrayer | null;
 }
@@ -94,6 +94,25 @@ const STANDARD_SUNNAHS: SunnahDefinition[] = [
     category: "muakkadah",
     locksAt: "fajr", // Witr can be prayed until Fajr starts
   },
+  // ── Nafl prayers (voluntary) ──
+  {
+    key: "duha",
+    label: "Duha (2 rak'ahs)",
+    rakats: 2,
+    position: "standalone",
+    associatedFard: "fajr", // Associated with Fajr window conceptually
+    category: "nafl",
+    locksAt: "dhuhr", // Duha window is from ~20 min after sunrise until Dhuhr
+  },
+  {
+    key: "awwabin",
+    label: "Awwabin (6 rak'ahs)",
+    rakats: 6,
+    position: "after",
+    associatedFard: "maghrib",
+    category: "nafl",
+    locksAt: "isha", // Awwabin is prayed after Maghrib, before Isha
+  },
 ];
 
 /**
@@ -164,6 +183,25 @@ const HANAFI_SUNNAHS: SunnahDefinition[] = [
     associatedFard: "isha",
     category: "wajib",
     locksAt: "fajr",
+  },
+  // ── Nafl prayers (voluntary) ──
+  {
+    key: "duha",
+    label: "Duha (2 rak'ahs)",
+    rakats: 2,
+    position: "standalone",
+    associatedFard: "fajr",
+    category: "nafl",
+    locksAt: "dhuhr",
+  },
+  {
+    key: "awwabin",
+    label: "Awwabin (6 rak'ahs)",
+    rakats: 6,
+    position: "after",
+    associatedFard: "maghrib",
+    category: "nafl",
+    locksAt: "isha",
   },
 ];
 

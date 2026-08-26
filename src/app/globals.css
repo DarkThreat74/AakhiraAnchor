@@ -139,6 +139,12 @@ textarea {
   50% { opacity: 0.4; transform: scaleY(1); }
 }
 
+/* ── Current prayer pulse (timeline "now" indicator) ── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
 /* ── Reduced motion: respect user preference (WCAG 2.3.3) ── */
 @media (prefers-reduced-motion: reduce) {
   *,

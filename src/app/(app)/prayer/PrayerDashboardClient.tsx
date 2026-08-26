@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X } from "lucide-react";
-import { getSunnahsForMadhab } from "@/lib/prayer/sunnahs";
+import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 
 interface PerPrayerStats {
   prayer: string;
@@ -462,7 +462,7 @@ export default function PrayerDashboard() {
           ════════════════════════════════════════════════════════════════ */}
       {activeTab === "comparison" && (
         <div className="space-y-6">
-          {/* ── Your day progress (clean list, Fajr on top) ── */}
+          {/* ── Today's Progress — Vertical Timeline ── */}
           <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
             <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
               <div className="flex items-center justify-between">
@@ -483,72 +483,193 @@ export default function PrayerDashboard() {
               </div>
             </div>
 
-            {/* Prayer list — Fajr on top, downward */}
-            <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
-              {prayerTimes && PRAYER_ORDER.map((prayer) => {
-                const prayed = isPrayed(prayer);
-                const color = PRAYER_COLORS[prayer];
-                const time = prayerTimes[prayer];
-                const prayerSunnahs = sunnahDefinitions.filter((s) => s.associatedFard === prayer);
+            {/* ── Vertical Timeline ── */}
+            {prayerTimes ? (
+              <div className="px-4 py-2 sm:px-5">
+                {PRAYER_ORDER.map((prayer, idx) => {
+                  const prayed = isPrayed(prayer);
+                  const status = getPrayerStatus(prayer);
+                  const color = PRAYER_COLORS[prayer];
+                  const time = prayerTimes[prayer];
+                  const isLast = idx === PRAYER_ORDER.length - 1;
+                  const prayerSunnahs = sunnahDefinitions.filter((s) => s.associatedFard === prayer);
+                  const beforeSunnahs = prayerSunnahs.filter((s) => s.position === "before");
+                  const afterSunnahs = prayerSunnahs.filter((s) => s.position === "after");
+                  const standaloneSunnahs = prayerSunnahs.filter((s) => s.position === "standalone");
 
-                return (
-                  <div key={prayer} className="flex items-center gap-3 px-4 py-3 sm:px-5">
-                    {/* Status circle */}
-                    <div
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2"
-                      style={{
-                        borderColor: prayed ? color : "var(--color-paper-3)",
-                        backgroundColor: prayed ? color : "transparent",
-                      }}
-                    >
-                      {prayed && <Check className="h-4 w-4" style={{ color: "var(--color-paper)" }} />}
-                    </div>
+                  // Determine if this prayer's time has started
+                  const [h, m] = time.split(" ")[0].split(":").map(Number);
+                  const prayerMinutes = h * 60 + m;
+                  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                  const timeStarted = currentMinutes >= prayerMinutes;
+                  const isCurrent = timeStarted && !prayed && (idx === PRAYER_ORDER.length - 1 ||
+                    currentMinutes < (PRAYER_ORDER[idx + 1] ? (() => {
+                      const [nh, nm] = prayerTimes[PRAYER_ORDER[idx + 1]].split(" ")[0].split(":").map(Number);
+                      return nh * 60 + nm;
+                    })() : 9999));
 
-                    {/* Prayer name + time */}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-                        {PRAYER_LABELS[prayer]}
-                      </div>
-                      <div className="text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                        {format12h(time)}
-                      </div>
-                    </div>
-
-                    {/* Sunnah toggles — inline, compact */}
-                    {prayerSunnahs.length > 0 && (
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                        {prayerSunnahs.map((s) => {
-                          const sunnahPrayed = todaySunnahs.includes(s.key);
-                          return (
-                            <button
-                              key={s.key}
-                              onClick={() => handleToggleSunnah(s.key)}
-                              className="flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors"
+                  return (
+                    <div key={prayer} className="relative flex gap-3 pb-4 sm:gap-4">
+                      {/* Timeline line + node */}
+                      <div className="flex flex-col items-center">
+                        {/* Node */}
+                        <div
+                          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-10 sm:w-10"
+                          style={{
+                            borderColor: prayed ? color : isCurrent ? color : "var(--color-paper-3)",
+                            backgroundColor: prayed ? color : isCurrent ? "color-mix(in oklab, " + color + " 10%, transparent)" : "transparent",
+                            ...(isCurrent && !prayed ? { boxShadow: "0 0 0 3px color-mix(in oklab, " + color + " 25%, transparent)" } : {}),
+                          }}
+                        >
+                          {prayed ? (
+                            <Check className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "var(--color-paper)" }} />
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase sm:text-xs" style={{ color: isCurrent ? color : "var(--color-ink-muted)" }}>
+                              {prayer.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          {/* Pulsing dot for current prayer */}
+                          {isCurrent && !prayed && (
+                            <span
+                              className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
                               style={{
-                                borderColor: sunnahPrayed ? "var(--color-success)" : "var(--color-paper-3)",
-                                color: sunnahPrayed ? "var(--color-success)" : "var(--color-ink-muted)",
-                                backgroundColor: sunnahPrayed ? "color-mix(in oklab, var(--color-success) 8%, transparent)" : "transparent",
+                                backgroundColor: color,
+                                animation: "pulse 2s ease-in-out infinite",
                               }}
-                              title={s.label}
-                            >
-                              {sunnahPrayed && <Check className="h-2.5 w-2.5" />}
-                              <span>{s.rakats}</span>
-                            </button>
-                          );
-                        })}
+                            />
+                          )}
+                        </div>
+                        {/* Connecting line */}
+                        {!isLast && (
+                          <div
+                            className="mt-1 w-0.5 flex-1"
+                            style={{
+                              backgroundColor: prayed ? "color-mix(in oklab, " + color + " 30%, var(--color-paper-3))" : "var(--color-paper-3)",
+                              minHeight: "1.5rem",
+                            }}
+                          />
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-              {!prayerTimes && (
-                <div className="px-4 py-8 text-center">
-                  <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
-                    Prayer times not loaded. Sync in Settings.
-                  </p>
-                </div>
-              )}
-            </div>
+
+                      {/* Content */}
+                      <div className={`min-w-0 flex-1 ${isLast ? "pb-0" : ""}`}>
+                        {/* Prayer header */}
+                        <div className="flex items-center justify-between gap-2 pt-1.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                                {PRAYER_LABELS[prayer]}
+                              </span>
+                              {/* Status badge */}
+                              {prayed ? (
+                                <span
+                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  style={{
+                                    backgroundColor: "color-mix(in oklab, " + color + " 15%, transparent)",
+                                    color: color,
+                                  }}
+                                >
+                                  {status === "assumed_prayed" ? "Assumed" : "Prayed"}
+                                </span>
+                              ) : isCurrent ? (
+                                <span
+                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  style={{
+                                    backgroundColor: "color-mix(in oklab, " + color + " 12%, transparent)",
+                                    color: color,
+                                  }}
+                                >
+                                  Now
+                                </span>
+                              ) : timeStarted ? (
+                                <span
+                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  style={{
+                                    backgroundColor: "var(--color-paper-2)",
+                                    color: "var(--color-ink-muted)",
+                                  }}
+                                >
+                                  Pending
+                                </span>
+                              ) : (
+                                <span
+                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  style={{
+                                    backgroundColor: "var(--color-paper-2)",
+                                    color: "var(--color-ink-muted)",
+                                  }}
+                                >
+                                  Upcoming
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                              {format12h(time)}
+                              {timeStarted && !prayed && (
+                                <span className="ml-1.5" style={{ color: "var(--color-warmth)" }}>
+                                  {Math.floor((currentMinutes - prayerMinutes) / 60)}h {(currentMinutes - prayerMinutes) % 60}m ago
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Sunnah / Nafl pills */}
+                        {prayerSunnahs.length > 0 && (
+                          <div className="mt-2 space-y-1.5">
+                            {/* Before sunnahs */}
+                            {beforeSunnahs.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {beforeSunnahs.map((s) => (
+                                  <SunnahPill
+                                    key={s.key}
+                                    sunnah={s}
+                                    prayed={todaySunnahs.includes(s.key)}
+                                    onToggle={() => handleToggleSunnah(s.key)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {/* After sunnahs */}
+                            {afterSunnahs.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {afterSunnahs.map((s) => (
+                                  <SunnahPill
+                                    key={s.key}
+                                    sunnah={s}
+                                    prayed={todaySunnahs.includes(s.key)}
+                                    onToggle={() => handleToggleSunnah(s.key)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {/* Standalone (Witr, Duha) */}
+                            {standaloneSunnahs.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {standaloneSunnahs.map((s) => (
+                                  <SunnahPill
+                                    key={s.key}
+                                    sunnah={s}
+                                    prayed={todaySunnahs.includes(s.key)}
+                                    onToggle={() => handleToggleSunnah(s.key)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-center">
+                <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                  Prayer times not loaded. Sync in Settings.
+                </p>
+              </div>
+            )}
 
             {sunnahError && (
               <div className="border-t px-4 py-2 text-xs" style={{ borderColor: "var(--color-paper-3)", color: "var(--color-warmth)" }}>
@@ -1128,6 +1249,51 @@ function ComparisonRow({
         </span>
       </div>
     </div>
+  );
+}
+
+// ── Sunnah / Nafl pill button ──
+const SUNNAH_CATEGORY_STYLES: Record<string, { bg: string; border: string; text: string; label: string }> = {
+  muakkadah: { bg: "color-mix(in oklab, var(--color-accent) 8%, transparent)", border: "var(--color-accent)", text: "var(--color-accent)", label: "Sunnah" },
+  ghayr_muakkadah: { bg: "color-mix(in oklab, var(--color-ink-soft) 8%, transparent)", border: "var(--color-ink-soft)", text: "var(--color-ink-soft)", label: "Sunnah" },
+  wajib: { bg: "color-mix(in oklab, var(--color-warmth) 8%, transparent)", border: "var(--color-warmth)", text: "var(--color-warmth)", label: "Wajib" },
+  raghibah: { bg: "color-mix(in oklab, var(--color-success) 8%, transparent)", border: "var(--color-success)", text: "var(--color-success)", label: "Sunnah" },
+  nafl_muakkadah: { bg: "color-mix(in oklab, var(--color-accent) 8%, transparent)", border: "var(--color-accent)", text: "var(--color-accent)", label: "Nafl" },
+  nafl: { bg: "color-mix(in oklab, var(--color-success) 6%, transparent)", border: "var(--color-success)", text: "var(--color-success)", label: "Nafl" },
+};
+
+function SunnahPill({
+  sunnah,
+  prayed,
+  onToggle,
+}: {
+  sunnah: SunnahDefinition;
+  prayed: boolean;
+  onToggle: () => void;
+}) {
+  const cat = SUNNAH_CATEGORY_STYLES[sunnah.category] || SUNNAH_CATEGORY_STYLES.nafl;
+
+  return (
+    <button
+      onClick={onToggle}
+      className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors active:scale-95 sm:text-[11px]"
+      style={{
+        borderColor: prayed ? cat.border : "var(--color-paper-3)",
+        color: prayed ? cat.text : "var(--color-ink-muted)",
+        backgroundColor: prayed ? cat.bg : "transparent",
+        minHeight: 28,
+      }}
+      title={`${cat.label} — ${sunnah.label}`}
+    >
+      {prayed ? (
+        <Check className="h-3 w-3 shrink-0" />
+      ) : (
+        <div className="h-3 w-3 shrink-0 rounded-full border" style={{ borderColor: "var(--color-paper-3)" }} />
+      )}
+      <span className="whitespace-nowrap">
+        {sunnah.label}
+      </span>
+    </button>
   );
 }
 

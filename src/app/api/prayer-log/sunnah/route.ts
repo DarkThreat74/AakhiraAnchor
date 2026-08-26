@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
   // ── Algorithmic checks for logging (prayed = true) ──
 
   // 1. For "after" sunnahs: the associated fard must be logged as "prayed"
+  // Also for Witr (standalone but requires Isha to be prayed first)
+  // Nafls like Duha don't require any fard to be prayed first
   if (sunnah.position === "after" || (sunnah.position === "standalone" && sunnah.key === "witr")) {
     const [fardLog] = await db
       .select()
