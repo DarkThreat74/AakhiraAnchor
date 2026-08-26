@@ -720,11 +720,14 @@ export default function PrayerDashboard() {
                               </span>
                               <span className="mx-1" style={{ color: "var(--color-paper-3)" }}>—</span>
                               <span>{windowEndLabel}</span>
-                              {inWindow && !prayed && (
-                                <span className="ml-1.5" style={{ color: "var(--color-warmth)" }}>
-                                  {Math.floor(elapsedInWindow / 60)}h {elapsedInWindow % 60}m in
-                                </span>
-                              )}
+                              {inWindow && !prayed && (() => {
+                                const remaining = windowEndMinutes - currentMinutes;
+                                return (
+                                  <span className="ml-1.5" style={{ color: "var(--color-warmth)" }}>
+                                    {Math.floor(remaining / 60)}h {remaining % 60}m left
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
