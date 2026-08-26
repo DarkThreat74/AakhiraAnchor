@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor } from "lucide-react";
+import { clearApiCache } from "@/lib/sw-helpers";
 
 interface PrayerSettings {
   latitude: string;
@@ -273,6 +274,7 @@ export default function SettingsClient({
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
+        clearApiCache();
         setPrayerSettings({
           latitude: locationResult.lat,
           longitude: locationResult.lng,
@@ -318,6 +320,7 @@ export default function SettingsClient({
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
+        clearApiCache();
         setPrayerSettings({ ...prayerSettings, calculationMethod: data.calculationMethod || selectedMethod });
         setMethodMsg({ ok: true, text: "Method saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
@@ -356,6 +359,7 @@ export default function SettingsClient({
         }),
       });
       if (res.ok) {
+        clearApiCache();
         setPrayerSettings({ ...prayerSettings, madhab: selectedMadhab });
         setMadhabMsg({ ok: true, text: "Madhab saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
@@ -412,6 +416,7 @@ export default function SettingsClient({
       const res = await fetch("/api/prayer-times/sync", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        clearApiCache();
         setSyncMsg({ ok: true, text: `Synced ${data.daysCached ?? 0} days of prayer times.` });
         await refreshPrayerTimes();
       } else {
@@ -431,6 +436,7 @@ export default function SettingsClient({
       const res = await fetch("/api/share/generate", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.token) {
+        clearApiCache();
         setShareEnabled(true);
         setShareUrl(`${window.location.origin}${data.url}`);
       } else {
@@ -448,6 +454,7 @@ export default function SettingsClient({
     try {
       const res = await fetch("/api/share/generate", { method: "DELETE" });
       if (res.ok) {
+        clearApiCache();
         setShareEnabled(false);
         setShareUrl(null);
       } else {
@@ -692,6 +699,7 @@ export default function SettingsClient({
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
+        clearApiCache();
         setDisplayName(data.displayName);
         setEditingName(false);
         setNameMsg({ ok: true, text: "Name updated." });

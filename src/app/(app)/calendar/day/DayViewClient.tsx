@@ -6,6 +6,7 @@ import Link from "next/link";
 import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
 import { useUISFX } from "@/components/uisfx-provider";
 import { getDisplayAsrTime, type PrayerKey } from "@/lib/prayer/checkin";
+import { clearApiCache } from "@/lib/sw-helpers";
 
 interface CalendarEvent {
   id: string;
@@ -361,6 +362,7 @@ export default function DayViewClient({ date }: { date: string }) {
 
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
+        clearApiCache();
 
         // Offline response — event was queued in the SW outbox
         if (data.offline && data._pending) {
@@ -457,10 +459,7 @@ export default function DayViewClient({ date }: { date: string }) {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (res.ok) {
         play("delete");
-        // Clear the SW API cache so stale events data isn't served on next refetch
-        if ("caches" in window) {
-          await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
-        }
+        clearApiCache();
       } else {
         // Delete failed — refetch to restore the event
         const refetch = await fetch(`/api/events?date=${date}`);
@@ -509,6 +508,7 @@ export default function DayViewClient({ date }: { date: string }) {
 
       if (res.ok) {
         const updated = await res.json().catch(() => ({}));
+        clearApiCache();
         // Offline response — update was queued in the SW outbox
         if (updated.offline) {
           // Update the local event with the new values and mark as pending

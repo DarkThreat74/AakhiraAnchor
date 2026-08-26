@@ -5,6 +5,7 @@ import { Check, X, Loader2, MapPin } from "lucide-react";
 import { shouldShowMasjidQuestion, getPrayerWindowState, getPrayerWindowStart, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
 import { getSunnahsForFard, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 import { useUISFX } from "@/components/uisfx-provider";
+import { clearApiCache } from "@/lib/sw-helpers";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
@@ -99,6 +100,7 @@ export default function PrayerCheckinPopup({
 
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
+        clearApiCache();
         // If there are sunnahs for this prayer, show the sunnah step
         if (sunnahDefs.length > 0) {
           setStep("sunnah");
@@ -130,6 +132,7 @@ export default function PrayerCheckinPopup({
         body: JSON.stringify({ date, sunnahKey: sunnah.key, prayed: !isLogged }),
       });
       if (res.ok) {
+        clearApiCache();
         setSunnahLogs((prev) => ({ ...prev, [sunnah.key]: !isLogged }));
       } else {
         const data = await res.json().catch(() => ({}));
@@ -167,6 +170,7 @@ export default function PrayerCheckinPopup({
     })
       .then((res) => res.json().catch(() => ({})))
       .then(() => {
+        clearApiCache();
         play("undo");
         onCheckedIn({ status: "pending", wentToMasjid: null });
       })

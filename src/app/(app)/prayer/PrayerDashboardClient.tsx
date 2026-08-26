@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X, WifiOff } from "lucide-react";
 import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs";
+import { clearApiCache } from "@/lib/sw-helpers";
 
 interface PerPrayerStats {
   prayer: string;
@@ -283,6 +284,7 @@ export default function PrayerDashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && !data.offline && data.friend) {
+        clearApiCache();
         setFriends((prev) => [...prev, data.friend]);
         setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}! You can now see each other's stats.`);
         setAddFriendCode("");
@@ -305,6 +307,7 @@ export default function PrayerDashboard() {
     try {
       const res = await fetch(`/api/prayer-friends/remove?friendId=${friendId}`, { method: "DELETE" });
       if (res.ok) {
+        clearApiCache();
         setFriends((prev) => prev.filter((f) => f.id !== friendId));
       }
     } catch {
@@ -322,6 +325,7 @@ export default function PrayerDashboard() {
         body: JSON.stringify({ date: todayStr, sunnahKey, prayed: !isLogged }),
       });
       if (res.ok) {
+        clearApiCache();
         setTodaySunnahs((prev) =>
           !isLogged ? [...prev, sunnahKey] : prev.filter((k) => k !== sunnahKey),
         );
@@ -387,6 +391,7 @@ export default function PrayerDashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        clearApiCache();
         if (data.offline) {
           if (qadaa) {
             const colMap: Record<string, keyof typeof qadaa> = {
