@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Spectral, Amiri } from "next/font/google";
 import "./globals.css";
+import { UISFXProvider } from "@/components/uisfx-provider";
 
 const spectral = Spectral({
   variable: "--font-spectral",
@@ -70,7 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${spectral.variable} ${amiri.variable} h-full antialiased`}
     >
       <body className="min-h-dvh flex flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
-        {children}
+        <UISFXProvider>{children}</UISFXProvider>
       </body>
     </html>
   );

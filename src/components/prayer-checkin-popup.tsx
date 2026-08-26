@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Check, X, Loader2, MapPin } from "lucide-react";
 import { shouldShowMasjidQuestion, getPrayerWindowState, getPrayerWindowStart, type PrayerKey, type PrayerTimings } from "@/lib/prayer/checkin";
 import { getSunnahsForFard, type SunnahDefinition } from "@/lib/prayer/sunnahs";
+import { useUISFX } from "@/components/uisfx-provider";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
@@ -28,6 +29,7 @@ export default function PrayerCheckinPopup({
   onCheckedIn,
   existingStatus,
 }: PrayerCheckinPopup) {
+  const { play } = useUISFX();
   const [step, setStep] = useState<"main" | "masjid" | "sunnah">("main");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,15 +103,18 @@ export default function PrayerCheckinPopup({
           setStep("sunnah");
           setLoading(false);
         } else {
+          play("check");
           onCheckedIn({ status: data.status, wentToMasjid: data.wentToMasjid });
         }
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to check in.");
+        play("error");
         setLoading(false);
       }
     } catch {
       setError("Network error.");
+      play("error");
       setLoading(false);
     }
   }
@@ -161,10 +166,12 @@ export default function PrayerCheckinPopup({
     })
       .then((res) => res.json())
       .then(() => {
+        play("undo");
         onCheckedIn({ status: "pending", wentToMasjid: null });
       })
       .catch(() => {
         setError("Network error.");
+        play("error");
         setLoading(false);
       });
   }
@@ -189,7 +196,7 @@ export default function PrayerCheckinPopup({
             {prayerLabel}
           </h2>
           <button
-            onClick={onClose}
+            onClick={() => { play("close"); onClose(); }}
             className="rounded-lg p-1 transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-muted)" }}
             aria-label="Close"

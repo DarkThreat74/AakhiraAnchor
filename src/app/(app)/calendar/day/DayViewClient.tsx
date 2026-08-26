@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff } from "lucide-react";
 import Link from "next/link";
 import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
+import { useUISFX } from "@/components/uisfx-provider";
 import { getDisplayAsrTime, type PrayerKey } from "@/lib/prayer/checkin";
 
 interface CalendarEvent {
@@ -39,10 +40,10 @@ const PRAYER_NAMES: Array<{
 }> = [
   { key: "fajr", label: "Fajr", color: "var(--color-accent)", isPrayer: true },
   { key: "sunrise", label: "Sunrise", color: "var(--color-warmth)", isPrayer: false },
-  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)", isPrayer: false },
-  { key: "asr", label: "Asr", color: "var(--color-accent)", isPrayer: false },
-  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)", isPrayer: false },
-  { key: "isha", label: "Isha", color: "var(--color-accent)", isPrayer: false },
+  { key: "dhuhr", label: "Dhuhr", color: "var(--color-accent)", isPrayer: true },
+  { key: "asr", label: "Asr", color: "var(--color-accent)", isPrayer: true },
+  { key: "maghrib", label: "Maghrib", color: "var(--color-warmth)", isPrayer: true },
+  { key: "isha", label: "Isha", color: "var(--color-accent)", isPrayer: true },
 ];
 
 // Color palette for reminders — each reminder gets a distinct color
@@ -92,6 +93,7 @@ function getReminderColor(title: string): string {
 }
 
 export default function DayViewClient({ date }: { date: string }) {
+  const { play } = useUISFX();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [loading, setLoading] = useState(true);
@@ -378,6 +380,7 @@ export default function DayViewClient({ date }: { date: string }) {
             setEvents((prev) => [...prev, tempEvent]);
           }
           setSuccessMsg("Saved offline — will sync when online.");
+          play("success");
           setShowAddForm(false);
           setNewTitle("");
           setNewColor(null);
@@ -431,9 +434,11 @@ export default function DayViewClient({ date }: { date: string }) {
       } else {
         const data = await res.json();
         setError(data.error || "Failed to create event.");
+        play("error");
       }
     } catch {
       setError("Network error.");
+      play("error");
     }
   }
 
@@ -441,6 +446,7 @@ export default function DayViewClient({ date }: { date: string }) {
     // If it's a pending offline event, just remove it from local state
     if (id.startsWith("offline-")) {
       setEvents((prev) => prev.filter((e) => e.id !== id));
+      play("delete");
       return;
     }
     // Optimistically remove from UI immediately
@@ -448,6 +454,7 @@ export default function DayViewClient({ date }: { date: string }) {
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (res.ok) {
+        play("delete");
         // Clear the SW API cache so stale events data isn't served on next refetch
         if ("caches" in window) {
           await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
@@ -515,6 +522,7 @@ export default function DayViewClient({ date }: { date: string }) {
           };
           setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? localUpdated : e)));
           setSuccessMsg("Saved offline — will sync when online.");
+          play("success");
           setEditingEvent(null);
           setNewTitle("");
           setNewColor(null);
@@ -524,6 +532,7 @@ export default function DayViewClient({ date }: { date: string }) {
           return;
         }
         setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? updated : e)));
+        play("success");
         // Clear SW API cache so stale events data isn't served on next refetch
         if ("caches" in window) {
           await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
@@ -899,6 +908,7 @@ export default function DayViewClient({ date }: { date: string }) {
           setRecurrenceDays([]);
           setEditingEvent(null);
           setShowAddForm(true);
+          play("open");
         }}
         className="fixed right-5 bottom-20 z-30 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 lg:bottom-6"
         style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}

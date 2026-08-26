@@ -361,6 +361,24 @@ export const onboardingResponses = pgTable('onboarding_responses', {
   completedAt: timestamp('completed_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// ─── Trusted Devices (FingerprintJS) ───
+
+export const trustedDevices = pgTable('trusted_devices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // SHA-256 hash of the FingerprintJS visitorId — never store raw fingerprint
+  fingerprintHash: text('fingerprint_hash').notNull(),
+  // Optional label for the user to identify the device (e.g. "iPhone 15")
+  label: text('label'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  // One device per user — prevents duplicate entries
+  userDeviceIdx: uniqueIndex('trusted_devices_user_hash_idx').on(t.userId, t.fingerprintHash),
+}));
+
 // ─── Type Exports (for use in app code) ───
 
 export type User = typeof users.$inferSelect;
@@ -385,3 +403,4 @@ export type DhikrSequence = typeof dhikrSequences.$inferSelect;
 export type Talk = typeof talks.$inferSelect;
 export type OnboardingResponse = typeof onboardingResponses.$inferSelect;
 export type PrayerFriend = typeof prayerFriends.$inferSelect;
+export type TrustedDevice = typeof trustedDevices.$inferSelect;
