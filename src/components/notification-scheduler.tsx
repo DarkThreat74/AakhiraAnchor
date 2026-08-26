@@ -43,6 +43,7 @@ interface CalendarEvent {
   title: string;
   startAt: string;
   type: "block" | "task" | "reminder";
+  notify?: boolean;
 }
 
 const PRAYER_NOTIFICATIONS: Array<{ key: keyof PrayerTimes; label: string }> = [
@@ -255,6 +256,8 @@ export default function NotificationScheduler() {
       const now = new Date();
 
       for (const event of events) {
+        // Skip events where the user disabled notifications
+        if (event.notify === false) continue;
         const eventStart = new Date(event.startAt);
         const notifyTime = new Date(eventStart.getTime() - 15 * 60 * 1000);
         const diffMs = notifyTime.getTime() - now.getTime();

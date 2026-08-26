@@ -21,7 +21,6 @@
 | Hosting | Vercel | Spec requirement. Cron, Web Push, edge functions. |
 | Push | Vercel Web Push (or web-push library) | Spec requirement. |
 | Prayer times | AlAdhan API | Spec requirement. Monthly fetch + cache. |
-| Payments | Stripe | Spec requirement. Plus tier only. |
 | LLM | OpenRouter (Claude/GPT) | For NL event entry only. Cost-controlled (max_tokens, rate limit). |
 | Package manager | **pnpm** | CODEBASE_PATTERNS.md convention. `pnpm-lock.yaml` committed. |
 | Content (hadith/dhikr/lessons) | Seeded tables, human-curated | **Never AI-generated.** Empty until user seeds. |
@@ -40,7 +39,7 @@ to Vercel as a bare shell.
    - `next-auth@beta`, `@auth/drizzle-adapter`
    - `bcryptjs`, `@types/bcryptjs` (if password auth)
 3. Create `src/lib/env.ts` — centralize ALL env vars (Neon URL, auth secret,
-   AlAdhan base URL, Twilio creds, Stripe creds, cron secret, app URL).
+   AlAdhan base URL, cron secret, app URL).
    Follow CODEBASE_PATTERNS.md §28 pattern.
 4. Create `src/lib/env.public.ts` — client-safe vars only (app URL, AlAdhan
    public base if needed).
@@ -318,41 +317,7 @@ This is the core of the app — test thoroughly with fake windows first.
 
 ---
 
-## Phase 8 — Subscription Gate
-
-**Goal:** Stripe Plus tier. Gate depth/convenience, never prayer features.
-
-### Tasks
-1. Create `src/lib/stripe.ts` — Stripe client (cached singleton).
-2. `POST /api/webhooks/stripe` — webhook handler:
-   - Verify signature (300s tolerance).
-   - Handle: `checkout.session.completed`, `customer.subscription.updated`,
-     `customer.subscription.deleted`.
-   - Update `users.subscription_tier`.
-   - Idempotent (check `stripe_event_id` before processing).
-   - Use `after()` for post-response work.
-3. Checkout flow: `POST /api/stripe/checkout` → redirect to Stripe.
-4. `src/lib/subscription.ts` — tier check helpers:
-   - `isPlus(user)`, `getHuddlePoolSize(user)`.
-5. **Gating (Plus only):**
-   - Huddle full pool size (free = 8-10 tasks, Plus = ~30 tasks)
-   - AI tone personalization variety
-   - Streak history / analytics depth
-6. **Never gate (free forever):**
-   - Prayer check-ins
-   - Core calendar
-   - Anything that makes it easier to ignore a missed prayer
-
-### Verification
-- Stripe checkout creates subscription, webhook updates tier
-- Webhook idempotent (duplicate events don't double-process)
-- Huddle pool size changes with tier
-- Prayer features work on free tier
-- `tsc --noEmit` + eslint pass
-
----
-
-## Phase 9 — Polish + PWA Store Packaging (LAST)
+## Phase 8 — Polish + PWA Store Packaging (LAST)
 
 **Goal:** Store-ready packages. Only after real usage validates the web version.
 
@@ -381,8 +346,7 @@ This is the core of the app — test thoroughly with fake windows first.
 | 3 | Exact hadith/virtue text for onboarding | Phase 5 | Can defer (placeholder OK) |
 | 4 | Exact dhikr sequences | Phase 6 | Can defer (empty state OK) |
 | 5 | Daily lesson content bank | Phase 6 | Can defer (empty state OK) |
-| 6 | Subscription price point | Phase 8 | **ASK before Phase 8** |
-| 7 | Talks library curated list | Phase 6 | Can defer (empty state OK) |
+| 6 | Talks library curated list | Phase 6 | Can defer (empty state OK) |
 
 ---
 

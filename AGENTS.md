@@ -19,7 +19,7 @@ features (Daily Huddle, lessons, dhikr counter, talks library, NL event entry).
 
 **Stack:** Next.js 14+ App Router · TypeScript · Neon (Postgres) via Drizzle ORM ·
 Vercel (hosting + cron) · Vercel Web Push · AlAdhan API
-(prayer times) · Stripe (subscriptions) · Tailwind CSS.
+(prayer times) · Tailwind CSS.
 
 **Full spec:** See the project brief (the message that created this repo). The
 schema, API routes, state machine, onboarding flow, and build order are all
@@ -32,9 +32,9 @@ defined there. This file distills the *rules* an agent must follow.
 These resolve every ambiguous decision. When in doubt, re-read these.
 
 1. **Prayer accountability is free forever.** Never gate the check-in system
-   behind a paywall. Subscriptions pay for depth and convenience (Huddle pool
-   size, AI tone variety, analytics depth) — never for the thing that makes
-   someone pray.
+   behind a paywall. Future premium features pay for depth and convenience
+   (Huddle pool size, AI tone variety, analytics depth) — never for the
+   thing that makes someone pray.
 
 2. **Never assume the worst on missing data.** Unmarked prayers auto-resolve as
    `assumed_prayed` at day's end — no silent penalty. A week-long absence
@@ -64,7 +64,7 @@ Before writing ANY code, especially UI or auth/payment/DB code:
    user-data code. Apply the defense-in-depth checklist in §5 below and the
    patterns in CODEBASE_PATTERNS.md §1 & §9.
 3. **Use `agent-reach`** for any competitive research or URL reading (prayer time
-   API docs, Stripe docs, etc.). See `.devin/skills/agent-reach/SKILL.md`.
+   API docs, etc.). See `.devin/skills/agent-reach/SKILL.md`.
 4. **Use `full-output-enforcement`** when a task requires exhaustive, unabridged
    code generation (no placeholder `// ...rest` patterns).
 
@@ -74,7 +74,7 @@ These are installed at `.devin/skills/` in this repo and are always available.
 
 ## 3. Build Order (Follow This Sequence)
 
-The spec defines a 10-step build order. **Do not skip ahead.** After each step the
+The spec defines a 9-step build order. **Do not skip ahead.** After each step the
 app must be in a working, deployable state.
 
 | Step | Focus | Key deliverable |
@@ -87,8 +87,7 @@ app must be in a working, deployable state.
 | 6 | Onboarding | Mandatory flow: location → virtue framing → religiosity quiz → notification setup |
 | 7 | Huddle + lesson + dhikr + talks | Content-bank-driven features (read from seeded tables, never generate) |
 | 8 | Voice/AI event entry | Web Speech API → LLM parse → confirm-before-save (never auto-commit ambiguous parse) |
-| 9 | Subscription gate | Stripe Plus tier; gate Huddle pool, AI variety, analytics — never gate prayer features |
-| 10 | PWA store packaging | PWABuilder (Android TWA) + Capacitor (iOS) — LAST, after real usage |
+| 9 | PWA store packaging | PWABuilder (Android TWA) + Capacitor (iOS) — LAST, after real usage |
 
 ---
 
@@ -130,7 +129,6 @@ src/
 │   ├── prayer/               # Prayer time logic, state machine, window math
 │   ├── notifications/        # Push dispatch
 │   ├── aladhan.ts            # AlAdhan API client
-│   ├── stripe.ts             # Stripe client
 │   ├── llm.ts                # LLM parse for NL event entry
 │   ├── validation.ts         # UUID/email/phone/HTML escape helpers
 │   ├── rateLimit.ts          # IP-based rate limiting (secure IP extraction)
@@ -148,7 +146,6 @@ Every piece of business logic has ONE home. Never duplicate.
 |-------|--------------|-------------------|
 | Prayer window thresholds (early/mid/closing %) | `src/lib/prayer/thresholds.ts` | Components, cron, API routes |
 | Check-in state machine transitions | `src/lib/prayer/stateMachine.ts` | API routes, cron, UI |
-| Subscription tier checks | `src/lib/subscription.ts` | API routes, components |
 | Environment variables | `src/lib/env.ts` | Any file using process.env |
 | DB schema | `src/lib/db/schema.ts` (Drizzle) | Any file defining tables |
 
@@ -190,7 +187,7 @@ Request → Rate limit → Input validation → Auth check → DB policy → Res
 ### 5.3 Authorization
 - Authenticated routes: verify session before any data access.
 - Cron routes: verify `CRON_SECRET` Bearer token with `crypto.timingSafeEqual()`.
-- Webhook routes: verify signature (Stripe SDK).
+- Webhook routes: verify signature.
 - Check for IDOR: can user A access user B's data by changing an ID?
 
 ### 5.4 Secrets Management
@@ -339,7 +336,7 @@ empty state — never generate content to fill it.**
   Use `after()` (CODEBASE_PATTERNS.md §7.4).
 - Verify signatures. Idempotency guards on all webhook handlers.
 
-### 11.3 External API Calls (AlAdhan, Stripe, LLM)
+### 11.3 External API Calls (AlAdhan, LLM)
 - Fetch current month from AlAdhan ONCE, cache in `prayer_times_cache`. Re-fetch
   monthly via cron, not on every page load.
 - LLM: cap `max_tokens`, rate-limit by IP, never expose API keys client-side.
@@ -383,7 +380,6 @@ These are marked TODO in the spec and require the user's input:
 - [ ] Exact dhikr sequences (phrases, transliteration, target counts — authenticated source)
 - [ ] Daily lesson content bank (curated, likely from existing Islamic studies content)
 - [ ] Talks library curated list (speakers/topics/links)
-- [ ] Final subscription price point
 - [ ] App name confirmation ("Waqt" — domain + trademark availability)
 
 **When you reach any of these in the build, stop and ask. Do not fabricate

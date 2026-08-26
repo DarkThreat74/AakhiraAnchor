@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff } from "lucide-react";
 import Link from "next/link";
 import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
 import { getDisplayAsrTime, type PrayerKey } from "@/lib/prayer/checkin";
@@ -13,6 +13,7 @@ interface CalendarEvent {
   endAt: string;
   type: "block" | "task" | "reminder";
   color?: string | null;
+  notify?: boolean;
   _pending?: boolean;
 }
 
@@ -106,6 +107,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showEarlyHours, setShowEarlyHours] = useState(false);
   const [newColor, setNewColor] = useState<string | null>(null);
+  const [newNotify, setNewNotify] = useState(true);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -337,6 +339,7 @@ export default function DayViewClient({ date }: { date: string }) {
       endAt: endISO,
       type: newType,
       color: newColor,
+      notify: newNotify,
     };
     if (enableRecurrence && recurrenceEndDate) {
       body.recurrenceEndDate = recurrenceEndDate;
@@ -365,6 +368,7 @@ export default function DayViewClient({ date }: { date: string }) {
             endAt: data.endAt,
             type: data.type,
             color: data.color,
+            notify: data.notify,
             _pending: true,
           };
           // Only add if it falls on the currently viewed date
@@ -377,6 +381,7 @@ export default function DayViewClient({ date }: { date: string }) {
           setShowAddForm(false);
           setNewTitle("");
           setNewColor(null);
+          setNewNotify(true);
           setEnableRecurrence(false);
           setRecurrenceEndDate("");
           setRecurrenceDays([]);
@@ -414,6 +419,7 @@ export default function DayViewClient({ date }: { date: string }) {
         setShowAddForm(false);
         setNewTitle("");
         setNewColor(null);
+        setNewNotify(true);
         setEnableRecurrence(false);
         setRecurrenceEndDate("");
         setRecurrenceDays([]);
@@ -488,6 +494,7 @@ export default function DayViewClient({ date }: { date: string }) {
           endAt: endISO,
           type: newType,
           color: newColor,
+          notify: newNotify,
         }),
       });
 
@@ -503,6 +510,7 @@ export default function DayViewClient({ date }: { date: string }) {
             endAt: endISO,
             type: newType,
             color: newColor,
+            notify: newNotify,
             _pending: true,
           };
           setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? localUpdated : e)));
@@ -510,6 +518,7 @@ export default function DayViewClient({ date }: { date: string }) {
           setEditingEvent(null);
           setNewTitle("");
           setNewColor(null);
+          setNewNotify(true);
           setError(null);
           setTimeout(() => setSuccessMsg(null), 3000);
           return;
@@ -522,6 +531,7 @@ export default function DayViewClient({ date }: { date: string }) {
         setEditingEvent(null);
         setNewTitle("");
         setNewColor(null);
+        setNewNotify(true);
         setError(null);
       } else {
         const data = await res.json();
@@ -541,6 +551,7 @@ export default function DayViewClient({ date }: { date: string }) {
     setNewEnd(endStr);
     setNewType(event.type);
     setNewColor(event.color || null);
+    setNewNotify(event.notify !== false); // default to true if undefined
     setEnableRecurrence(false);
     setRecurrenceEndDate("");
     setRecurrenceDays([]);
@@ -553,6 +564,7 @@ export default function DayViewClient({ date }: { date: string }) {
     setEditingEvent(null);
     setNewTitle("");
     setNewColor(null);
+    setNewNotify(true);
     setError(null);
     setEnableRecurrence(false);
     setRecurrenceEndDate("");
@@ -873,7 +885,7 @@ export default function DayViewClient({ date }: { date: string }) {
         </div>
       </div>
 
-      {/* Add event button — always visible, 44px touch target */}
+      {/* Floating action button — sits above mobile bottom nav, top-right on desktop */}
       <button
         onClick={() => {
           setNewTitle("");
@@ -881,17 +893,18 @@ export default function DayViewClient({ date }: { date: string }) {
           setNewEnd("10:00");
           setNewType("block");
           setNewColor(null);
+          setNewNotify(true);
           setEnableRecurrence(false);
           setRecurrenceEndDate("");
           setRecurrenceDays([]);
           setEditingEvent(null);
           setShowAddForm(true);
         }}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-opacity hover:opacity-90"
-        style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
+        className="fixed right-5 bottom-20 z-30 flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 lg:bottom-6"
+        style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+        aria-label="Add event"
       >
-        <Plus className="h-4 w-4" />
-        Add event
+        <Plus className="h-5 w-5" />
       </button>
 
       {loading && (
@@ -899,19 +912,34 @@ export default function DayViewClient({ date }: { date: string }) {
           Loading...
         </p>
       )}
-      {error && (
+      {error && !showAddForm && !editingEvent && (
         <p className="mt-4 text-sm" style={{ color: "var(--color-error)" }}>{error}</p>
       )}
 
-      {/* Add/Edit event form — compact inline section */}
+      {/* Add/Edit event modal dialog */}
       {(showAddForm || editingEvent) && (
-        <form
-          onSubmit={editingEvent ? handleUpdateEvent : handleAddEvent}
-          className="mt-3 w-full max-w-sm rounded-2xl border p-4 sm:mt-4 sm:p-5"
-          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
+          onClick={closeForm}
         >
-            <div className="mb-2 text-xs font-semibold" style={{ color: "var(--color-ink-muted)" }}>
-              {editingEvent ? "Edit event" : "New event"}
+          <form
+            onSubmit={editingEvent ? handleUpdateEvent : handleAddEvent}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-t-2xl border p-5 sm:rounded-2xl"
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                {editingEvent ? "Edit event" : "New event"}
+              </div>
+              <button
+                type="button"
+                onClick={closeForm}
+                className="rounded-full p-1 transition-colors hover:bg-[var(--color-paper-2)]"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+              </button>
             </div>
             <div className="flex flex-col gap-3">
               {/* Title */}
@@ -1012,6 +1040,31 @@ export default function DayViewClient({ date }: { date: string }) {
                 )}
               </div>
 
+              {/* Notify toggle — per-event push notification control */}
+              <button
+                type="button"
+                onClick={() => setNewNotify(!newNotify)}
+                className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors"
+                style={{
+                  borderColor: newNotify ? "var(--color-accent)" : "var(--color-paper-3)",
+                  backgroundColor: newNotify ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "var(--color-paper-2)",
+                }}
+              >
+                <span className="flex items-center gap-2" style={{ color: "var(--color-ink)" }}>
+                  {newNotify ? <Bell className="h-4 w-4" style={{ color: "var(--color-accent)" }} /> : <BellOff className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />}
+                  Notify 15 min before
+                </span>
+                <span
+                  className="relative h-5 w-9 rounded-full transition-colors"
+                  style={{ backgroundColor: newNotify ? "var(--color-accent)" : "var(--color-paper-3)" }}
+                >
+                  <span
+                    className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+                    style={{ transform: newNotify ? "translateX(18px)" : "translateX(2px)" }}
+                  />
+                </span>
+              </button>
+
               {/* Recurrence option — only for new events, not editing */}
               {!editingEvent && (
                 <div
@@ -1103,6 +1156,11 @@ export default function DayViewClient({ date }: { date: string }) {
                 </div>
               )}
 
+              {/* Error message inside modal */}
+              {error && (showAddForm || editingEvent) && (
+                <p className="text-xs" style={{ color: "var(--color-error)" }}>{error}</p>
+              )}
+
               {/* Action buttons */}
               <div className="flex gap-2">
                 <button
@@ -1123,17 +1181,10 @@ export default function DayViewClient({ date }: { date: string }) {
                     Delete
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  className="rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
-                >
-                  Cancel
-                </button>
               </div>
             </div>
           </form>
+        </div>
       )}
 
       {/* Delete confirmation dialog */}

@@ -97,12 +97,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { title, startAt, endAt, type, color, recurrenceEndDate, recurrenceDays } = body as {
+  const { title, startAt, endAt, type, color, notify, recurrenceEndDate, recurrenceDays } = body as {
     title?: string;
     startAt?: string;
     endAt?: string;
     type?: string;
     color?: string;
+    notify?: boolean;
     recurrenceEndDate?: string;
     recurrenceDays?: number[];
   };
@@ -134,6 +135,9 @@ export async function POST(request: NextRequest) {
 
   // Validate color — must be a hex string like "#c2410c" or null
   const validColor = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
+
+  // Notify toggle — defaults to true if not specified
+  const validNotify = notify !== undefined ? Boolean(notify) : true;
 
   if (eventType !== "reminder" && endDate <= startDate) {
     return NextResponse.json({ error: "End time must be after start time." }, { status: 400 });
@@ -248,6 +252,7 @@ export async function POST(request: NextRequest) {
           endAt: occ.endAt,
           type: eventType,
           color: validColor,
+          notify: validNotify,
           recurrenceRule: `WEEKLY_${daysToRepeat.join(",")}_UNTIL_${recurrenceEndDate}`,
           createdVia: "manual" as const,
         })),
@@ -267,6 +272,7 @@ export async function POST(request: NextRequest) {
       endAt: effectiveEnd,
       type: eventType,
       color: validColor,
+      notify: validNotify,
       recurrenceRule: null,
       createdVia: "manual",
     })

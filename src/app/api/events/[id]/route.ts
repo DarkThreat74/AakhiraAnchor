@@ -35,17 +35,30 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { title, startAt, endAt, type, color, recurrenceRule } = body as {
+  const { title, startAt, endAt, type, color, notify, recurrenceRule } = body as {
     title?: string;
     startAt?: string;
     endAt?: string;
     type?: string;
     color?: string | null;
+    notify?: boolean;
     recurrenceRule?: string | null;
   };
 
   // Build update object — only update provided fields
   const updates: Record<string, unknown> = {};
+
+  // Process type FIRST — the time validation below needs to know the effective type
+  // to decide whether end > start is required (blocks/tasks) or end == start is OK (reminders).
+  // Previously this was processed after validation, causing a bug where changing from
+  // block → reminder would still validate as block if end < start.
+  if (type !== undefined) {
+    const validTypes = ["block", "task", "reminder"];
+    if (!validTypes.includes(type)) {
+      return NextResponse.json({ error: "Invalid event type." }, { status: 400 });
+    }
+    updates.type = type;
+  }
 
   if (title !== undefined) {
     if (!title.trim()) {
@@ -73,6 +86,10 @@ export async function PATCH(
     updates.endAt = endDate;
   }
 
+  if (notify !== undefined) {
+    updates.notify = Boolean(notify);
+  }
+
   // Validate that end > start
   // If only one of startAt/endAt is updated, we need to check against the existing value
   if (updates.startAt || updates.endAt) {
@@ -95,14 +112,6 @@ export async function PATCH(
     if (effectiveType !== "reminder" && effectiveEnd <= effectiveStart) {
       return NextResponse.json({ error: "End time must be after start time." }, { status: 400 });
     }
-  }
-
-  if (type !== undefined) {
-    const validTypes = ["block", "task", "reminder"];
-    if (!validTypes.includes(type)) {
-      return NextResponse.json({ error: "Invalid event type." }, { status: 400 });
-    }
-    updates.type = type;
   }
 
   if (recurrenceRule !== undefined) {

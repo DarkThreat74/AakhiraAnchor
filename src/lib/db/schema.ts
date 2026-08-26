@@ -263,6 +263,9 @@ export const events = pgTable('events', {
   type: eventType('type').default('block').notNull(),
   // Custom color (hex string like "#c2410c"). Null = use type-based default color.
   color: text('color'),
+  // Whether to send a push notification 15 min before this event.
+  // Defaults to true. User can disable per-event in the create/edit form.
+  notify: boolean('notify').default(true).notNull(),
   // iCal RRULE string, null = one-off
   recurrenceRule: text('recurrence_rule'),
   createdVia: eventCreatedVia('created_via').default('manual').notNull(),
