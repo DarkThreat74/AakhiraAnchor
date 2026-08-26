@@ -20,7 +20,6 @@
 | Styling | Tailwind CSS + CSS custom properties for tokens | Spec requirement. Tokens in `globals.css` per CODEBASE_PATTERNS.md §3. |
 | Hosting | Vercel | Spec requirement. Cron, Web Push, edge functions. |
 | Push | Vercel Web Push (or web-push library) | Spec requirement. |
-| SMS | Twilio | Spec requirement. Opt-in only. |
 | Prayer times | AlAdhan API | Spec requirement. Monthly fetch + cache. |
 | Payments | Stripe | Spec requirement. Plus tier only. |
 | LLM | OpenRouter (Claude/GPT) | For NL event entry only. Cost-controlled (max_tokens, rate limit). |
@@ -192,21 +191,21 @@ This is the core of the app — test thoroughly with fake windows first.
      window close, silently, no ledger charge.
 3. Create `POST /api/prayer-log/checkin` — record a check-in response:
    - Handles all state machine transitions (Yes/No → follow-up, Yes → prayed).
-   - "I will pray right now" → sends urgent push/SMS, stops further check-ins.
+   - "I will pray right now" → sends urgent push, stops further check-ins.
    - Writes to `prayer_log`, advances `checkin_stage`.
 4. Create `GET /api/prayer-log/[date]` — get a day's prayer log.
 5. Create `POST /api/cron/checkin-scheduler` — runs every 5 min:
    - Verify `CRON_SECRET`.
    - For each user: check cached prayer times against current time in their
      timezone. Fire due check-ins per state machine.
-   - Respect `notification_prefs` (push vs push_sms vs sms).
+   - Respect `notification_prefs` (push only).
    - Idempotent: check `checkin_stage` before firing.
    - At window close: set `assumed_prayed` silently.
 6. Push notification dispatch: `src/lib/notifications/push.ts`.
 7. Return-after-absence: `src/lib/prayer/absence.ts`:
    - Detect 7+ consecutive days of unmarked prayers.
    - On next app open: show ONE batch catch-up screen.
-   - User chooses: add estimate to qadaa OR mark as unknown.
+   - User chooses: mark as unknown.
    - Never assume. Never flood with backdated reminders.
 8. Create `POST /api/qadaa/catchup` — resolve the batch catch-up screen.
 9. **Testing harness:** create a dev-only route or script that fast-forwards
@@ -242,98 +241,22 @@ This is the core of the app — test thoroughly with fake windows first.
    - Timed factual recall (10-second limit): "Name the five pillars of Islam,"
      etc. From a small seeded question bank — **placeholder content**.
    - Save to `onboarding_responses`.
-7. Step 4 — Oath amount slider:
-   - `src/lib/onboarding/oathRange.ts` — compute min/max from quiz score
-     (higher self-rated religiosity → higher floor). **Draft formula, flag for
-     user review** (open decision #6).
-   - User picks exact value within range. Save to `oath_settings`.
-8. Step 5 — Qadaa estimator:
-   - `src/lib/onboarding/qadaaEstimate.ts` — years × 365 × 5, adjustable down.
-   - Save as `onboarding_estimate` in `qadaa_ledger`. Number only decreases
-     (via logged qadaa) unless new current-day misses occur.
-9. Step 6 — Notification setup:
-   - Three toggles: early/mid (`push`/`push_sms`/`sms`), final
-     (`push`/`push_sms`/`sms`), other (locked to `push` only).
-   - If any SMS option selected: require phone number entry + Twilio verification
-     code before saving.
+7. Step 4 — Notification setup:
+   - Three toggles: early/mid (`push`), final (`push`), other (`push`).
    - Save to `notification_prefs`.
-10. On completion: set `users.onboarding_completed = true`, redirect to calendar.
-11. State-driven step navigation (resume where left off, per CODEBASE_PATTERNS.md
-    §24.1 pattern).
+8. On completion: set `users.onboarding_completed = true`, redirect to calendar.
+9. State-driven step navigation (resume where left off, per CODEBASE_PATTERNS.md
+   §24.1 pattern).
 
 ### Verification
 - Cannot skip onboarding (redirect enforced)
 - Can resume mid-flow after closing browser
 - Location capture triggers prayer times cache
-- Oath slider range reflects quiz score
-- Qadaa estimate saves correctly
-- SMS opt-in requires phone verification
 - `tsc --noEmit` + eslint pass
 
 ---
 
-## Phase 6 — Oath + Qadaa Ledger UI
-
-**Goal:** Dedicated Accountability page (one deliberate tap to reach, not on home).
-
-### Tasks
-1. Create `src/app/(app)/accountability/page.tsx`:
-   - **NOT linked from home/dashboard header.** Requires one deliberate tap.
-   - This is not a shame display — it's a private accountability tool.
-2. Oath ledger section:
-   - Show: total owed, total logged as donated, running balance.
-   - "Log a donation" button — decrements owed-vs-donated gap on trust.
-   - **No payment processing, ever.** The app is a witness, not a collector.
-3. Qadaa backlog section:
-   - Show current backlog number.
-   - "Log qadaa prayed" input — capped at 20 per submission.
-   - **Server-side daily rate limit** (not just client-side) to prevent
-     one-tap erasure of the whole backlog.
-4. API routes:
-   - `POST /api/oath/log-donation` — mark a ledger entry as donated.
-   - `POST /api/qadaa/log` — log qadaa prayers (capped, rate-limited server-side).
-5. Rate limit qadaa logging: e.g., 5 submissions per day per user (server-enforced).
-
-### Verification
-- Accountability page is not prominent on home
-- Oath ledger shows correct balance
-- Qadaa logging capped at 20/submission, rate-limited daily
-- No payment processing anywhere in oath flow
-- `tsc --noEmit` + eslint pass
-
----
-
-## Phase 7 — SMS Integration
-
-**Goal:** Twilio wired into the check-in scheduler, respecting three-tier prefs.
-
-### Tasks
-1. Create `src/lib/twilio.ts` — Twilio client (cached singleton).
-2. Create `src/lib/notifications/channels.ts` — resolve which channel(s) to use
-   per user per notification type (early/mid, final, other).
-3. Create `src/lib/notifications/sms.ts` — send SMS, rate-limited per user
-   (20/hr, 100/day per user — keyed by user ID, not IP).
-4. Wire SMS into `checkin-scheduler` cron: only send SMS where
-   `notification_prefs` is `push_sms` or `sms` for the relevant tier.
-5. Phone verification flow:
-   - `POST /api/notifications/verify-phone` — send Twilio verification code.
-   - `POST /api/notifications/verify-code` — confirm code, mark
-     `users.phone_verified = true`.
-   - Phone verification is a prerequisite before any SMS setting can be activated.
-6. `POST /api/notifications/prefs` — get/update channel settings.
-7. Twilio webhook signature verification (`src/lib/twilioVerify.ts`) if handling
-   inbound SMS (optional for MVP).
-
-### Verification
-- SMS only sends when user opted in for that tier
-- Phone verification required before SMS activation
-- SMS rate-limited per user (20/hr, 100/day)
-- "Other reminders" never sends SMS (locked to push)
-- `tsc --noEmit` + eslint pass
-
----
-
-## Phase 8 — Huddle, Lesson, Dhikr, Talks
+## Phase 6 — Huddle, Lesson, Dhikr, Talks
 
 **Goal:** Content-bank-driven features. All read from seeded tables, never generate.
 
@@ -370,7 +293,7 @@ This is the core of the app — test thoroughly with fake windows first.
 
 ---
 
-## Phase 9 — Voice/AI Event Entry
+## Phase 7 — Voice/AI Event Entry
 
 **Goal:** Mic button → Web Speech API → LLM parse → confirm-before-save.
 
@@ -395,7 +318,7 @@ This is the core of the app — test thoroughly with fake windows first.
 
 ---
 
-## Phase 10 — Subscription Gate
+## Phase 8 — Subscription Gate
 
 **Goal:** Stripe Plus tier. Gate depth/convenience, never prayer features.
 
@@ -410,16 +333,13 @@ This is the core of the app — test thoroughly with fake windows first.
    - Use `after()` for post-response work.
 3. Checkout flow: `POST /api/stripe/checkout` → redirect to Stripe.
 4. `src/lib/subscription.ts` — tier check helpers:
-   - `isPlus(user)`, `getHuddlePoolSize(user)`, `getSmsAllowance(user)`.
+   - `isPlus(user)`, `getHuddlePoolSize(user)`.
 5. **Gating (Plus only):**
    - Huddle full pool size (free = 8-10 tasks, Plus = ~30 tasks)
-   - SMS beyond a small free monthly allowance (define cap — **open decision #7**)
    - AI tone personalization variety
    - Streak history / analytics depth
 6. **Never gate (free forever):**
    - Prayer check-ins
-   - Oath ledger
-   - Qadaa ledger
    - Core calendar
    - Anything that makes it easier to ignore a missed prayer
 
@@ -432,7 +352,7 @@ This is the core of the app — test thoroughly with fake windows first.
 
 ---
 
-## Phase 11 — Polish + PWA Store Packaging (LAST)
+## Phase 9 — Polish + PWA Store Packaging (LAST)
 
 **Goal:** Store-ready packages. Only after real usage validates the web version.
 
@@ -459,11 +379,10 @@ This is the core of the app — test thoroughly with fake windows first.
 | 1 | App name confirmation ("Waqt" — domain + trademark) | Phase 0 | **ASK NOW** |
 | 2 | Auth approach: email/password vs magic link vs both | Phase 0 | **ASK NOW** |
 | 3 | Exact hadith/virtue text for onboarding | Phase 5 | Can defer (placeholder OK) |
-| 4 | Exact dhikr sequences | Phase 8 | Can defer (empty state OK) |
-| 5 | Daily lesson content bank | Phase 8 | Can defer (empty state OK) |
-| 6 | Oath scoring formula (quiz → slider range) | Phase 5 | Draft, user reviews |
-| 7 | Subscription price + SMS free-tier cap | Phase 10 | **ASK before Phase 10** |
-| 8 | Talks library curated list | Phase 8 | Can defer (empty state OK) |
+| 4 | Exact dhikr sequences | Phase 6 | Can defer (empty state OK) |
+| 5 | Daily lesson content bank | Phase 6 | Can defer (empty state OK) |
+| 6 | Subscription price point | Phase 8 | **ASK before Phase 8** |
+| 7 | Talks library curated list | Phase 6 | Can defer (empty state OK) |
 
 ---
 
@@ -473,7 +392,7 @@ Waqt is a prayer-centered app. The design should feel:
 - **Warm and grounded** — not cold tech blue. Think pre-dawn light, prayer rug
   textiles, ink on paper.
 - **Contemplative, not gamified** — no streak shame, no aggressive notifications
-  visual language. Accountability is private, not performative.
+  visual language.
 - **Calm density** — the calendar is data-heavy but should not feel cluttered.
   Prayer bands are context, not noise.
 - **Mobile-first** — this is a PWA used on phones, primarily at prayer times.

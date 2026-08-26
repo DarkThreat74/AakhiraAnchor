@@ -14,12 +14,11 @@
 
 **Waqt** is a prayer-centered life tracker PWA. The five daily prayers are fixed
 anchors; everything else (calendar events, tasks, reminders) is scheduled around
-them. The app provides prayer accountability (check-ins, an oath ledger, a qadaa
-backlog tracker) plus surrounding features (Daily Huddle, lessons, dhikr counter,
-talks library, NL event entry).
+them. The app provides prayer accountability (check-ins) plus surrounding
+features (Daily Huddle, lessons, dhikr counter, talks library, NL event entry).
 
 **Stack:** Next.js 14+ App Router · TypeScript · Neon (Postgres) via Drizzle ORM ·
-Vercel (hosting + cron) · Vercel Web Push · Twilio (SMS, opt-in) · AlAdhan API
+Vercel (hosting + cron) · Vercel Web Push · AlAdhan API
 (prayer times) · Stripe (subscriptions) · Tailwind CSS.
 
 **Full spec:** See the project brief (the message that created this repo). The
@@ -28,37 +27,28 @@ defined there. This file distills the *rules* an agent must follow.
 
 ---
 
-## 1. The Six Product Principles (Non-Negotiable)
+## 1. The Four Product Principles (Non-Negotiable)
 
 These resolve every ambiguous decision. When in doubt, re-read these.
 
-1. **Prayer accountability is free forever.** Never gate the check-in system, the
-   oath ledger, or the qadaa tracker behind a paywall. Subscriptions pay for depth
-   and convenience (Huddle pool size, SMS allowance, AI tone variety, analytics
-   depth) — never for the thing that makes someone pray.
+1. **Prayer accountability is free forever.** Never gate the check-in system
+   behind a paywall. Subscriptions pay for depth and convenience (Huddle pool
+   size, AI tone variety, analytics depth) — never for the thing that makes
+   someone pray.
 
-2. **The app never touches money.** It tracks an oath ledger (owed vs.
-   self-reported donated). It never processes payments for the oath itself. The
-   app is a witness, not a collector. Stripe is only for the Plus subscription.
+2. **Never assume the worst on missing data.** Unmarked prayers auto-resolve as
+   `assumed_prayed` at day's end — no silent penalty. A week-long absence
+   surfaces as ONE batch catch-up screen, never a flood of backdated reminders.
 
-3. **Never assume the worst on missing data.** Unmarked prayers auto-resolve as
-   `assumed_prayed` at day's end — no silent penalty, no ledger charge. A week-long
-   absence surfaces as ONE batch catch-up screen, never a flood of backdated
-   reminders.
-
-4. **No AI-generated religious content.** All hadith, dhikr sequences, and daily
+3. **No AI-generated religious content.** All hadith, dhikr sequences, and daily
    lessons must come from a vetted, human-curated content bank
    (`daily_lessons`, `dhikr_sequences` tables). The AI's job is tone variation and
    selection from that bank — never authorship. Treat these tables as
    empty-until-seeded; build UI to *read* from them, not generate their content.
 
-5. **The overlap-in-calendar rule is permissive.** Overlapping events stack
+4. **The overlap-in-calendar rule is permissive.** Overlapping events stack
    side-by-side. No blocking, no warning modal. Prayer windows render as a
    background band, never as a blocking event.
-
-6. **SMS costs real money.** Every SMS-capable notification tier must be an
-   explicit opt-in setting, never a default. "Other reminders" is locked to
-   push-only — no SMS option exists for it.
 
 ---
 
@@ -74,7 +64,7 @@ Before writing ANY code, especially UI or auth/payment/DB code:
    user-data code. Apply the defense-in-depth checklist in §5 below and the
    patterns in CODEBASE_PATTERNS.md §1 & §9.
 3. **Use `agent-reach`** for any competitive research or URL reading (prayer time
-   API docs, Twilio docs, Stripe docs, etc.). See `.devin/skills/agent-reach/SKILL.md`.
+   API docs, Stripe docs, etc.). See `.devin/skills/agent-reach/SKILL.md`.
 4. **Use `full-output-enforcement`** when a task requires exhaustive, unabridged
    code generation (no placeholder `// ...rest` patterns).
 
@@ -84,7 +74,7 @@ These are installed at `.devin/skills/` in this repo and are always available.
 
 ## 3. Build Order (Follow This Sequence)
 
-The spec defines a 12-step build order. **Do not skip ahead.** After each step the
+The spec defines a 10-step build order. **Do not skip ahead.** After each step the
 app must be in a working, deployable state.
 
 | Step | Focus | Key deliverable |
@@ -94,13 +84,11 @@ app must be in a working, deployable state.
 | 3 | Prayer times | AlAdhan monthly fetch + cache, prayer window overlay band on day view |
 | 4 | PWA shell | Manifest, service worker, offline cache of current week, install prompt, Web Push subscription |
 | 5 | Check-in state machine | Cron scheduler (every 5 min), push notifications, prayer_log writes, assumed_prayed at window close, return-after-absence catch-up |
-| 6 | Onboarding | Mandatory flow: location → virtue framing → religiosity quiz → oath slider → qadaa estimator → notification setup |
-| 7 | Oath + qadaa ledger UI | Dedicated Accountability page (one deliberate tap to reach, not on home) |
-| 8 | SMS layer | Twilio integration, phone verification, three-tier settings wired into state machine |
-| 9 | Huddle + lesson + dhikr + talks | Content-bank-driven features (read from seeded tables, never generate) |
-| 10 | Voice/AI event entry | Web Speech API → LLM parse → confirm-before-save (never auto-commit ambiguous parse) |
-| 11 | Subscription gate | Stripe Plus tier; gate Huddle pool, SMS allowance, AI variety, analytics — never gate prayer features |
-| 12 | PWA store packaging | PWABuilder (Android TWA) + Capacitor (iOS) — LAST, after real usage |
+| 6 | Onboarding | Mandatory flow: location → virtue framing → religiosity quiz → notification setup |
+| 7 | Huddle + lesson + dhikr + talks | Content-bank-driven features (read from seeded tables, never generate) |
+| 8 | Voice/AI event entry | Web Speech API → LLM parse → confirm-before-save (never auto-commit ambiguous parse) |
+| 9 | Subscription gate | Stripe Plus tier; gate Huddle pool, AI variety, analytics — never gate prayer features |
+| 10 | PWA store packaging | PWABuilder (Android TWA) + Capacitor (iOS) — LAST, after real usage |
 
 ---
 
@@ -115,7 +103,6 @@ src/
 │   ├── (auth)/               # Login, signup
 │   ├── (app)/                # Authenticated app shell
 │   │   ├── calendar/         # Day + month views
-│   │   ├── accountability/   # Oath + qadaa ledger (one tap to reach)
 │   │   ├── huddle/           # Daily Huddle
 │   │   ├── lesson/           # Daily lesson
 │   │   ├── dhikr/            # Tasbih counter
@@ -126,8 +113,6 @@ src/
 │   │   ├── auth/
 │   │   ├── prayer-times/
 │   │   ├── prayer-log/
-│   │   ├── oath/
-│   │   ├── qadaa/
 │   │   ├── events/
 │   │   ├── huddle/
 │   │   ├── lessons/
@@ -143,9 +128,8 @@ src/
 │   ├── db/                   # Drizzle client + schema
 │   ├── auth/                 # Session/auth helpers
 │   ├── prayer/               # Prayer time logic, state machine, window math
-│   ├── notifications/        # Push + SMS dispatch, channel resolution
+│   ├── notifications/        # Push dispatch
 │   ├── aladhan.ts            # AlAdhan API client
-│   ├── twilio.ts             # Twilio client
 │   ├── stripe.ts             # Stripe client
 │   ├── llm.ts                # LLM parse for NL event entry
 │   ├── validation.ts         # UUID/email/phone/HTML escape helpers
@@ -164,9 +148,6 @@ Every piece of business logic has ONE home. Never duplicate.
 |-------|--------------|-------------------|
 | Prayer window thresholds (early/mid/closing %) | `src/lib/prayer/thresholds.ts` | Components, cron, API routes |
 | Check-in state machine transitions | `src/lib/prayer/stateMachine.ts` | API routes, cron, UI |
-| Oath amount range from quiz score | `src/lib/onboarding/oathRange.ts` | Onboarding UI, API |
-| Qadaa estimate calculation | `src/lib/onboarding/qadaaEstimate.ts` | Onboarding UI, API |
-| Notification channel resolution | `src/lib/notifications/channels.ts` | Cron, API, UI |
 | Subscription tier checks | `src/lib/subscription.ts` | API routes, components |
 | Environment variables | `src/lib/env.ts` | Any file using process.env |
 | DB schema | `src/lib/db/schema.ts` (Drizzle) | Any file defining tables |
@@ -199,7 +180,6 @@ Request → Rate limit → Input validation → Auth check → DB policy → Res
 - Auth endpoints: 5/15min. Form submissions: 5/min. AI endpoints: 15/60s.
 - Use `src/lib/rateLimit.ts` with secure IP extraction (LAST value in
   X-Forwarded-For, not first — CODEBASE_PATTERNS.md §30.1).
-- SMS rate limiting is keyed by **user ID**, not IP (triggered by cron, not browser).
 
 ### 5.2 Input Validation
 - Parse `req.json()` inside try/catch — malformed JSON returns 400, not crash.
@@ -210,7 +190,7 @@ Request → Rate limit → Input validation → Auth check → DB policy → Res
 ### 5.3 Authorization
 - Authenticated routes: verify session before any data access.
 - Cron routes: verify `CRON_SECRET` Bearer token with `crypto.timingSafeEqual()`.
-- Webhook routes: verify signature (Stripe SDK, Twilio HMAC-SHA1).
+- Webhook routes: verify signature (Stripe SDK).
 - Check for IDOR: can user A access user B's data by changing an ID?
 
 ### 5.4 Secrets Management
@@ -241,7 +221,7 @@ Request → Rate limit → Input validation → Auth check → DB policy → Res
 ### 6.2 Idempotency
 - Every cron job and webhook MUST be idempotent.
 - Check for existing records before inserting (e.g., prayer_log unique on
-  `(user_id, date, prayer_name)`, oath_ledger check before insert).
+  `(user_id, date, prayer_name)`).
 - Use DB unique constraints as a backstop.
 
 ### 6.3 TypeScript Sync
@@ -269,13 +249,13 @@ STATE: pending, mid-window (~50% elapsed)
 
 STATE: pending, closing (~20 min before window ends)
   → CLOSING check-in: [Yes / I will pray right now]
-     - "I will pray right now" → urgent push/SMS, no further checkins
+     - "I will pray right now" → urgent push, no further checkins
 
 STATE: window closed, still unmarked
-  → status = assumed_prayed (silent, no ledger charge, no retroactive reminder)
+  → status = assumed_prayed (silent, no retroactive reminder)
 
 RETURN-AFTER-ABSENCE (7+ days unmarked):
-  → ONE batch catch-up screen. User chooses: add to qadaa or mark unknown.
+  → ONE batch catch-up screen. User chooses: mark as unknown.
   → Never assume. Never flood with backdated reminders.
 ```
 
@@ -294,9 +274,7 @@ RETURN-AFTER-ABSENCE (7+ days unmarked):
 1. **Location capture** → geocode → save to `prayer_settings` → fetch + cache current month from AlAdhan immediately.
 2. **Virtue/framing screen** — PLACEHOLDER text block. Do NOT generate hadith text. Mark it clearly for the user to fill with vetted content.
 3. **Religiosity quiz** (~10 questions) — self-rating sliders (1-5) + timed factual recall (10-second limit). Questions from a small seeded bank — placeholder content for the user to populate/verify.
-4. **Oath amount slider** — min/max computed from quiz score (higher self-rated religiosity → higher floor). User picks exact value within range. Save to `oath_settings`.
-5. **Qadaa estimator** — years × 365 × 5, adjustable down. Save as `onboarding_estimate`. This number only decreases (via logged qadaa) unless new current-day misses occur.
-6. **Notification setup** — three toggles (early/mid, final, other). "Other" locked to push-only. SMS options require Twilio phone verification before saving.
+4. **Notification setup** — three toggles (early/mid, final, other), all push-only.
 
 ---
 
@@ -361,10 +339,9 @@ empty state — never generate content to fill it.**
   Use `after()` (CODEBASE_PATTERNS.md §7.4).
 - Verify signatures. Idempotency guards on all webhook handlers.
 
-### 11.3 External API Calls (AlAdhan, Twilio, Stripe, LLM)
+### 11.3 External API Calls (AlAdhan, Stripe, LLM)
 - Fetch current month from AlAdhan ONCE, cache in `prayer_times_cache`. Re-fetch
   monthly via cron, not on every page load.
-- Twilio SMS: only send where `notification_prefs` is `push_sms` or `sms`.
 - LLM: cap `max_tokens`, rate-limit by IP, never expose API keys client-side.
 - All external calls are best-effort after DB save.
 
@@ -406,9 +383,7 @@ These are marked TODO in the spec and require the user's input:
 - [ ] Exact dhikr sequences (phrases, transliteration, target counts — authenticated source)
 - [ ] Daily lesson content bank (curated, likely from existing Islamic studies content)
 - [ ] Talks library curated list (speakers/topics/links)
-- [ ] Donate-vs-fast distinction in the oath system (ruling-dependent)
-- [ ] Final oath scoring formula (quiz → min/max slider range)
-- [ ] Final subscription price point and SMS free-tier cap
+- [ ] Final subscription price point
 - [ ] App name confirmation ("Waqt" — domain + trademark availability)
 
 **When you reach any of these in the build, stop and ask. Do not fabricate
@@ -423,11 +398,10 @@ religious content. Do not invent pricing. Do not guess at rulings.**
 | `process.env.X` outside `env.ts` | Import from `@/lib/env` |
 | `===` for secret comparison | `crypto.timingSafeEqual()` |
 | Fire-and-forget on serverless | Use `after()` from `next/server` |
-| Inline business logic (state machine, oath range) | Import from the single source |
+| Inline business logic (state machine) | Import from the single source |
 | AI-generate hadith/dhikr/lesson content | Read from seeded tables; empty state if unseeded |
-| Gate prayer check-in/ledger/qadaa behind paywall | Free forever — gate only depth/convenience |
+| Gate prayer check-in behind paywall | Free forever — gate only depth/convenience |
 | Block overlapping events or show warning modal | Stack side-by-side silently |
-| Default SMS on | Explicit opt-in only |
 | Backdated reminder flood after absence | ONE batch catch-up screen |
 | Assume the worst on unmarked prayers | `assumed_prayed`, no penalty |
 | `select('*')` on sensitive tables | Explicitly list columns |
