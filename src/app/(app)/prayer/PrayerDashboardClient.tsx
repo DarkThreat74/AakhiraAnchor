@@ -497,16 +497,42 @@ export default function PrayerDashboard() {
                   const afterSunnahs = prayerSunnahs.filter((s) => s.position === "after");
                   const standaloneSunnahs = prayerSunnahs.filter((s) => s.position === "standalone");
 
-                  // Determine if this prayer's time has started
+                  // Parse prayer start time
                   const [h, m] = time.split(" ")[0].split(":").map(Number);
                   const prayerMinutes = h * 60 + m;
                   const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+
+                  // ── Determine window END ──
+                  // Fajr's window ends at Sunrise (not Dhuhr)
+                  // Other prayers' windows end at the next prayer's start
+                  // Isha's window extends to end of day (next Fajr is tomorrow)
+                  let windowEndMinutes: number;
+                  let windowEndLabel: string;
+                  if (prayer === "fajr") {
+                    const [sh, sm] = prayerTimes.sunrise.split(" ")[0].split(":").map(Number);
+                    windowEndMinutes = sh * 60 + sm;
+                    windowEndLabel = format12h(prayerTimes.sunrise);
+                  } else if (idx < PRAYER_ORDER.length - 1) {
+                    const nextPrayer = PRAYER_ORDER[idx + 1];
+                    const [nh, nm] = prayerTimes[nextPrayer].split(" ")[0].split(":").map(Number);
+                    windowEndMinutes = nh * 60 + nm;
+                    windowEndLabel = format12h(prayerTimes[nextPrayer]);
+                  } else {
+                    // Isha — window goes to end of day
+                    windowEndMinutes = 24 * 60;
+                    windowEndLabel = "Fajr (tomorrow)";
+                  }
+
                   const timeStarted = currentMinutes >= prayerMinutes;
-                  const isCurrent = timeStarted && !prayed && (idx === PRAYER_ORDER.length - 1 ||
-                    currentMinutes < (PRAYER_ORDER[idx + 1] ? (() => {
-                      const [nh, nm] = prayerTimes[PRAYER_ORDER[idx + 1]].split(" ")[0].split(":").map(Number);
-                      return nh * 60 + nm;
-                    })() : 9999));
+                  const inWindow = timeStarted && currentMinutes < windowEndMinutes;
+                  const isCurrent = inWindow && !prayed;
+
+                  // Progress within window (0-100%)
+                  const windowDuration = windowEndMinutes - prayerMinutes;
+                  const elapsedInWindow = currentMinutes - prayerMinutes;
+                  const windowProgress = inWindow
+                    ? Math.min(100, Math.max(0, (elapsedInWindow / windowDuration) * 100))
+                    : timeStarted ? 100 : 0;
 
                   return (
                     <div key={prayer} className="relative flex gap-3 pb-4 sm:gap-4">
@@ -528,8 +554,8 @@ export default function PrayerDashboard() {
                               {prayer.charAt(0).toUpperCase()}
                             </span>
                           )}
-                          {/* Pulsing dot for current prayer */}
-                          {isCurrent && !prayed && (
+                          {/* Pulsing dot — only when in the active window */}
+                          {isCurrent && (
                             <span
                               className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
                               style={{
@@ -589,7 +615,7 @@ export default function PrayerDashboard() {
                                     color: "var(--color-ink-muted)",
                                   }}
                                 >
-                                  Pending
+                                  Missed
                                 </span>
                               ) : (
                                 <span
@@ -603,16 +629,39 @@ export default function PrayerDashboard() {
                                 </span>
                               )}
                             </div>
+                            {/* Time frame: start — end */}
                             <div className="mt-0.5 text-xs tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                              {format12h(time)}
-                              {timeStarted && !prayed && (
+                              <span style={{ color: timeStarted ? "var(--color-ink)" : "var(--color-ink-muted)" }}>
+                                {format12h(time)}
+                              </span>
+                              <span className="mx-1" style={{ color: "var(--color-paper-3)" }}>—</span>
+                              <span>{windowEndLabel}</span>
+                              {inWindow && !prayed && (
                                 <span className="ml-1.5" style={{ color: "var(--color-warmth)" }}>
-                                  {Math.floor((currentMinutes - prayerMinutes) / 60)}h {(currentMinutes - prayerMinutes) % 60}m ago
+                                  {Math.floor(elapsedInWindow / 60)}h {elapsedInWindow % 60}m in
                                 </span>
                               )}
                             </div>
                           </div>
                         </div>
+
+                        {/* Window progress bar — only show when in the active window */}
+                        {inWindow && !prayed && (
+                          <div className="mt-1.5 mb-0.5">
+                            <div
+                              className="h-1 w-full overflow-hidden rounded-full"
+                              style={{ backgroundColor: "var(--color-paper-2)" }}
+                            >
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${windowProgress}%`,
+                                  backgroundColor: color,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
 
                         {/* Sunnah / Nafl pills */}
                         {prayerSunnahs.length > 0 && (
