@@ -636,7 +636,7 @@ export default function PrayerDashboard() {
                   // ── Determine window END ──
                   // Fajr's window ends at Sunrise (not Dhuhr)
                   // Other prayers' windows end at the next prayer's start
-                  // Isha's window extends to end of day (next Fajr is tomorrow)
+                  // Isha's window extends to next day's Fajr (crosses midnight)
                   let windowEndMinutes: number;
                   let windowEndLabel: string;
                   if (prayer === "fajr") {
@@ -649,18 +649,24 @@ export default function PrayerDashboard() {
                     windowEndMinutes = nh * 60 + nm;
                     windowEndLabel = format12h(prayerTimes[nextPrayer]);
                   } else {
-                    // Isha — window goes to end of day
-                    windowEndMinutes = 24 * 60;
-                    windowEndLabel = "Fajr (tomorrow)";
+                    // Isha — window goes to next day's Fajr (crosses midnight)
+                    const [fh, fm] = prayerTimes.fajr.split(" ")[0].split(":").map(Number);
+                    const fajrMinutes = fh * 60 + fm;
+                    windowEndMinutes = fajrMinutes + 1440; // next day
+                    windowEndLabel = `Fajr ${format12h(prayerTimes.fajr)}`;
                   }
 
                   const timeStarted = currentMinutes >= prayerMinutes;
-                  const inWindow = timeStarted && currentMinutes < windowEndMinutes;
+                  // For Isha, the window crosses midnight. If currentMinutes < fajrStart,
+                  // it's after midnight and still within yesterday's Isha window.
+                  const isIshaAfterMidnight = prayer === "isha" && currentMinutes < prayerMinutes;
+                  const effectiveCurrent = isIshaAfterMidnight ? currentMinutes + 1440 : currentMinutes;
+                  const inWindow = timeStarted && effectiveCurrent < windowEndMinutes;
                   const isCurrent = inWindow && !prayed;
 
                   // Progress within window (0-100%)
                   const windowDuration = windowEndMinutes - prayerMinutes;
-                  const elapsedInWindow = currentMinutes - prayerMinutes;
+                  const elapsedInWindow = effectiveCurrent - prayerMinutes;
                   const windowProgress = inWindow
                     ? Math.min(100, Math.max(0, (elapsedInWindow / windowDuration) * 100))
                     : timeStarted ? 100 : 0;
@@ -768,7 +774,7 @@ export default function PrayerDashboard() {
                               <span className="mx-1" style={{ color: "var(--color-paper-3)" }}>—</span>
                               <span>{windowEndLabel}</span>
                               {inWindow && !prayed && (() => {
-                                const remaining = windowEndMinutes - currentMinutes;
+                                const remaining = windowEndMinutes - effectiveCurrent;
                                 return (
                                   <span className="ml-1.5" style={{ color: "var(--color-warmth)" }}>
                                     {Math.floor(remaining / 60)}h {remaining % 60}m left
@@ -805,7 +811,7 @@ export default function PrayerDashboard() {
                               <div className="flex flex-wrap gap-1.5">
                                 {beforeSunnahs.map((s) => {
                                   const sunnahPrayed = todaySunnahs.includes(s.key);
-                                  const windowPassed = currentMinutes >= windowEndMinutes;
+                                  const windowPassed = effectiveCurrent >= windowEndMinutes;
                                   // Grey out when window passed (allow un-logging if already prayed)
                                   // Duha is exempt from lock — it can be logged late
                                   const disabled = sunnahPrayed
@@ -834,7 +840,7 @@ export default function PrayerDashboard() {
                               <div className="flex flex-wrap gap-1.5">
                                 {afterSunnahs.map((s) => {
                                   const sunnahPrayed = todaySunnahs.includes(s.key);
-                                  const windowPassed = currentMinutes >= windowEndMinutes;
+                                  const windowPassed = effectiveCurrent >= windowEndMinutes;
                                   const disabled = sunnahPrayed
                                     ? false
                                     : !prayed || windowPassed;

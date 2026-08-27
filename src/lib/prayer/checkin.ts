@@ -7,7 +7,7 @@
  * Rules (from user spec):
  * - Dhuhr:  show masjid question from 12:00 PM to 3:00 PM
  * - Maghrib: show masjid question for 40 minutes after maghrib time
- * - Asr:    show masjid question as long as it's NOT in the last hour of Asr
+ * - Asr:    show masjid question as long as it's NOT in the last 30 minutes of Asr
  * - Isha:   show masjid question as long as it's NOT after 11:30 PM
  * - Fajr:   show masjid question as long as it's NOT in the last 30 minutes of Fajr
  */
@@ -162,10 +162,10 @@ export function shouldShowMasjidQuestion(
       return currentMinutes >= 720 && currentMinutes <= 1080;
     }
     case "asr": {
-      // Show as long as NOT in the last hour of Asr (Asr ends at maghrib)
+      // Show as long as NOT in the last 30 minutes of Asr (Asr ends at maghrib)
       const asrEnd = parseMinutes(timings.maghrib);
-      const lastHour = asrEnd - 60;
-      return currentMinutes < lastHour;
+      const last30 = asrEnd - 30;
+      return currentMinutes < last30;
     }
     case "maghrib": {
       // Show for 40 minutes after maghrib time
