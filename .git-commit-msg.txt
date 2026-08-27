@@ -1,37 +1,26 @@
-Add Goals section — hierarchical goals with list/tree views and sharing
+Fix Goals offline support + SW improvements
 
-New top-level Goals section (4th nav item: Calendar | Prayer | Goals | Settings).
+Offline support for Goals:
+- SW now returns synthetic goal object in offline POST response so the
+  client can add it to local state immediately (with _pending flag)
+- GoalsClient listens for EVENT_SYNCED message from SW and refetches
+  goals to replace temp IDs with real server data
+- Excluded /api/goals/share and /api/goals/shared from SW outbox
+  (share management needs network, shouldn't queue offline)
+- Added /goals/shared/ and /privacy and /terms to SW public page
+  exclusion list (don't intercept, let browser handle normally)
+- Bumped SW cache version to waqt-v16
 
-Features:
-- Create goals with a checkmark toggle to mark done
-- Branch goals into sub-goals (infinite nesting, parent-child relationships)
-- Two views: List (indented rows) and Tree (visual branches with connector lines)
-- Share menu with three export options:
-  - Export as PNG image (html-to-image, lazy-loaded)
-  - Export as PDF (jspdf, lazy-loaded)
-  - Public shareable link (read-only view at /goals/shared/<token>)
-- Native share sheet support on mobile (Capacitor Share plugin)
-- Public shared goals page with list/tree toggle, no auth required
+Tested:
+- Migration ran successfully against Neon (goals + goal_share_tokens)
+- GET /api/goals returns empty array for new user
+- POST /api/goals creates goal with correct fields
+- POST /api/goals with parentId creates sub-goal (branch)
+- PATCH /api/goals with status=done sets completedAt
+- DELETE /api/goals?id=... cascade-deletes children
+- POST /api/goals/share generates UUID token
+- GET /api/goals/shared?token=... returns public goals + ownerName
+- /goals page renders with "Goals" heading and "Add a goal" button
+- /goals/shared/<token> page renders (200)
 
-Schema:
-- goals table: id, userId, parentId (self-ref FK with cascade delete),
-  title, description, status (active/done/archived), sortOrder, color,
-  createdAt, updatedAt, completedAt
-- goal_share_tokens table: id, userId, token (unique), createdAt
-
-API routes:
-- GET/POST/PATCH/DELETE /api/goals — CRUD with ownership validation
-  and circular reference prevention
-- POST/DELETE /api/goals/share — generate/revoke share token
-- GET /api/goals/shared?token=<token> — public read-only endpoint
-
-Mobile considerations:
-- List view: max 4 levels of indent (16px each = 64px max on 320px)
-- Tree view: horizontal scroll with overflow-x-auto, min-width nodes
-- Share menu: bottom sheet on mobile, centered on desktop
-- All touch targets >= 36px (checkmark uses 44px hit area)
-- View toggle and share button in header, shrink-0 to prevent overflow
-
-Generated with [Devin](https://devin.ai)
-
-Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+Also added tsx dev dependency and migration script.

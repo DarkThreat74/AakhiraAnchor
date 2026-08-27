@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v15";
+const CACHE_VERSION = "waqt-v16";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -219,7 +219,9 @@ self.addEventListener("fetch", (event) => {
     !url.pathname.startsWith("/api/auth/") &&
     !url.pathname.startsWith("/api/admin/") &&
     !url.pathname.startsWith("/api/notifications/") &&
-    !url.pathname.startsWith("/api/cron/")
+    !url.pathname.startsWith("/api/cron/") &&
+    !url.pathname.startsWith("/api/goals/share") &&
+    !url.pathname.startsWith("/api/goals/shared")
   ) {
     // Clone the request body before consuming it
     const bodyPromise = request.clone().json().catch(() => null);
@@ -278,6 +280,22 @@ self.addEventListener("fetch", (event) => {
               responseData.type = body.type || "block";
               responseData.color = body.color || null;
               responseData._pending = true;
+            } else if (url.pathname.startsWith("/api/goals")) {
+              // For goals POST, echo back a synthetic goal object
+              responseData.goal = {
+                id: tempId,
+                userId: null,
+                parentId: body.parentId ?? null,
+                title: body.title || "Untitled",
+                description: body.description || null,
+                status: "active",
+                sortOrder: 0,
+                color: body.color || null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                completedAt: null,
+                _pending: true,
+              };
             } else {
               // For other API POSTs (prayer log, qadaa, etc.), echo back the body
               Object.assign(responseData, body);
@@ -351,8 +369,11 @@ self.addEventListener("fetch", (event) => {
     if (
       pathname === "/login" ||
       pathname === "/signup" ||
+      pathname === "/privacy" ||
+      pathname === "/terms" ||
       pathname.startsWith("/admin") ||
       pathname.startsWith("/user/public/") ||
+      pathname.startsWith("/goals/shared/") ||
       pathname.startsWith("/api/")
     ) {
       return; // Let the browser handle it directly — no SW interference

@@ -52,6 +52,24 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
       .catch(() => {});
   }, []);
 
+  // Listen for SW sync events — refetch goals when offline writes are synced
+  useEffect(() => {
+    if (!navigator.serviceWorker) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "EVENT_SYNCED") {
+        // Refetch goals to replace temp IDs with real server data
+        fetch("/api/goals")
+          .then((r) => r.json().catch(() => ({})))
+          .then((data) => {
+            if (data.goals) setGoals(data.goals);
+          })
+          .catch(() => {});
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => navigator.serviceWorker.removeEventListener("message", handler);
+  }, []);
+
   const createGoal = useCallback(
     async (title: string, parentId?: string | null) => {
       const trimmed = title.trim();
