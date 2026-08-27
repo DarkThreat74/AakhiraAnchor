@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Info.plist additions for Waqt iOS app.
+    After running `npx cap add ios`, merge these keys into the generated
+    ios/App/App/Info.plist. Do NOT replace the entire file — Capacitor
+    generates its own Info.plist with required keys. Only add the keys
+    below that are missing.
+
+    Lines marked with <!-- REQUIRED --> must be added or the app will be rejected.
+    Lines marked with <!-- OPTIONAL --> are recommended but not blocking.
+  -->
+
+  <!-- REQUIRED: Face ID usage description (biometric gate) -->
+  <key>NSFaceIDUsageDescription</key>
+  <string>Waqt uses Face ID to protect your prayer data and accountability logs.</string>
+
+  <!-- REQUIRED: Remote notifications (push notifications) -->
+  <key>UIRemoteNotificationType</key>
+  <array>
+    <string>alert</string>
+    <string>badge</string>
+    <string>sound</string>
+  </array>
+
+  <!-- OPTIONAL: Camera usage description (only if camera feature is used) -->
+  <!-- The @capacitor/camera plugin is installed but not actively used.
+       If camera is not used, do NOT add this key — unused permission
+       requests trigger rejection. -->
+  <!--
+  <key>NSCameraUsageDescription</key>
+  <string>Waqt needs camera access to capture photos for your profile.</string>
+  -->
+
+  <!-- App transport security — allow Capacitor to load the remote URL -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
+
+  <!-- Launch screen — Capacitor generates this, but verify it exists -->
+  <key>UILaunchScreen</key>
+  <dict>
+    <key>UIColorName</key>
+    <string>LaunchScreenColor</string>
+  </dict>
+
+  <!-- Supported orientations — portrait only for this app -->
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+  </array>
+
+  <!-- iPad: allow portrait and landscape (required for iPad support) -->
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+
+  <!-- Status bar style -->
+  <key>UIStatusBarStyle</key>
+  <string>UIStatusBarStyleLightContent</string>
+
+  <!-- View controller-based status bar appearance -->
+  <key>UIViewControllerBasedStatusBarAppearance</key>
+  <true/>
+
+  <!-- ITSAppUsesNonExemptEncryption — set to false if app doesn't use custom encryption -->
+  <!-- Waqt uses HTTPS (standard encryption exempt) — set to false to skip export compliance -->
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
+
+  <!-- NSUserTrackingUsageDescription — NOT needed, app does not track -->
+  <!-- Do NOT add NSUserTrackingUsageDescription if you don't use ATT -->
+</dict>
+</plist>

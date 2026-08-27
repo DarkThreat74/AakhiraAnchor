@@ -1,0 +1,57 @@
+App Name: Waqt
+
+Subtitle: Prayer-centered life tracker
+
+Primary Category: Lifestyle
+Secondary Category: Productivity
+
+Keywords (max 100 chars):
+prayer,islam,muslim,salah,namaz,calendar,goals,accountability,qadaa,dhikr
+
+Description (max 4000 chars):
+
+Waqt is a prayer-centered life tracker that anchors your day around the five daily prayers. Schedule events, track goals, and stay accountable to your prayer practice — all in one place.
+
+PRAYER ACCOUNTABILITY
+• Automatic prayer time calculation based on your location
+• Check in when you pray — the app tracks your streak and consistency
+• Gentle reminders at the start, middle, and end of each prayer window
+• No penalties for missed check-ins — unmarked prayers are assumed prayed
+• Qadaa tracker for missed prayers, with a simple estimator to get started
+
+CALENDAR
+• Day and month views with a scrollable hour grid
+• Prayer windows render as background bands — never blocking your events
+• Overlapping events stack side-by-side (no warnings, no blocking)
+• Natural language event entry (type "Meeting tomorrow at 3pm" and it parses)
+
+GOALS
+• Create goals as a simple list or as a branching tree map
+• Break big goals into smaller sub-goals with unlimited nesting
+• Add details and descriptions to any goal
+• Check off completed goals with a single tap
+• Export your goal map as an image or PDF
+• Share a read-only public link to your goals
+
+DAILY PRACTICE
+• Daily Huddle: a short task list to start your day with intention
+• Daily lessons from a curated, human-reviewed content bank
+• Dhikr counter with preset sequences and target counts
+• Curated talks library with external links to authenticated sources
+
+PRIVACY & SECURITY
+• Biometric authentication (Face ID / Touch ID) on app launch
+• Trusted-device login — no password needed on your own devices
+• Account deletion with full PII anonymization
+• No tracking, no advertising SDKs, no third-party analytics
+• Works offline — your data is cached and synced when you reconnect
+
+Waqt is free. Prayer accountability is and always will be free. The app does not process payments for religious obligations.
+
+Support URL: https://waqt.app/support
+Privacy Policy URL: https://waqt.app/privacy
+Marketing URL: https://waqt.app
+
+Copyright: © 2026 Waqt
+
+Version: 1.0.0

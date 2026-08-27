@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v16";
+const CACHE_VERSION = "waqt-v17";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -371,6 +371,7 @@ self.addEventListener("fetch", (event) => {
       pathname === "/signup" ||
       pathname === "/privacy" ||
       pathname === "/terms" ||
+      pathname === "/support" ||
       pathname.startsWith("/admin") ||
       pathname.startsWith("/user/public/") ||
       pathname.startsWith("/goals/shared/") ||

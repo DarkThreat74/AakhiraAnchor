@@ -7,12 +7,17 @@
         "paths": [
           "/prayer*",
           "/calendar*",
+          "/goals*",
           "/settings*",
           "/onboarding*",
           "NOT /",
           "NOT /login",
           "NOT /signup",
-          "NOT /admin*"
+          "NOT /admin*",
+          "NOT /api*",
+          "NOT /privacy",
+          "NOT /terms",
+          "NOT /support"
         ]
       }
     ]

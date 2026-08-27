@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Entitlements for Waqt iOS app.
+    After running `npx cap add ios`, set this as the entitlements file
+    for the App target in Xcode:
+    Target > Signing & Capabilities > add capabilities below.
+
+    Capabilities needed:
+    1. Associated Domains — applinks:waqt.app (Universal Links)
+    2. Push Notifications — APNs (production environment)
+    3. Keychain Sharing (optional — if biometric auth needs keychain access)
+  -->
+
+  <!-- Associated Domains — for Universal Links -->
+  <!-- Replace waqt.app with your actual domain if different -->
+  <key>com.apple.developer.associated-domains</key>
+  <array>
+    <string>applinks:waqt.app</string>
+  </array>
+
+  <!-- Push Notifications — APNs environment -->
+  <key>aps-environment</key>
+  <string>production</string>
+</dict>
+</plist>

@@ -1,32 +1,41 @@
-Fix Goals bugs + add details/description support
+App Store readiness: privacy manifest, support page, deep links, metadata
 
-Bugs fixed:
-- exportAsImage: removed broken shareNative call that shared text without
-  the image — now always downloads the PNG directly
-- exportAsPdf: fixed image onload race condition where the promise could
-  hang forever if the image was already cached/complete
-- exportRef: moved export container to only wrap the goals list, not the
-  "Add a goal" button and input fields
-- handleEditSave: added optimistic update for title/description edits
-  so the UI updates immediately even when offline (SW returns 202
-  without data.goal)
-- handleShareLink: now shows "Copied!" feedback even when native share
-  succeeds, not just on clipboard fallback
-- countCompleted: excluded archived goals from the total/done count
-- ListRow onBlur: removed auto-save on blur to prevent race conditions
-  with delete/add-child buttons — edit saves via Enter or Ctrl/Cmd+Enter
+Code-level fixes for Apple App Store submission:
 
-New feature — goal details/description:
-- Add goal form now has an optional description textarea
-- Sub-goal creation also supports description
-- Edit mode shows both title input and description textarea
-- List view: "Details" toggle button appears under goals that have
-  a description — click to expand/collapse
-- Tree view: same Details toggle inside the node card with a divider
-- Public shared goals page also shows descriptions with the same
-  expand/collapse pattern
-- API: added 2000 character length validation for description on
-  both POST and PATCH
+Privacy & compliance:
+- Created PrivacyInfo.xcprivacy privacy manifest declaring all data
+  collection (email, name, coarse location, device ID, product
+  interaction, user content) and required-reason APIs (UserDefaults,
+  file timestamps, system boot time, disk space)
+- Created Waqt.entitlements template (Associated Domains + APNs)
+- Created Info.plist additions template (NSFaceIDUsageDescription,
+  NSAppTransportSecurity, orientations, encryption exemption)
+- Created /support page (Apple requires a support URL)
+- Added /support to sitemap, robots.txt, and SW public route exclusions
+
+Universal Links / App Links:
+- Added /goals* to apple-app-site-association paths
+- Added /support, /api*, /privacy, /terms to exclusion list
+- Updated assetlinks.json formatting
+
+App Store metadata:
+- Created app description (under 4000 chars)
+- Created review notes with demo account instructions and native
+  feature list for Guideline 4.2 compliance
+- Created privacy nutrition label reference
+- Created APP_STORE.md submission guide with step-by-step process
+  and guideline compliance checklist
+- Created scripts/setup-ios.sh automated iOS project setup script
+
+Routing fixes:
+- Added /prayer and /goals to proxy protected paths for instant
+  redirect when unauthenticated (was only protected server-side)
+- Added /goals to robots.txt disallow list
+- Added /goals/shared/ to robots.txt allow list (public shares)
+
+Service worker:
+- Bumped cache version to waqt-v17
+- Added /support to public route exclusions
 
 Generated with [Devin](https://devin.ai)
 

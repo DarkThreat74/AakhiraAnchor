@@ -7,8 +7,12 @@ Disallow: /settings
 Disallow: /onboarding
 Disallow: /calendar
 Disallow: /prayer
+Disallow: /goals
 
 # Public calendar shares are indexable
 Allow: /user/public/
+
+# Public goal shares are indexable
+Allow: /goals/shared/
 
 Sitemap: https://waqt.app/sitemap.xml

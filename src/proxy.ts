@@ -11,7 +11,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get('waqt-session')?.value;
 
-  const protectedPaths = ['/calendar', '/settings', '/onboarding'];
+  const protectedPaths = ['/calendar', '/settings', '/onboarding', '/prayer', '/goals'];
   const authPaths = ['/login', '/signup'];
 
   const isProtected = protectedPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));

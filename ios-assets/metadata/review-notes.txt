@@ -1,0 +1,88 @@
+App Review Notes for Waqt
+==========================
+
+DEMO ACCOUNT (for review):
+Email: demo@waqt.app
+Password: WaqtReview2026!
+(Note: Create this account on the production site before submitting.
+The demo account should have completed onboarding and have sample data:
+prayer logs, calendar events, and goals.)
+
+---
+
+APP OVERVIEW:
+Waqt is a prayer-centered life tracker for Muslims. The five daily prayers
+(Fajr, Dhuhr, Asr, Maghrib, Isha) are the fixed anchors of the day. The app
+provides prayer time calculation, check-in accountability, a calendar with
+prayer window overlays, goal tracking with tree/list views, and curated
+religious content.
+
+NATIVE FEATURES (for Guideline 4.2 compliance):
+This app is not a website wrapper. It uses the following native iOS capabilities:
+
+1. BIOMETRIC AUTHENTICATION (Face ID / Touch ID)
+   - On app launch, the user is prompted to authenticate with Face ID
+   - Re-prompts when returning from background
+   - If biometrics are not enrolled, the gate is skipped (no lockout)
+   - Uses @aparajita/capacitor-biometric-auth plugin
+
+2. PUSH NOTIFICATIONS (APNs)
+   - Prayer check-in reminders at the start, middle, and end of each prayer window
+   - User must opt in during onboarding
+   - Uses @capacitor/push-notifications plugin
+
+3. HAPTIC FEEDBACK
+   - Success haptics on prayer check-in, goal completion
+   - Warning/error haptics on failures
+   - Uses @capacitor/haptics plugin
+
+4. NATIVE SHARE SHEET
+   - Share goals as public links via the iOS share sheet
+   - Uses @capacitor/share plugin
+
+5. UNIVERSAL LINKS (Deep Links)
+   - Opening waqt.app/prayer, /calendar, /goals, /settings links opens
+     the app directly instead of Safari
+   - Configured via apple-app-site-association at /.well-known/
+
+6. STATUS BAR INTEGRATION
+   - Status bar styled to match the app's dark theme
+   - Uses @capacitor/status-bar plugin
+
+7. SPLASH SCREEN
+   - Native splash screen on launch, hidden after React hydration
+   - Uses @capacitor/splash-screen plugin
+
+8. OFFLINE FALLBACK
+   - When the device is offline, a native offline screen is shown
+     instead of a blank white page
+
+CONTENT POLICY:
+- All religious content (hadith, dhikr sequences, daily lessons) is
+  human-curated from authenticated sources. No AI-generated religious content.
+- The app does not generate fatwas or religious rulings.
+- The talks library links to external authenticated sources only.
+
+MONETIZATION:
+- The app is free. No in-app purchases.
+- Prayer accountability features are free forever.
+- The app does not process payments for religious obligations.
+
+DATA COLLECTION:
+- Email, display name (account creation)
+- Coarse location (city-level, for prayer time calculation)
+- Push notification token (opt-in)
+- Device fingerprint hash (SHA-256, for trusted-device login)
+- Prayer check-in logs, calendar events, goals (user-created)
+- No tracking, no advertising SDKs
+- Privacy manifest included (PrivacyInfo.xcprivacy)
+
+ACCOUNT DELETION:
+- Users can delete their account from Settings > Account > Delete Account
+- PII is anonymized (email and name replaced with [deleted])
+- Prayer logs and analytics data are retained in anonymized form
+- Session is revoked immediately
+
+SUPPORT:
+- Support URL: https://waqt.app/support
+- Privacy Policy: https://waqt.app/privacy

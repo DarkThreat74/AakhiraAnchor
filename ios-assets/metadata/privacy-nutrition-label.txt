@@ -1,0 +1,73 @@
+App Store Privacy Nutrition Label — Waqt
+==========================================
+
+Fill this out in App Store Connect > App Privacy section.
+
+DATA LINKED TO YOU:
+(Linked to the user's identity via their account)
+
+1. Identifiers
+   - Email Address
+     Purpose: App Functionality (account creation, login, password recovery)
+     Linked: Yes
+     Tracking: No
+
+2. Personal Info
+   - Name (Display Name)
+     Purpose: App Functionality (profile, shared goals attribution)
+     Linked: Yes
+     Tracking: No
+
+3. Location
+   - Coarse Location (City-level)
+     Purpose: App Functionality (prayer time calculation)
+     Linked: Yes
+     Tracking: No
+
+4. Identifiers
+   - Device ID (Fingerprint Hash)
+     Purpose: App Functionality (trusted-device login)
+     Linked: Yes
+     Tracking: No
+
+5. Usage Data
+   - Product Interaction (Prayer check-ins, goal completion)
+     Purpose: App Functionality (accountability tracking)
+     Linked: Yes
+     Tracking: No
+
+6. User Content
+   - Other User Content (Calendar events, goals, prayer notes)
+     Purpose: App Functionality
+     Linked: Yes
+     Tracking: No
+
+DATA NOT COLLECTED:
+- Precise Location (only coarse city-level is used)
+- Contacts
+- Photos or Videos
+- Audio Data
+- Game Data
+- Health & Fitness
+- Financial Info
+- Browsing History
+- Search History
+- Diagnostics (no crash reporting SDK, no analytics SDK)
+- Purchases (no IAP)
+
+DATA USED FOR TRACKING:
+None. The app does not track users across other companies' apps or websites.
+
+THIRD-PARTY SDKs:
+- Capacitor (Ionic) — app framework, ships its own privacy manifest
+- @aparajita/capacitor-biometric-auth — biometric authentication
+- @capacitor/push-notifications — APNs integration
+- @capacitor/haptics — haptic feedback
+- @capacitor/share — native share sheet
+- @capacitor/status-bar — status bar styling
+- @capacitor/splash-screen — launch screen
+- @capacitor/app — app lifecycle, deep links
+- @capacitor/camera — installed but not actively used (no permission requested)
+- @capacitor/local-notifications — installed for local notification support
+
+No advertising SDKs. No analytics SDKs. No tracking SDKs.
