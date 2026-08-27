@@ -16,6 +16,7 @@ import {
   Loader2,
   List,
   GitBranch,
+  AlignLeft,
 } from "lucide-react";
 import type { Goal } from "@/lib/db/schema";
 import { buildGoalTree, countCompleted, type GoalNode } from "@/lib/goals/tree";
@@ -30,8 +31,10 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
   const [loading, setLoading] = useState(false);
   const [addingRoot, setAddingRoot] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -57,7 +60,6 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
     if (!navigator.serviceWorker) return;
     const handler = (event: MessageEvent) => {
       if (event.data?.type === "EVENT_SYNCED") {
-        // Refetch goals to replace temp IDs with real server data
         fetch("/api/goals")
           .then((r) => r.json().catch(() => ({})))
           .then((data) => {
@@ -71,7 +73,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
   }, []);
 
   const createGoal = useCallback(
-    async (title: string, parentId?: string | null) => {
+    async (title: string, parentId?: string | null, description?: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
       setLoading(true);
@@ -81,7 +83,11 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ title: trimmed, parentId: parentId ?? null }),
+          body: JSON.stringify({
+            title: trimmed,
+            parentId: parentId ?? null,
+            description: description?.trim() || undefined,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.goal) {
@@ -102,6 +108,21 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
 
   const updateGoal = useCallback(
     async (id: string, updates: Partial<Goal>) => {
+      // Optimistic update for title and description
+      if (updates.title !== undefined || updates.description !== undefined) {
+        setGoals((prev) =>
+          prev.map((g) =>
+            g.id === id
+              ? {
+                  ...g,
+                  ...(updates.title !== undefined ? { title: updates.title } : {}),
+                  ...(updates.description !== undefined ? { description: updates.description } : {}),
+                  updatedAt: new Date(),
+                }
+              : g,
+          ),
+        );
+      }
       try {
         const res = await fetch("/api/goals", {
           method: "PATCH",
@@ -126,7 +147,6 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
     try {
       const res = await fetch(`/api/goals?id=${id}`, { method: "DELETE" });
       if (res.ok) {
-        // Remove the goal and all its descendants from local state
         setGoals((prev) => {
           const toRemove = new Set<string>([id]);
           let changed = true;
@@ -151,7 +171,6 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
   const toggleDone = useCallback(
     (goal: Goal) => {
       const newStatus = goal.status === "done" ? "active" : "done";
-      // Optimistic update
       setGoals((prev) =>
         prev.map((g) =>
           g.id === goal.id
@@ -166,15 +185,22 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
 
   const handleAddRoot = () => {
     if (newTitle.trim()) {
-      void createGoal(newTitle);
+      void createGoal(newTitle, null, newDescription);
       setNewTitle("");
+      setNewDescription("");
       setAddingRoot(false);
     }
   };
 
+  const handleEditStart = (goal: Goal) => {
+    setEditingId(goal.id);
+    setEditTitle(goal.title);
+    setEditDescription(goal.description || "");
+  };
+
   const handleEditSave = (id: string) => {
     if (editTitle.trim()) {
-      void updateGoal(id, { title: editTitle.trim() });
+      void updateGoal(id, { title: editTitle.trim(), description: editDescription.trim() || null });
     }
     setEditingId(null);
   };
@@ -188,27 +214,19 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
       const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(exportRef.current, {
         cacheBust: true,
-        backgroundColor: getComputedStyle(document.body).getPropertyValue("--color-paper-2").trim() || "#f5f0e8",
+        backgroundColor:
+          getComputedStyle(document.body).getPropertyValue("--color-paper-2").trim() || "#f5f0e8",
         pixelRatio: 2,
       });
-
-      // Try native share, fallback to download
-      const shared = await shareNative({
-        title: "My Goals — Waqt",
-        text: "Check out my goals on Waqt",
-      }).catch(() => false);
-
-      if (!shared) {
-        // Convert dataUrl to blob for sharing or download
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "my-goals.png";
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      // Always download — shareNative doesn't support file sharing
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "my-goals.png";
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
       setError("Failed to export image");
     } finally {
@@ -225,15 +243,22 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
 
       const dataUrl = await toPng(exportRef.current, {
         cacheBust: true,
-        backgroundColor: getComputedStyle(document.body).getPropertyValue("--color-paper-2").trim() || "#f5f0e8",
+        backgroundColor:
+          getComputedStyle(document.body).getPropertyValue("--color-paper-2").trim() || "#f5f0e8",
         pixelRatio: 2,
       });
 
       const img = new Image();
       img.src = dataUrl;
-      await new Promise((resolve) => {
-        img.onload = resolve;
-      });
+      // Fix: handle race condition where image may already be loaded
+      if (img.complete) {
+        // already loaded
+      } else {
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      }
 
       const pdf = new jsPDF({
         orientation: img.width > img.height ? "landscape" : "portrait",
@@ -258,14 +283,20 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
 
   const handleShareLink = async () => {
     if (!shareUrl) {
-      // Generate one
       try {
         const res = await fetch("/api/goals/share", { method: "POST" });
         const data = await res.json().catch(() => ({}));
         if (data.url) {
           setShareUrl(data.url);
-          // Copy to clipboard
-          await navigator.clipboard.writeText(data.url).catch(() => {});
+          // Try native share first, fallback to clipboard
+          const shared = await shareNative({
+            title: "My Goals — Waqt",
+            text: "Check out my goals on Waqt",
+            url: data.url,
+          }).catch(() => false);
+          if (!shared) {
+            await navigator.clipboard.writeText(data.url).catch(() => {});
+          }
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
         }
@@ -273,18 +304,16 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
         setError("Failed to create share link");
       }
     } else {
-      // Already have a link — copy or share
       const shared = await shareNative({
         title: "My Goals — Waqt",
         text: "Check out my goals on Waqt",
         url: shareUrl,
       }).catch(() => false);
-
       if (!shared) {
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
       }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -302,7 +331,10 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
       {/* ── Header ── */}
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--color-ink)" }}>
+          <h1
+            className="text-xl font-semibold tracking-tight sm:text-2xl"
+            style={{ color: "var(--color-ink)" }}
+          >
             Goals
           </h1>
           {total > 0 && (
@@ -312,11 +344,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {/* View toggle */}
-          <div
-            className="flex rounded-lg border"
-            style={{ borderColor: "var(--color-paper-3)" }}
-          >
+          <div className="flex rounded-lg border" style={{ borderColor: "var(--color-paper-3)" }}>
             <button
               onClick={() => setView("list")}
               className="flex items-center gap-1.5 rounded-l-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-3"
@@ -345,7 +373,6 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
             </button>
           </div>
 
-          {/* Share button */}
           <button
             onClick={() => setShareOpen(true)}
             className="flex items-center justify-center rounded-lg border px-2.5 py-2 transition-colors"
@@ -372,75 +399,104 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
           }}
         >
           {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+          <button onClick={() => setError(null)} className="ml-2 underline">
+            Dismiss
+          </button>
         </div>
       )}
 
-      {/* ── Export container (captured for image/PDF) ── */}
-      <div ref={exportRef} style={{ backgroundColor: "var(--color-paper-2)", padding: "0" }}>
-        {/* Add root goal input */}
-        {addingRoot ? (
-          <div className="mb-4 rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-            <input
-              autoFocus
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddRoot();
-                if (e.key === "Escape") { setAddingRoot(false); setNewTitle(""); }
-              }}
-              placeholder="What's your goal?"
-              className="w-full rounded-lg border bg-transparent px-3 py-2.5 text-sm outline-none"
-              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)" }}
-            />
-            <div className="mt-2 flex gap-2">
-              <button
-                onClick={handleAddRoot}
-                disabled={loading || !newTitle.trim()}
-                className="rounded-lg px-4 py-2 text-xs font-medium transition-colors disabled:opacity-50"
-                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
-              >
-                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add goal"}
-              </button>
-              <button
-                onClick={() => { setAddingRoot(false); setNewTitle(""); }}
-                className="rounded-lg border px-4 py-2 text-xs font-medium transition-colors"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 36 }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setAddingRoot(true)}
-            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-3 text-sm font-medium transition-colors"
-            style={{
-              borderColor: "var(--color-paper-3)",
-              color: "var(--color-ink-muted)",
-              backgroundColor: "transparent",
-              minHeight: 44,
+      {/* Add root goal input */}
+      {addingRoot ? (
+        <div
+          className="mb-4 rounded-xl border p-3"
+          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+        >
+          <input
+            autoFocus
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleAddRoot();
+              if (e.key === "Escape") {
+                setAddingRoot(false);
+                setNewTitle("");
+                setNewDescription("");
+              }
             }}
-          >
-            <Plus className="h-4 w-4" />
-            Add a goal
-          </button>
-        )}
+            placeholder="What's your goal?"
+            className="w-full rounded-lg border bg-transparent px-3 py-2.5 text-sm outline-none"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)" }}
+          />
+          <textarea
+            value={newDescription}
+            onChange={(e) => setNewDescription(e.target.value)}
+            placeholder="Add details (optional)..."
+            rows={2}
+            className="mt-2 w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)" }}
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleAddRoot}
+              disabled={loading || !newTitle.trim()}
+              className="rounded-lg px-4 py-2 text-xs font-medium transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add goal"}
+            </button>
+            <button
+              onClick={() => {
+                setAddingRoot(false);
+                setNewTitle("");
+                setNewDescription("");
+              }}
+              className="rounded-lg border px-4 py-2 text-xs font-medium transition-colors"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                color: "var(--color-ink-muted)",
+                minHeight: 36,
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAddingRoot(true)}
+          className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-3 text-sm font-medium transition-colors"
+          style={{
+            borderColor: "var(--color-paper-3)",
+            color: "var(--color-ink-muted)",
+            backgroundColor: "transparent",
+            minHeight: 44,
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Add a goal
+        </button>
+      )}
 
-        {/* Goals content */}
+      {/* ── Export container (only captures the goals list, not the add button) ── */}
+      <div ref={exportRef} style={{ backgroundColor: "var(--color-paper-2)" }}>
         {goals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div
               className="mb-4 flex h-16 w-16 items-center justify-center rounded-full"
-              style={{ backgroundColor: "color-mix(in oklab, var(--color-accent) 10%, transparent)" }}
+              style={{
+                backgroundColor: "color-mix(in oklab, var(--color-accent) 10%, transparent)",
+              }}
             >
               <Target className="h-7 w-7" style={{ color: "var(--color-accent)" }} />
             </div>
             <h2 className="text-base font-semibold" style={{ color: "var(--color-ink)" }}>
               No goals yet
             </h2>
-            <p className="mt-1 max-w-xs text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            <p
+              className="mt-1 max-w-xs text-sm"
+              style={{ color: "var(--color-ink-muted)" }}
+            >
               Create your first goal, then branch it into smaller steps. Track progress, build a map, and share with others.
             </p>
           </div>
@@ -449,13 +505,16 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
             tree={tree}
             editingId={editingId}
             editTitle={editTitle}
+            editDescription={editDescription}
             setEditTitle={setEditTitle}
-            onEditStart={(goal) => { setEditingId(goal.id); setEditTitle(goal.title); }}
+            setEditDescription={setEditDescription}
+            onEditStart={handleEditStart}
             onEditSave={handleEditSave}
             onEditCancel={() => setEditingId(null)}
             onToggleDone={toggleDone}
             onAddChild={createGoal}
             onDelete={deleteGoal}
+            onUpdateDescription={updateGoal}
             loading={loading}
           />
         ) : (
@@ -463,13 +522,16 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
             tree={tree}
             editingId={editingId}
             editTitle={editTitle}
+            editDescription={editDescription}
             setEditTitle={setEditTitle}
-            onEditStart={(goal) => { setEditingId(goal.id); setEditTitle(goal.title); }}
+            setEditDescription={setEditDescription}
+            onEditStart={handleEditStart}
             onEditSave={handleEditSave}
             onEditCancel={() => setEditingId(null)}
             onToggleDone={toggleDone}
             onAddChild={createGoal}
             onDelete={deleteGoal}
+            onUpdateDescription={updateGoal}
             loading={loading}
           />
         )}
@@ -503,58 +565,97 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
             </div>
 
             <div className="space-y-2">
-              {/* Export as image */}
               <button
                 onClick={() => void exportAsImage()}
                 disabled={exporting !== null || goals.length === 0}
                 className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:opacity-50"
                 style={{ borderColor: "var(--color-paper-3)" }}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in oklab, var(--color-accent) 10%, transparent)" }}>
-                  {exporting === "image" ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--color-accent)" }} /> : <ImageIcon className="h-4 w-4" style={{ color: "var(--color-accent)" }} />}
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    backgroundColor: "color-mix(in oklab, var(--color-accent) 10%, transparent)",
+                  }}
+                >
+                  {exporting === "image" ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      style={{ color: "var(--color-accent)" }}
+                    />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Export as image</p>
-                  <p className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>Download or share as PNG</p>
+                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                    Export as image
+                  </p>
+                  <p className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                    Download as PNG
+                  </p>
                 </div>
               </button>
 
-              {/* Export as PDF */}
               <button
                 onClick={() => void exportAsPdf()}
                 disabled={exporting !== null || goals.length === 0}
                 className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:opacity-50"
                 style={{ borderColor: "var(--color-paper-3)" }}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in oklab, var(--color-warmth) 10%, transparent)" }}>
-                  {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--color-warmth)" }} /> : <FileText className="h-4 w-4" style={{ color: "var(--color-warmth)" }} />}
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    backgroundColor: "color-mix(in oklab, var(--color-warmth) 10%, transparent)",
+                  }}
+                >
+                  {exporting === "pdf" ? (
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      style={{ color: "var(--color-warmth)" }}
+                    />
+                  ) : (
+                    <FileText className="h-4 w-4" style={{ color: "var(--color-warmth)" }} />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Export as PDF</p>
-                  <p className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>Download as a PDF document</p>
+                  <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                    Export as PDF
+                  </p>
+                  <p className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                    Download as a PDF document
+                  </p>
                 </div>
               </button>
 
-              {/* Public link */}
               <button
                 onClick={() => void handleShareLink()}
                 className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
                 style={{ borderColor: "var(--color-paper-3)" }}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)" }}>
-                  {copied ? <Check className="h-4 w-4" style={{ color: "var(--color-success)" }} /> : <LinkIcon className="h-4 w-4" style={{ color: "var(--color-success)" }} />}
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)",
+                  }}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" style={{ color: "var(--color-success)" }} />
+                  ) : (
+                    <LinkIcon className="h-4 w-4" style={{ color: "var(--color-success)" }} />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
                     {copied ? "Copied!" : shareUrl ? "Copy public link" : "Create public link"}
                   </p>
                   <p className="truncate text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
-                    {shareUrl ? shareUrl.replace(/^https?:\/\//, "") : "Read-only view anyone can see"}
+                    {shareUrl
+                      ? shareUrl.replace(/^https?:\/\//, "")
+                      : "Read-only view anyone can see"}
                   </p>
                 </div>
               </button>
 
-              {/* Revoke link */}
               {shareUrl && (
                 <button
                   onClick={() => void handleRevokeShare()}
@@ -574,91 +675,50 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
 
 // ── List View ──
 
-function ListView({
-  tree,
-  editingId,
-  editTitle,
-  setEditTitle,
-  onEditStart,
-  onEditSave,
-  onEditCancel,
-  onToggleDone,
-  onAddChild,
-  onDelete,
-  loading,
-}: {
+interface ViewProps {
   tree: GoalNode[];
   editingId: string | null;
   editTitle: string;
+  editDescription: string;
   setEditTitle: (v: string) => void;
+  setEditDescription: (v: string) => void;
   onEditStart: (goal: Goal) => void;
   onEditSave: (id: string) => void;
   onEditCancel: () => void;
   onToggleDone: (goal: Goal) => void;
-  onAddChild: (title: string, parentId: string | null) => void;
+  onAddChild: (title: string, parentId: string | null, description?: string) => void;
   onDelete: (id: string) => void;
+  onUpdateDescription: (id: string, description: Partial<Goal>) => void;
   loading: boolean;
-}) {
+}
+
+function ListView(props: ViewProps) {
   return (
     <div className="space-y-1">
-      {tree.map((node) => (
-        <ListRow
-          key={node.id}
-          node={node}
-          editingId={editingId}
-          editTitle={editTitle}
-          setEditTitle={setEditTitle}
-          onEditStart={onEditStart}
-          onEditSave={onEditSave}
-          onEditCancel={onEditCancel}
-          onToggleDone={onToggleDone}
-          onAddChild={onAddChild}
-          onDelete={onDelete}
-          loading={loading}
-        />
+      {props.tree.map((node) => (
+        <ListRow key={node.id} node={node} {...props} />
       ))}
     </div>
   );
 }
 
-function ListRow({
-  node,
-  editingId,
-  editTitle,
-  setEditTitle,
-  onEditStart,
-  onEditSave,
-  onEditCancel,
-  onToggleDone,
-  onAddChild,
-  onDelete,
-  loading,
-}: {
-  node: GoalNode;
-  editingId: string | null;
-  editTitle: string;
-  setEditTitle: (v: string) => void;
-  onEditStart: (goal: Goal) => void;
-  onEditSave: (id: string) => void;
-  onEditCancel: () => void;
-  onToggleDone: (goal: Goal) => void;
-  onAddChild: (title: string, parentId: string | null) => void;
-  onDelete: (id: string) => void;
-  loading: boolean;
-}) {
+function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
   const [expanded, setExpanded] = useState(true);
   const [addingChild, setAddingChild] = useState(false);
   const [childTitle, setChildTitle] = useState("");
-  const isEditing = editingId === node.id;
+  const [childDescription, setChildDescription] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const isEditing = props.editingId === node.id;
   const isDone = node.status === "done";
   const hasChildren = node.children.length > 0;
-  // Max indent: 4 levels on mobile (16px each = 64px max)
+  const hasDescription = !!node.description;
   const indent = Math.min(node.depth, 4) * 16;
 
   const handleAddChild = () => {
     if (childTitle.trim()) {
-      onAddChild(childTitle, node.id);
+      props.onAddChild(childTitle, node.id, childDescription);
       setChildTitle("");
+      setChildDescription("");
       setAddingChild(false);
       setExpanded(true);
     }
@@ -670,7 +730,6 @@ function ListRow({
         className="group flex items-center gap-2 rounded-lg py-2 pr-2 transition-colors"
         style={{ paddingLeft: `${indent + 8}px` }}
       >
-        {/* Expand/collapse */}
         {hasChildren ? (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -684,9 +743,8 @@ function ListRow({
           <div className="w-5 shrink-0" />
         )}
 
-        {/* Checkmark toggle */}
         <button
-          onClick={() => onToggleDone(node)}
+          onClick={() => props.onToggleDone(node)}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
           style={{
             borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
@@ -699,37 +757,61 @@ function ListRow({
           {isDone && <Check className="h-3.5 w-3.5" style={{ color: "var(--color-paper)" }} />}
         </button>
 
-        {/* Title / edit input */}
         <div className="min-w-0 flex-1">
           {isEditing ? (
-            <input
-              autoFocus
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onEditSave(node.id);
-                if (e.key === "Escape") onEditCancel();
-              }}
-              onBlur={() => onEditSave(node.id)}
-              className="w-full rounded border bg-transparent px-1.5 py-0.5 text-sm outline-none"
-              style={{ borderColor: "var(--color-accent)", color: "var(--color-ink)" }}
-            />
+            <div className="space-y-1.5">
+              <input
+                autoFocus
+                type="text"
+                value={props.editTitle}
+                onChange={(e) => props.setEditTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") props.onEditSave(node.id);
+                  if (e.key === "Escape") props.onEditCancel();
+                }}
+                placeholder="Goal title"
+                className="w-full rounded border bg-transparent px-1.5 py-0.5 text-sm outline-none"
+                style={{ borderColor: "var(--color-accent)", color: "var(--color-ink)" }}
+              />
+              <textarea
+                value={props.editDescription}
+                onChange={(e) => props.setEditDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) props.onEditSave(node.id);
+                  if (e.key === "Escape") props.onEditCancel();
+                }}
+                placeholder="Add details..."
+                rows={2}
+                className="w-full resize-none rounded border bg-transparent px-1.5 py-1 text-xs outline-none"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+              />
+            </div>
           ) : (
-            <button
-              onClick={() => onEditStart(node)}
-              className="block w-full truncate text-left text-sm"
-              style={{
-                color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
-                textDecoration: isDone ? "line-through" : "none",
-              }}
-            >
-              {node.title}
-            </button>
+            <div>
+              <button
+                onClick={() => props.onEditStart(node)}
+                className="block w-full truncate text-left text-sm"
+                style={{
+                  color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
+                  textDecoration: isDone ? "line-through" : "none",
+                }}
+              >
+                {node.title}
+              </button>
+              {hasDescription && !showDetails && (
+                <button
+                  onClick={() => setShowDetails(true)}
+                  className="mt-0.5 flex items-center gap-1 text-[11px]"
+                  style={{ color: "var(--color-ink-muted)" }}
+                >
+                  <AlignLeft className="h-3 w-3" />
+                  Details
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex shrink-0 items-center gap-0.5">
           <button
             onClick={() => setAddingChild(true)}
@@ -741,7 +823,7 @@ function ListRow({
           </button>
           <button
             onClick={() => {
-              if (confirm("Delete this goal and all its sub-goals?")) onDelete(node.id);
+              if (confirm("Delete this goal and all its sub-goals?")) props.onDelete(node.id);
             }}
             className="rounded p-1.5 transition-colors"
             style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
@@ -752,9 +834,38 @@ function ListRow({
         </div>
       </div>
 
+      {/* Description display (when not editing) */}
+      {hasDescription && showDetails && !isEditing && (
+        <div
+          className="flex items-start gap-2 py-1 pr-2 text-xs"
+          style={{ paddingLeft: `${indent + 8 + 28 + 24}px` }}
+        >
+          <AlignLeft
+            className="mt-0.5 h-3 w-3 shrink-0"
+            style={{ color: "var(--color-ink-muted)" }}
+          />
+          <p
+            className="min-w-0 flex-1 whitespace-pre-wrap break-words"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            {node.description}
+          </p>
+          <button
+            onClick={() => setShowDetails(false)}
+            className="shrink-0 rounded p-0.5"
+            style={{ color: "var(--color-ink-muted)" }}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
       {/* Add child input */}
       {addingChild && (
-        <div className="flex items-center gap-2 py-1.5 pr-2" style={{ paddingLeft: `${indent + 24 + 8}px` }}>
+        <div
+          className="space-y-1.5 py-1.5 pr-2"
+          style={{ paddingLeft: `${indent + 24 + 8}px` }}
+        >
           <input
             autoFocus
             type="text"
@@ -762,48 +873,56 @@ function ListRow({
             onChange={(e) => setChildTitle(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleAddChild();
-              if (e.key === "Escape") { setAddingChild(false); setChildTitle(""); }
+              if (e.key === "Escape") {
+                setAddingChild(false);
+                setChildTitle("");
+                setChildDescription("");
+              }
             }}
             placeholder="Sub-goal title"
-            className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1.5 text-sm outline-none"
+            className="w-full rounded border bg-transparent px-2 py-1.5 text-sm outline-none"
             style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)" }}
           />
-          <button
-            onClick={handleAddChild}
-            disabled={loading || !childTitle.trim()}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
-          >
-            Add
-          </button>
-          <button
-            onClick={() => { setAddingChild(false); setChildTitle(""); }}
-            className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 36 }}
-          >
-            Cancel
-          </button>
+          <textarea
+            value={childDescription}
+            onChange={(e) => setChildDescription(e.target.value)}
+            placeholder="Add details (optional)..."
+            rows={2}
+            className="w-full resize-none rounded border bg-transparent px-2 py-1.5 text-xs outline-none"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleAddChild}
+              disabled={props.loading || !childTitle.trim()}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
+            >
+              Add
+            </button>
+            <button
+              onClick={() => {
+                setAddingChild(false);
+                setChildTitle("");
+                setChildDescription("");
+              }}
+              className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                color: "var(--color-ink-muted)",
+                minHeight: 36,
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Children */}
       {expanded && hasChildren && (
         <div>
           {node.children.map((child) => (
-            <ListRow
-              key={child.id}
-              node={child}
-              editingId={editingId}
-              editTitle={editTitle}
-              setEditTitle={setEditTitle}
-              onEditStart={onEditStart}
-              onEditSave={onEditSave}
-              onEditCancel={onEditCancel}
-              onToggleDone={onToggleDone}
-              onAddChild={onAddChild}
-              onDelete={onDelete}
-              loading={loading}
-            />
+            <ListRow key={child.id} node={child} {...props} />
           ))}
         </div>
       )}
@@ -813,91 +932,37 @@ function ListRow({
 
 // ── Tree View ──
 
-function TreeView({
-  tree,
-  editingId,
-  editTitle,
-  setEditTitle,
-  onEditStart,
-  onEditSave,
-  onEditCancel,
-  onToggleDone,
-  onAddChild,
-  onDelete,
-  loading,
-}: {
-  tree: GoalNode[];
-  editingId: string | null;
-  editTitle: string;
-  setEditTitle: (v: string) => void;
-  onEditStart: (goal: Goal) => void;
-  onEditSave: (id: string) => void;
-  onEditCancel: () => void;
-  onToggleDone: (goal: Goal) => void;
-  onAddChild: (title: string, parentId: string | null) => void;
-  onDelete: (id: string) => void;
-  loading: boolean;
-}) {
+function TreeView(props: ViewProps) {
   return (
     <div className="overflow-x-auto pb-4">
-      <div className="inline-flex min-w-full flex-col gap-6" style={{ minWidth: "max-content" }}>
-        {tree.map((node) => (
-          <TreeBranch
-            key={node.id}
-            node={node}
-            editingId={editingId}
-            editTitle={editTitle}
-            setEditTitle={setEditTitle}
-            onEditStart={onEditStart}
-            onEditSave={onEditSave}
-            onEditCancel={onEditCancel}
-            onToggleDone={onToggleDone}
-            onAddChild={onAddChild}
-            onDelete={onDelete}
-            loading={loading}
-          />
+      <div
+        className="inline-flex min-w-full flex-col gap-6"
+        style={{ minWidth: "max-content" }}
+      >
+        {props.tree.map((node) => (
+          <TreeBranch key={node.id} node={node} {...props} />
         ))}
       </div>
     </div>
   );
 }
 
-function TreeBranch({
-  node,
-  editingId,
-  editTitle,
-  setEditTitle,
-  onEditStart,
-  onEditSave,
-  onEditCancel,
-  onToggleDone,
-  onAddChild,
-  onDelete,
-  loading,
-}: {
-  node: GoalNode;
-  editingId: string | null;
-  editTitle: string;
-  setEditTitle: (v: string) => void;
-  onEditStart: (goal: Goal) => void;
-  onEditSave: (id: string) => void;
-  onEditCancel: () => void;
-  onToggleDone: (goal: Goal) => void;
-  onAddChild: (title: string, parentId: string | null) => void;
-  onDelete: (id: string) => void;
-  loading: boolean;
-}) {
+function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
   const [expanded, setExpanded] = useState(true);
   const [addingChild, setAddingChild] = useState(false);
   const [childTitle, setChildTitle] = useState("");
-  const isEditing = editingId === node.id;
+  const [childDescription, setChildDescription] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const isEditing = props.editingId === node.id;
   const isDone = node.status === "done";
   const hasChildren = node.children.length > 0;
+  const hasDescription = !!node.description;
 
   const handleAddChild = () => {
     if (childTitle.trim()) {
-      onAddChild(childTitle, node.id);
+      props.onAddChild(childTitle, node.id, childDescription);
       setChildTitle("");
+      setChildDescription("");
       setAddingChild(false);
       setExpanded(true);
     }
@@ -905,9 +970,8 @@ function TreeBranch({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Node card */}
       <div
-        className="flex items-center gap-2 rounded-xl border px-3 py-2.5"
+        className="rounded-xl border px-3 py-2.5"
         style={{
           borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
           backgroundColor: "var(--color-paper)",
@@ -915,61 +979,112 @@ function TreeBranch({
           maxWidth: 280,
         }}
       >
-        {/* Checkmark */}
-        <button
-          onClick={() => onToggleDone(node)}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
-          style={{
-            borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
-            backgroundColor: isDone ? "var(--color-success)" : "transparent",
-            minHeight: 44,
-            minWidth: 44,
-          }}
-          aria-label={isDone ? "Mark as not done" : "Mark as done"}
-        >
-          {isDone && <Check className="h-3.5 w-3.5" style={{ color: "var(--color-paper)" }} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => props.onToggleDone(node)}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
+            style={{
+              borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
+              backgroundColor: isDone ? "var(--color-success)" : "transparent",
+              minHeight: 44,
+              minWidth: 44,
+            }}
+            aria-label={isDone ? "Mark as not done" : "Mark as done"}
+          >
+            {isDone && <Check className="h-3.5 w-3.5" style={{ color: "var(--color-paper)" }} />}
+          </button>
 
-        {/* Title */}
-        <div className="min-w-0 flex-1">
-          {isEditing ? (
-            <input
-              autoFocus
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onEditSave(node.id);
-                if (e.key === "Escape") onEditCancel();
-              }}
-              onBlur={() => onEditSave(node.id)}
-              className="w-full rounded border bg-transparent px-1.5 py-0.5 text-sm outline-none"
-              style={{ borderColor: "var(--color-accent)", color: "var(--color-ink)" }}
-            />
-          ) : (
+          <div className="min-w-0 flex-1">
+            {isEditing ? (
+              <div className="space-y-1.5">
+                <input
+                  autoFocus
+                  type="text"
+                  value={props.editTitle}
+                  onChange={(e) => props.setEditTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") props.onEditSave(node.id);
+                    if (e.key === "Escape") props.onEditCancel();
+                  }}
+                  placeholder="Goal title"
+                  className="w-full rounded border bg-transparent px-1.5 py-0.5 text-sm outline-none"
+                  style={{ borderColor: "var(--color-accent)", color: "var(--color-ink)" }}
+                />
+                <textarea
+                  value={props.editDescription}
+                  onChange={(e) => props.setEditDescription(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) props.onEditSave(node.id);
+                    if (e.key === "Escape") props.onEditCancel();
+                  }}
+                  placeholder="Add details..."
+                  rows={2}
+                  className="w-full resize-none rounded border bg-transparent px-1.5 py-1 text-xs outline-none"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+                />
+              </div>
+            ) : (
+              <div>
+                <button
+                  onClick={() => props.onEditStart(node)}
+                  className="block w-full truncate text-left text-sm font-medium"
+                  style={{
+                    color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
+                    textDecoration: isDone ? "line-through" : "none",
+                  }}
+                >
+                  {node.title}
+                </button>
+                {hasDescription && !showDetails && (
+                  <button
+                    onClick={() => setShowDetails(true)}
+                    className="mt-0.5 flex items-center gap-1 text-[11px]"
+                    style={{ color: "var(--color-ink-muted)" }}
+                  >
+                    <AlignLeft className="h-3 w-3" />
+                    Details
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {hasChildren && (
             <button
-              onClick={() => onEditStart(node)}
-              className="block w-full truncate text-left text-sm font-medium"
-              style={{
-                color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
-                textDecoration: isDone ? "line-through" : "none",
-              }}
+              onClick={() => setExpanded(!expanded)}
+              className="shrink-0 rounded p-0.5"
+              style={{ color: "var(--color-ink-muted)" }}
+              aria-label={expanded ? "Collapse" : "Expand"}
             >
-              {node.title}
+              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             </button>
           )}
         </div>
 
-        {/* Expand toggle */}
-        {hasChildren && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="shrink-0 rounded p-0.5"
-            style={{ color: "var(--color-ink-muted)" }}
-            aria-label={expanded ? "Collapse" : "Expand"}
+        {/* Description display */}
+        {hasDescription && showDetails && !isEditing && (
+          <div
+            className="mt-2 flex items-start gap-2 border-t pt-2 text-xs"
+            style={{ borderColor: "var(--color-paper-3)" }}
           >
-            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
+            <AlignLeft
+              className="mt-0.5 h-3 w-3 shrink-0"
+              style={{ color: "var(--color-ink-muted)" }}
+            />
+            <p
+              className="min-w-0 flex-1 whitespace-pre-wrap break-words"
+              style={{ color: "var(--color-ink-soft)" }}
+            >
+              {node.description}
+            </p>
+            <button
+              onClick={() => setShowDetails(false)}
+              className="shrink-0 rounded p-0.5"
+              style={{ color: "var(--color-ink-muted)" }}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -985,7 +1100,7 @@ function TreeBranch({
         </button>
         <button
           onClick={() => {
-            if (confirm("Delete this goal and all its branches?")) onDelete(node.id);
+            if (confirm("Delete this goal and all its branches?")) props.onDelete(node.id);
           }}
           className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors"
           style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 32 }}
@@ -996,7 +1111,7 @@ function TreeBranch({
 
       {/* Add child input */}
       {addingChild && (
-        <div className="flex items-center gap-2" style={{ paddingLeft: 12 }}>
+        <div className="space-y-1.5" style={{ paddingLeft: 12 }}>
           <input
             autoFocus
             type="text"
@@ -1004,34 +1119,54 @@ function TreeBranch({
             onChange={(e) => setChildTitle(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleAddChild();
-              if (e.key === "Escape") { setAddingChild(false); setChildTitle(""); }
+              if (e.key === "Escape") {
+                setAddingChild(false);
+                setChildTitle("");
+                setChildDescription("");
+              }
             }}
-            placeholder="Sub-goal"
-            className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)", maxWidth: 200 }}
+            placeholder="Sub-goal title"
+            className="w-full rounded border bg-transparent px-2 py-1.5 text-sm outline-none"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)", maxWidth: 240 }}
           />
-          <button
-            onClick={handleAddChild}
-            disabled={loading || !childTitle.trim()}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
-          >
-            Add
-          </button>
-          <button
-            onClick={() => { setAddingChild(false); setChildTitle(""); }}
-            className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 36 }}
-          >
-            Cancel
-          </button>
+          <textarea
+            value={childDescription}
+            onChange={(e) => setChildDescription(e.target.value)}
+            placeholder="Add details (optional)..."
+            rows={2}
+            className="w-full resize-none rounded border bg-transparent px-2 py-1.5 text-xs outline-none"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", maxWidth: 240 }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleAddChild}
+              disabled={props.loading || !childTitle.trim()}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
+            >
+              Add
+            </button>
+            <button
+              onClick={() => {
+                setAddingChild(false);
+                setChildTitle("");
+                setChildDescription("");
+              }}
+              className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                color: "var(--color-ink-muted)",
+                minHeight: 36,
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Children with connector lines */}
       {expanded && hasChildren && (
         <div className="relative" style={{ paddingLeft: 24 }}>
-          {/* Vertical connector line */}
           <div
             className="absolute left-2 top-0 bottom-0 w-px"
             style={{ backgroundColor: "var(--color-paper-3)" }}
@@ -1039,24 +1174,11 @@ function TreeBranch({
           <div className="space-y-4">
             {node.children.map((child) => (
               <div key={child.id} className="relative">
-                {/* Horizontal connector to child */}
                 <div
                   className="absolute left-[-12px] top-5 h-px w-3"
                   style={{ backgroundColor: "var(--color-paper-3)" }}
                 />
-                <TreeBranch
-                  node={child}
-                  editingId={editingId}
-                  editTitle={editTitle}
-                  setEditTitle={setEditTitle}
-                  onEditStart={onEditStart}
-                  onEditSave={onEditSave}
-                  onEditCancel={onEditCancel}
-                  onToggleDone={onToggleDone}
-                  onAddChild={onAddChild}
-                  onDelete={onDelete}
-                  loading={loading}
-                />
+                <TreeBranch node={child} {...props} />
               </div>
             ))}
           </div>

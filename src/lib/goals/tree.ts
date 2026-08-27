@@ -49,12 +49,13 @@ export function countDescendants(node: GoalNode): number {
 }
 
 /**
- * Count completed goals in a tree.
+ * Count completed goals in a tree (excludes archived goals).
  */
 export function countCompleted(nodes: GoalNode[]): { total: number; done: number } {
   let total = 0;
   let done = 0;
   function walk(node: GoalNode) {
+    if (node.status === "archived") return;
     total++;
     if (node.status === "done") done++;
     node.children.forEach(walk);

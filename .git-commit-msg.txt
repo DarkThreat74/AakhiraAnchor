@@ -1,26 +1,33 @@
-Fix Goals offline support + SW improvements
+Fix Goals bugs + add details/description support
 
-Offline support for Goals:
-- SW now returns synthetic goal object in offline POST response so the
-  client can add it to local state immediately (with _pending flag)
-- GoalsClient listens for EVENT_SYNCED message from SW and refetches
-  goals to replace temp IDs with real server data
-- Excluded /api/goals/share and /api/goals/shared from SW outbox
-  (share management needs network, shouldn't queue offline)
-- Added /goals/shared/ and /privacy and /terms to SW public page
-  exclusion list (don't intercept, let browser handle normally)
-- Bumped SW cache version to waqt-v16
+Bugs fixed:
+- exportAsImage: removed broken shareNative call that shared text without
+  the image — now always downloads the PNG directly
+- exportAsPdf: fixed image onload race condition where the promise could
+  hang forever if the image was already cached/complete
+- exportRef: moved export container to only wrap the goals list, not the
+  "Add a goal" button and input fields
+- handleEditSave: added optimistic update for title/description edits
+  so the UI updates immediately even when offline (SW returns 202
+  without data.goal)
+- handleShareLink: now shows "Copied!" feedback even when native share
+  succeeds, not just on clipboard fallback
+- countCompleted: excluded archived goals from the total/done count
+- ListRow onBlur: removed auto-save on blur to prevent race conditions
+  with delete/add-child buttons — edit saves via Enter or Ctrl/Cmd+Enter
 
-Tested:
-- Migration ran successfully against Neon (goals + goal_share_tokens)
-- GET /api/goals returns empty array for new user
-- POST /api/goals creates goal with correct fields
-- POST /api/goals with parentId creates sub-goal (branch)
-- PATCH /api/goals with status=done sets completedAt
-- DELETE /api/goals?id=... cascade-deletes children
-- POST /api/goals/share generates UUID token
-- GET /api/goals/shared?token=... returns public goals + ownerName
-- /goals page renders with "Goals" heading and "Add a goal" button
-- /goals/shared/<token> page renders (200)
+New feature — goal details/description:
+- Add goal form now has an optional description textarea
+- Sub-goal creation also supports description
+- Edit mode shows both title input and description textarea
+- List view: "Details" toggle button appears under goals that have
+  a description — click to expand/collapse
+- Tree view: same Details toggle inside the node card with a divider
+- Public shared goals page also shows descriptions with the same
+  expand/collapse pattern
+- API: added 2000 character length validation for description on
+  both POST and PATCH
 
-Also added tsx dev dependency and migration script.
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

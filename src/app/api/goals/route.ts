@@ -55,6 +55,9 @@ export async function POST(request: Request) {
     if (title.length > 200) {
       return NextResponse.json({ error: "Title must be 200 characters or less" }, { status: 400 });
     }
+    if (body.description && body.description.length > 2000) {
+      return NextResponse.json({ error: "Description must be 2000 characters or less" }, { status: 400 });
+    }
 
     // Validate parentId belongs to the user if provided
     if (body.parentId) {
@@ -152,7 +155,12 @@ export async function PATCH(request: Request) {
       if (!trimmed) return NextResponse.json({ error: "Title cannot be empty" }, { status: 400 });
       updates.title = trimmed.slice(0, 200);
     }
-    if (body.description !== undefined) updates.description = body.description?.trim() || null;
+    if (body.description !== undefined) {
+      if (body.description.length > 2000) {
+        return NextResponse.json({ error: "Description must be 2000 characters or less" }, { status: 400 });
+      }
+      updates.description = body.description.trim() || null;
+    }
     if (body.status !== undefined) {
       if (!["active", "done", "archived"].includes(body.status)) {
         return NextResponse.json({ error: "Invalid status" }, { status: 400 });
