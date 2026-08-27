@@ -478,7 +478,7 @@ export default function PrayerDashboard() {
   const sunnahDefinitions = getSunnahsForMadhab(madhab);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto max-w-4xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="mb-4 text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--color-ink)" }}>
         Prayer
       </h1>
@@ -526,7 +526,7 @@ export default function PrayerDashboard() {
       {activeTab === "comparison" && (
         <div className="space-y-6">
           {/* ── Today's Progress — Vertical Timeline ── */}
-          <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
             <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
               <div className="flex items-center justify-between">
                 <div>
@@ -563,12 +563,12 @@ export default function PrayerDashboard() {
 
                   return (
                     <div className="mb-3 mt-1">
-                      <div className="mb-1 flex items-center justify-between text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                        <span>Fajr {format12h(prayerTimes.fajr)}</span>
-                        <span style={{ color: beforeDay ? "var(--color-ink-muted)" : "var(--color-accent)" }}>
-                          {beforeDay ? "Day hasn't started" : `${Math.floor(dayPct)}% through the day`}
+                      <div className="mb-1 flex items-center justify-between gap-1 text-[10px] tabular-nums sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        <span className="shrink-0">Fajr {format12h(prayerTimes.fajr)}</span>
+                        <span className="min-w-0 truncate text-center" style={{ color: beforeDay ? "var(--color-ink-muted)" : "var(--color-accent)" }}>
+                          {beforeDay ? "Day hasn't started" : `${Math.floor(dayPct)}% through`}
                         </span>
-                        <span>Isha {format12h(prayerTimes.isha)}</span>
+                        <span className="shrink-0">Isha {format12h(prayerTimes.isha)}</span>
                       </div>
                       <div
                         className="relative h-2 w-full overflow-hidden rounded-full"
@@ -919,7 +919,7 @@ export default function PrayerDashboard() {
           </div>
 
           {/* ── Friends comparison ── */}
-          <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
             <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
               <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
                 <Users className="h-4 w-4" /> Competition
@@ -976,7 +976,7 @@ export default function PrayerDashboard() {
       {activeTab === "stats" && (
         <div className="space-y-6">
           {/* Overview metrics */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             <StatCard
               icon={<Flame className="h-4 w-4" />}
               label="Current Streak"
@@ -1008,7 +1008,7 @@ export default function PrayerDashboard() {
           </div>
 
           {/* Per-prayer breakdown */}
-          <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
             <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
               <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Per-Prayer Breakdown</h2>
               <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>Last 90 days of data</p>
@@ -1024,7 +1024,7 @@ export default function PrayerDashboard() {
                         {PRAYER_LABELS[stat.prayer] || stat.prayer}
                       </span>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 text-center">
+                    <div className="grid grid-cols-4 gap-1 text-center sm:gap-2">
                       <Metric label="Prayed" value={`${stat.totalPrayed}`} />
                       <Metric label="Consistency" value={`${stat.consistencyPct}%`} />
                       <Metric label="Masjid" value={`${stat.masjidPct}%`} />
@@ -1050,7 +1050,7 @@ export default function PrayerDashboard() {
       {activeTab === "qadaa" && (
         <div className="space-y-6">
           {qadaa && !qadaa.setupCompleted && (
-            <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+            <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
               <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
                 <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Set Up Qadaa</h2>
               </div>
@@ -1101,12 +1101,12 @@ export default function PrayerDashboard() {
           )}
 
           {qadaa && qadaa.setupCompleted && (
-            <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+            <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
               <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
                 <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Qadaa Tracker</h2>
               </div>
               <div className="px-4 py-4 sm:px-5">
-                <div className="mb-4 grid grid-cols-5 gap-2">
+                <div className="mb-4 grid grid-cols-5 gap-1.5 sm:gap-2">
                   {([
                     { key: "fajr", label: "Fajr", val: qadaa.fajrOwed },
                     { key: "dhuhr", label: "Dhuhr", val: qadaa.dhuhrOwed },
@@ -1197,7 +1197,7 @@ export default function PrayerDashboard() {
           TAB: FRIENDS
           ════════════════════════════════════════════════════════════════ */}
       {activeTab === "friends" && (
-        <div className="rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+        <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
           <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
             <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
               <Users className="h-4 w-4" /> Friends Competition

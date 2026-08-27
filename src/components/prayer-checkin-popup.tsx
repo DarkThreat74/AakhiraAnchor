@@ -188,7 +188,7 @@ export default function PrayerCheckinPopup({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl border p-5 shadow-xl"
+        className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-2xl border p-5 shadow-xl"
         style={{
           backgroundColor: "var(--color-paper)",
           borderColor: "var(--color-paper-3)",

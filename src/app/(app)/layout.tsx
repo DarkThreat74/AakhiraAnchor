@@ -98,6 +98,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           style={{
             borderColor: "var(--color-paper-3)",
             backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
+            paddingTop: "calc(0.75rem + env(safe-area-inset-top))",
           }}
         >
           <span className="text-base font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
@@ -106,7 +107,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page content */}
-        <main id="main-content" className="flex-1 overflow-x-hidden pb-16 lg:pb-0">
+        <main id="main-content" className="flex-1 overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>

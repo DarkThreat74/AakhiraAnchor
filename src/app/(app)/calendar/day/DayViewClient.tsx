@@ -583,7 +583,7 @@ export default function DayViewClient({ date }: { date: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-2 py-3 sm:px-6 sm:py-6">
+    <div className="mx-auto max-w-5xl overflow-x-hidden px-3 py-3 sm:px-6 sm:py-6">
       {/* Offline banner — only show after mount to avoid hydration mismatch */}
       {mounted && !isOnline && (
         <div
@@ -938,7 +938,7 @@ export default function DayViewClient({ date }: { date: string }) {
             onSubmit={editingEvent ? handleUpdateEvent : handleAddEvent}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-t-2xl border p-5 sm:rounded-2xl"
-            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", maxHeight: "90vh", overflowY: "auto" }}
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", maxHeight: "90vh", overflowY: "auto", paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
           >
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
