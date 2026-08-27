@@ -1,12 +1,37 @@
-Fix Isha window end + Asr masjid question timing
+Add Goals section — hierarchical goals with list/tree views and sharing
 
-Bug 1: Isha "time left" showed time until midnight, not until next Fajr.
-The dashboard computed Isha's window end as 24*60 (midnight) instead of
-next day's Fajr. Now uses fajrMinutes + 1440, and handles the
-after-midnight case with effectiveCurrent (currentMinutes + 1440).
+New top-level Goals section (4th nav item: Calendar | Prayer | Goals | Settings).
 
-Bug 2: Asr masjid question showed until the last hour of Asr. User wants
-30 min before window end (matching Fajr's behavior). Changed from
-asrEnd - 60 to asrEnd - 30 in shouldShowMasjidQuestion.
+Features:
+- Create goals with a checkmark toggle to mark done
+- Branch goals into sub-goals (infinite nesting, parent-child relationships)
+- Two views: List (indented rows) and Tree (visual branches with connector lines)
+- Share menu with three export options:
+  - Export as PNG image (html-to-image, lazy-loaded)
+  - Export as PDF (jspdf, lazy-loaded)
+  - Public shareable link (read-only view at /goals/shared/<token>)
+- Native share sheet support on mobile (Capacitor Share plugin)
+- Public shared goals page with list/tree toggle, no auth required
 
-Also added PLAN.md with the Goals section implementation plan.
+Schema:
+- goals table: id, userId, parentId (self-ref FK with cascade delete),
+  title, description, status (active/done/archived), sortOrder, color,
+  createdAt, updatedAt, completedAt
+- goal_share_tokens table: id, userId, token (unique), createdAt
+
+API routes:
+- GET/POST/PATCH/DELETE /api/goals — CRUD with ownership validation
+  and circular reference prevention
+- POST/DELETE /api/goals/share — generate/revoke share token
+- GET /api/goals/shared?token=<token> — public read-only endpoint
+
+Mobile considerations:
+- List view: max 4 levels of indent (16px each = 64px max on 320px)
+- Tree view: horizontal scroll with overflow-x-auto, min-width nodes
+- Share menu: bottom sheet on mobile, centered on desktop
+- All touch targets >= 36px (checkmark uses 44px hit area)
+- View toggle and share button in header, shrink-0 to prevent overflow
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

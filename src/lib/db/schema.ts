@@ -379,6 +379,31 @@ export const trustedDevices = pgTable('trusted_devices', {
   userDeviceIdx: uniqueIndex('trusted_devices_user_hash_idx').on(t.userId, t.fingerprintHash),
 }));
 
+// ─── Goals (hierarchical goal tracking with tree/list views) ───
+
+export const goals = pgTable('goals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Self-referencing FK — the cascade delete is handled in the migration SQL
+  // because Drizzle's type inference can't handle () => goals.id in the same initializer
+  parentId: uuid('parent_id'),
+  title: text('title').notNull(),
+  description: text('description'),
+  status: text('status').default('active').notNull(), // active | done | archived
+  sortOrder: integer('sort_order').default(0).notNull(),
+  color: text('color'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
+
+export const goalShareTokens = pgTable('goal_share_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').unique().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ─── Type Exports (for use in app code) ───
 
 export type User = typeof users.$inferSelect;
@@ -404,3 +429,6 @@ export type Talk = typeof talks.$inferSelect;
 export type OnboardingResponse = typeof onboardingResponses.$inferSelect;
 export type PrayerFriend = typeof prayerFriends.$inferSelect;
 export type TrustedDevice = typeof trustedDevices.$inferSelect;
+export type Goal = typeof goals.$inferSelect;
+export type NewGoal = typeof goals.$inferInsert;
+export type GoalShareToken = typeof goalShareTokens.$inferSelect;
