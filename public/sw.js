@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v14";
+const CACHE_VERSION = "waqt-v15";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -113,6 +113,18 @@ async function syncOutbox() {
       if (res.ok) {
         await removeFromOutbox(item.id);
         syncedCount++;
+      } else if (res.status === 401 || res.status === 403) {
+        // Session expired — keep the item in the outbox so it can retry
+        // after the user re-authenticates. Don't drop queued writes.
+        // Notify client so it can prompt re-login.
+        const clients = await self.clients.matchAll({ type: "window" });
+        clients.forEach((c) => c.postMessage({
+          type: "EVENT_SYNC_FAILED",
+          operation: item,
+          status: res.status,
+        }));
+        // Stop syncing — remaining items will also fail with 401
+        break;
       } else {
         // Server rejected it (e.g. validation error) — remove from outbox
         // to avoid retrying forever, but notify client

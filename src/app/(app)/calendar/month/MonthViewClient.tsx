@@ -70,7 +70,8 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
         ]);
 
         if (eventsRes.ok && !cancelled) {
-          const events: CalendarEvent[] = await eventsRes.json();
+          const events: CalendarEvent[] = await eventsRes.json().catch(() => []);
+          if (!Array.isArray(events)) return;
           const grouped: Record<string, CalendarEvent[]> = {};
           for (const event of events) {
             const d = new Date(event.startAt);
@@ -85,7 +86,8 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
         }
 
         if (logRes?.ok && !cancelled) {
-          const logs: PrayerLogEntry[] = await logRes.json();
+          const logs: PrayerLogEntry[] = await logRes.json().catch(() => []);
+          if (!Array.isArray(logs)) return;
           const grouped: Record<string, PrayerLogEntry[]> = {};
           for (const log of logs) {
             if (!grouped[log.date]) grouped[log.date] = [];

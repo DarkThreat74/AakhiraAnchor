@@ -46,7 +46,7 @@ export default function AdminPortal() {
           router.push("/admin/login");
           return null;
         }
-        return r.json();
+        return r.json().catch(() => null);
       })
       .then((data) => {
         if (data) {
@@ -283,7 +283,7 @@ function UsersList({ onSelect }: { onSelect: (user: AdminUser) => void }) {
 
   useEffect(() => {
     fetch("/api/admin/users")
-      .then((r) => r.json())
+      .then((r) => r.json().catch(() => ({})))
       .then((data) => {
         if (data.users) setUsers(data.users);
         else if (data.error) setError(data.error);
@@ -430,7 +430,7 @@ function TalksManager() {
 
   const load = useCallback(() => {
     fetch("/api/admin/talks")
-      .then(r => r.json())
+      .then(r => r.json().catch(() => []))
       .then(setItems)
       .catch(() => { /* ignore — loading will be cleared in finally */ })
       .finally(() => setLoading(false));

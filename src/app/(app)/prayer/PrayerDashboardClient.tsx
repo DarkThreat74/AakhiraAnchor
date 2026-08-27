@@ -152,16 +152,16 @@ export default function PrayerDashboard() {
         fetch(`/api/prayer-times?date=${todayStr}`).catch(() => null),
       ]);
       if (logsRes?.ok) {
-        const data = await logsRes.json();
-        setTodayLogs(Array.isArray(data) ? data : data.logs || []);
+        const data = await logsRes.json().catch(() => null);
+        if (data) setTodayLogs(Array.isArray(data) ? data : data.logs || []);
       }
       if (sunnahRes?.ok) {
-        const data = await sunnahRes.json();
-        setTodaySunnahs(Array.isArray(data) ? data.filter((l: { prayed: boolean }) => l.prayed).map((l: { sunnahKey: string }) => l.sunnahKey) : []);
+        const data = await sunnahRes.json().catch(() => []);
+        if (Array.isArray(data)) setTodaySunnahs(data.filter((l: { prayed: boolean }) => l.prayed).map((l: { sunnahKey: string }) => l.sunnahKey));
       }
       if (timesRes?.ok) {
-        const data = await timesRes.json();
-        setPrayerTimes({
+        const data = await timesRes.json().catch(() => null);
+        if (data) setPrayerTimes({
           fajr: data.fajr,
           sunrise: data.sunrise,
           dhuhr: data.dhuhr,
@@ -192,29 +192,35 @@ export default function PrayerDashboard() {
         if (cancelled) return;
 
         if (analyticsRes?.ok) {
-          const data = await analyticsRes.json();
-          setAnalytics(data);
-          if (data.madhab) setMadhab(data.madhab);
+          const data = await analyticsRes.json().catch(() => null);
+          if (data) {
+            setAnalytics(data);
+            if (data.madhab) setMadhab(data.madhab);
+          }
         }
-        if (friendsRes?.ok) setFriends(await friendsRes.json());
+        if (friendsRes?.ok) {
+          const data = await friendsRes.json().catch(() => []);
+          if (Array.isArray(data)) setFriends(data);
+        }
         if (codeRes?.ok) {
-          const data = await codeRes.json();
-          setPrayerCode(data.prayerCode);
+          const data = await codeRes.json().catch(() => ({}));
+          if (data.prayerCode) setPrayerCode(data.prayerCode);
         }
         if (qadaaRes?.ok) {
-          setQadaa(await qadaaRes.json());
+          const data = await qadaaRes.json().catch(() => null);
+          if (data) setQadaa(data);
         }
         if (logsRes?.ok) {
-          const data = await logsRes.json();
-          setTodayLogs(Array.isArray(data) ? data : data.logs || []);
+          const data = await logsRes.json().catch(() => null);
+          if (data) setTodayLogs(Array.isArray(data) ? data : data.logs || []);
         }
         if (sunnahRes?.ok) {
-          const data = await sunnahRes.json();
-          setTodaySunnahs(Array.isArray(data) ? data.filter((l: { prayed: boolean }) => l.prayed).map((l: { sunnahKey: string }) => l.sunnahKey) : []);
+          const data = await sunnahRes.json().catch(() => []);
+          if (Array.isArray(data)) setTodaySunnahs(data.filter((l: { prayed: boolean }) => l.prayed).map((l: { sunnahKey: string }) => l.sunnahKey));
         }
         if (timesRes?.ok) {
-          const data = await timesRes.json();
-          setPrayerTimes({
+          const data = await timesRes.json().catch(() => null);
+          if (data) setPrayerTimes({
             fajr: data.fajr,
             sunrise: data.sunrise,
             dhuhr: data.dhuhr,
@@ -247,9 +253,18 @@ export default function PrayerDashboard() {
             fetch("/api/prayer-friends").catch(() => null),
             fetch("/api/qadaa").catch(() => null),
           ]);
-          if (analyticsRes?.ok) setAnalytics(await analyticsRes.json());
-          if (friendsRes?.ok) setFriends(await friendsRes.json());
-          if (qadaaRes?.ok) setQadaa(await qadaaRes.json());
+          if (analyticsRes?.ok) {
+            const data = await analyticsRes.json().catch(() => null);
+            if (data) setAnalytics(data);
+          }
+          if (friendsRes?.ok) {
+            const data = await friendsRes.json().catch(() => []);
+            if (Array.isArray(data)) setFriends(data);
+          }
+          if (qadaaRes?.ok) {
+            const data = await qadaaRes.json().catch(() => null);
+            if (data) setQadaa(data);
+          }
           await fetchTodayData();
         } catch {
           // ignore
@@ -357,6 +372,7 @@ export default function PrayerDashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && !data.offline) {
+        clearApiCache();
         setQadaa(data);
         setQadaaMsg("Qadaa set up successfully.");
         setTimeout(() => setQadaaMsg(null), 3000);
