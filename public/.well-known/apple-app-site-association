@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.waqt.app",
+        "paths": [
+          "/prayer*",
+          "/calendar*",
+          "/settings*",
+          "/onboarding*",
+          "NOT /",
+          "NOT /login",
+          "NOT /signup",
+          "NOT /admin*"
+        ]
+      }
+    ]
+  }
+}

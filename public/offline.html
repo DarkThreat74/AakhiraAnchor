@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Offline — Waqt</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Georgia, serif;
+      background: #1a1815;
+      color: #f5f0e8;
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .container { max-width: 400px; text-align: center; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.75rem; color: #f5f0e8; }
+    p { font-size: 0.95rem; color: #a8a098; line-height: 1.5; margin-bottom: 2rem; }
+    .retry-btn {
+      padding: 0.75rem 2rem; background: #f5f0e8; color: #1a1815;
+      border: none; border-radius: 8px; font-size: 0.95rem; font-family: Georgia, serif;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>You're Offline</h1>
+    <p>Waqt needs an internet connection to load. Please check your network and try again.</p>
+    <button class="retry-btn" onclick="location.reload()">Retry</button>
+  </div>
+</body>
+</html>

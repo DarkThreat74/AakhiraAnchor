@@ -1,0 +1,37 @@
+Add Capacitor native app packaging (Mode B remote URL)
+
+Wraps the deployed Next.js app in a Capacitor 8 native shell for iOS
+and Android App Store submission. All native features are gated behind
+isNativeApp() checks — web users see zero changes.
+
+Native bridge (src/lib/native-bridge.ts):
+- Platform detection (sync, SSR-safe)
+- Haptics (impact + notification styles)
+- Native share sheet (falls back to navigator.share on web)
+- Biometric auth (Face ID / Touch ID)
+- Push notifications (APNs/FCM)
+- App state listener, deep link listener, status bar, splash screen
+
+Components:
+- NativeShellEnhancements: native-only CSS, no-op on web
+- BiometricGate: Face ID/Touch ID gate, pass-through on web
+- DeepLinkHandler: navigates deep-linked URLs inside the app
+
+Wired into existing features:
+- Haptics on check-in, sunnah toggle, undo, qadaa adjust
+- Native share sheet for prayer code
+- Native push registration, SW disabled on native
+
+App Store compliance:
+- Account deletion API + Settings UI
+- Privacy Policy at /privacy, Terms at /terms
+- Deep link association files at /.well-known/
+
+Config:
+- capacitor.config.ts: Mode B, offline.html fallback
+- .gitignore: excludes /android/ and /ios/
+- package.json: cap:sync, cap:add, cap:open scripts
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

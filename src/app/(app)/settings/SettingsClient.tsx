@@ -157,6 +157,8 @@ export default function SettingsClient({
 
   // Logout state
   const [loggingOut, setLoggingOut] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Load share link status on mount
   useEffect(() => {
@@ -682,6 +684,31 @@ export default function SettingsClient({
     }
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = "/login";
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/auth/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ confirm: "DELETE" }),
+      });
+      if (res.ok) {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/login";
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to delete account. Please try again.");
+        setDeleteConfirm(false);
+      }
+    } catch {
+      alert("Network error. Please try again.");
+      setDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleSaveName() {
@@ -1267,6 +1294,52 @@ export default function SettingsClient({
             <LogOut className="h-4 w-4" />
             {loggingOut ? "Logging out..." : "Log out"}
           </button>
+        </div>
+
+        {/* ── Delete Account (App Store requirement) ── */}
+        <div className="border-t p-4 sm:p-6" style={{ borderColor: "var(--color-paper-3)" }}>
+          <h3 className="mb-1 text-sm font-semibold" style={{ color: "var(--color-error)" }}>
+            Delete Account
+          </h3>
+          <p className="mb-3 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+            Permanently delete your account and remove all personal information.
+            Your prayer logs and calendar events will be anonymized but retained
+            for aggregate analytics. This action cannot be undone.
+          </p>
+          {!deleteConfirm ? (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ borderColor: "var(--color-error)", color: "var(--color-error)" }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete my account
+            </button>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <span className="text-sm font-medium" style={{ color: "var(--color-error)" }}>
+                Are you sure? This is permanent.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeleteConfirm(false)}
+                  disabled={deleting}
+                  className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                  className="rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)" }}
+                >
+                  {deleting ? "Deleting..." : "Yes, delete forever"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

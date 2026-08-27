@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { isNativeApp, requestPushPermission, getPushToken, getPlatform } from "@/lib/native-bridge";
 
 /**
  * Client-side notification scheduler.
@@ -363,6 +364,39 @@ export default function NotificationScheduler() {
     window.addEventListener("waqt:notifications-enabled", handlePermissionGranted);
     return () => window.removeEventListener("waqt:notifications-enabled", handlePermissionGranted);
   }, [scheduleAll, clearAllTimers, checkMissedPrayers]);
+
+  // ── Native push registration ──
+  // Inside the Capacitor shell, register for native push notifications
+  // (APNs on iOS, FCM on Android) and store the device token on the server.
+  // On web, this effect is a no-op — web push uses the service worker path above.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const granted = await requestPushPermission();
+        if (!granted || cancelled) return;
+        const token = await getPushToken();
+        if (!token || cancelled) return;
+
+        await fetch("/api/notifications/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            platform: getPlatform(),
+            token,
+            native: true,
+          }),
+        }).catch(() => {});
+      } catch {
+        // Silent — push is best-effort, not critical for prayer tracking
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
 
   return null;
 }

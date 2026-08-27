@@ -6,6 +6,8 @@ import { db, schema } from "@/lib/db/client";
 import { Calendar, Settings, Flame } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
+import BiometricGate from "@/components/biometric-gate";
+import DeepLinkHandler from "@/components/deep-link-handler";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 export const dynamic = "force-dynamic";
@@ -108,7 +110,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         {/* Page content */}
         <main id="main-content" className="flex-1 overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
-          {children}
+          <BiometricGate>{children}</BiometricGate>
         </main>
       </div>
 
@@ -127,9 +129,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
 
-      {/* Service worker + notification scheduler */}
+      {/* Service worker + notification scheduler + deep links */}
       <ServiceWorkerRegister />
       <NotificationScheduler />
+      <DeepLinkHandler />
     </div>
   );
 }

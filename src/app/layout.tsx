@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Spectral, Amiri } from "next/font/google";
 import "./globals.css";
 import { UISFXProvider } from "@/components/uisfx-provider";
+import NativeShellEnhancements from "@/components/native-shell-enhancements";
 
 const spectral = Spectral({
   variable: "--font-spectral",
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-dvh flex flex-col" style={{ fontFamily: "var(--font-spectral), Georgia, serif" }}>
+        <NativeShellEnhancements />
         <UISFXProvider>{children}</UISFXProvider>
       </body>
     </html>

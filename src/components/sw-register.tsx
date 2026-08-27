@@ -1,15 +1,22 @@
 "use client";
 
 import { useEffect } from "react";
+import { isNativeApp } from "@/lib/native-bridge";
 
 /**
  * Registers the service worker and handles:
  * 1. Auto-reload on update (clears old caches, hard reloads)
  * 2. Offline event sync notifications (shows toast when events sync)
  * 3. Push notification subscription
+ *
+ * NOTE: Service worker is disabled inside the Capacitor native shell.
+ * The SW caches stale assets inside the WebView and breaks app updates.
+ * Native apps use native push (APNs/FCM) instead of web push.
  */
 export default function ServiceWorkerRegister() {
   useEffect(() => {
+    // Skip SW registration inside native app — it caches stale assets in the WebView
+    if (isNativeApp()) return;
     if (!("serviceWorker" in navigator)) return;
 
     // Register the service worker

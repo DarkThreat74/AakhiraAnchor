@@ -6,6 +6,7 @@ import { shouldShowMasjidQuestion, getPrayerWindowState, getPrayerWindowStart, t
 import { getSunnahsForFard, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 import { useUISFX } from "@/components/uisfx-provider";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { hapticNotification, hapticImpact } from "@/lib/native-bridge";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
@@ -107,17 +108,20 @@ export default function PrayerCheckinPopup({
           setLoading(false);
         } else {
           play("check");
+          void hapticNotification("success");
           onCheckedIn({ status: data.status, wentToMasjid: data.wentToMasjid });
         }
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to check in.");
         play("error");
+        void hapticNotification("error");
         setLoading(false);
       }
     } catch {
       setError("Network error.");
       play("error");
+      void hapticNotification("error");
       setLoading(false);
     }
   }
@@ -134,6 +138,7 @@ export default function PrayerCheckinPopup({
       if (res.ok) {
         clearApiCache();
         setSunnahLogs((prev) => ({ ...prev, [sunnah.key]: !isLogged }));
+        void hapticImpact("light");
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Failed to update sunnah.");
@@ -172,6 +177,7 @@ export default function PrayerCheckinPopup({
       .then(() => {
         clearApiCache();
         play("undo");
+        void hapticImpact("light");
         onCheckedIn({ status: "pending", wentToMasjid: null });
       })
       .catch(() => {

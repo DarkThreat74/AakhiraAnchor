@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X, WifiOff } from "lucide-react";
 import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { shareNative, hapticNotification } from "@/lib/native-bridge";
 
 interface PerPrayerStats {
   prayer: string;
@@ -277,6 +278,16 @@ export default function PrayerDashboard() {
 
   async function handleCopyCode() {
     if (!prayerCode) return;
+    // Try native share sheet first (native app), then web share, then clipboard
+    const shared = await shareNative({
+      title: "My Waqt Prayer Code",
+      text: `Add me on Waqt! My prayer code is: ${prayerCode}`,
+    });
+    if (shared) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(prayerCode);
       setCopied(true);
@@ -408,6 +419,7 @@ export default function PrayerDashboard() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         clearApiCache();
+        void hapticNotification("success");
         if (data.offline) {
           if (qadaa) {
             const colMap: Record<string, keyof typeof qadaa> = {
