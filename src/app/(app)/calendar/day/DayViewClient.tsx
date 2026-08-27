@@ -737,7 +737,7 @@ export default function DayViewClient({ date }: { date: string }) {
               return (
                 <div
                   key={prayer.key}
-                  className="absolute z-30 flex items-center"
+                  className="absolute z-30 flex items-center pr-1"
                   style={{ top: top - 7, left: TIME_COL, right: 0 }}
                 >
                   <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
@@ -769,7 +769,7 @@ export default function DayViewClient({ date }: { date: string }) {
             return (
               <div
                 key={event.id}
-                className="absolute z-25 flex items-center group"
+                className="absolute z-25 flex items-center pr-1 group"
                 style={{ top: top - 7, left: TIME_COL, right: 0 }}
               >
                 <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />
