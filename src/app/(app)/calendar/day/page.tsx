@@ -44,9 +44,9 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
   });
 
   return (
-    <div>
+    <div className="overflow-x-hidden">
       {/* Date header with day/month toggle */}
-      <div className="border-b" style={{ borderColor: "var(--color-paper-3)" }}>
+      <div className="overflow-x-hidden border-b" style={{ borderColor: "var(--color-paper-3)" }}>
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
           {/* Prev day */}
           <Link

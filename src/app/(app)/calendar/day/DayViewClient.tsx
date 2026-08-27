@@ -601,7 +601,7 @@ export default function DayViewClient({ date }: { date: string }) {
 
       {/* Prayer times bar */}
       {prayerTimes && (
-        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
+        <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4">
           {PRAYER_NAMES.map((prayer) => {
             const rawTime = prayerTimes[prayer.key];
             if (!rawTime) return null;
@@ -614,7 +614,7 @@ export default function DayViewClient({ date }: { date: string }) {
               <button
                 key={prayer.key}
                 onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
-                className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-2.5 py-1.5 transition-colors sm:px-3"
+                className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 transition-colors sm:flex-none sm:px-3"
                 style={{
                   borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
                   backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
