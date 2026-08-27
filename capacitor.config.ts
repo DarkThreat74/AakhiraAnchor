@@ -18,7 +18,9 @@ const config: CapacitorConfig = {
   },
 
   ios: {
-    contentInset: "automatic",
+    // "never" — let CSS env(safe-area-inset-*) handle all padding.
+    // "automatic" causes double spacing when combined with CSS safe-area padding.
+    contentInset: "never",
     backgroundColor: "#1a1815",
   },
   android: {

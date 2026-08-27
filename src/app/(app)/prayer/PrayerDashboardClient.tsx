@@ -1324,7 +1324,7 @@ export default function PrayerDashboard() {
                         <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
                           {friend.firstName || friend.displayName || "Friend"}
                         </div>
-                        <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        <div className="truncate text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
                           {friend.thisWeekPrayed} this week · {friend.totalCompleteDays} complete · {friend.masjidPct}% masjid
                         </div>
                       </div>
@@ -1417,11 +1417,11 @@ function ComparisonRow({
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-3 sm:px-5"
+      className="flex items-center gap-2 px-3 py-3 sm:gap-3 sm:px-5"
       style={isMe ? { backgroundColor: "color-mix(in oklab, var(--color-accent) 4%, transparent)" } : undefined}
     >
       {/* Name + streak */}
-      <div className="w-24 shrink-0 sm:w-32">
+      <div className="w-20 shrink-0 sm:w-32">
         <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
           {isMe ? "You" : name}
         </div>
@@ -1448,7 +1448,7 @@ function ComparisonRow({
       </div>
 
       {/* Prayer dots */}
-      <div className="flex flex-1 items-center justify-center gap-1.5 sm:gap-2">
+      <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
         {PRAYER_ORDER.map((prayer, idx) => {
           const log = todayLogs.find((l) => l.prayerName === prayer);
           const prayed = log?.status === "prayed" || log?.status === "assumed_prayed";

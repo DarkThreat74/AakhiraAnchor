@@ -146,11 +146,24 @@ export async function getPushToken(): Promise<string | null> {
     const { PushNotifications } = await import(
       "@capacitor/push-notifications"
     );
+    // Get the token that was already received during registration,
+    // or listen for it if it hasn't arrived yet.
     return new Promise((resolve) => {
-      PushNotifications.addListener("registration", (token: { value: string }) =>
-        resolve(token.value),
+      let resolved = false;
+      const done = (token: string | null) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeout);
+        void listener.then((l) => l.remove()).catch(() => {});
+        resolve(token);
+      };
+
+      const listener = PushNotifications.addListener(
+        "registration",
+        (token: { value: string }) => done(token.value),
       );
-      setTimeout(() => resolve(null), 5000);
+
+      const timeout = setTimeout(() => done(null), 5000);
     });
   } catch {
     return null;

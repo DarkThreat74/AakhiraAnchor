@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   isNativeApp,
   checkBiometricAvailability,
@@ -20,12 +20,20 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
   const [verified, setVerified] = useState(!isNativeApp());
   const [loading, setLoading] = useState(isNativeApp());
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  // Use a ref to track verified state so the appStateChange callback
+  // always sees the current value, not a stale closure capture.
+  const verifiedRef = useRef(verified);
+
+  useEffect(() => {
+    verifiedRef.current = verified;
+  }, [verified]);
 
   const verify = useCallback(async () => {
     setLoading(true);
     const result = await biometricVerify("Authenticate to access Waqt");
     if (result.verified) {
       setVerified(true);
+      verifiedRef.current = true;
       void hapticNotification("success");
     }
     setLoading(false);
@@ -44,6 +52,7 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
         if (!result.available) {
           // No biometrics enrolled — don't lock the user out
           setVerified(true);
+          verifiedRef.current = true;
         } else {
           void verify();
         }
@@ -52,8 +61,10 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
 
     let unsub: (() => void) | undefined;
     onAppStateChange((isActive) => {
-      if (isActive && verified) {
+      // Re-prompt on every return from background if previously verified
+      if (isActive && verifiedRef.current) {
         setVerified(false);
+        verifiedRef.current = false;
         void verify();
       }
     }).then((fn) => {
@@ -65,7 +76,7 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
       clearTimeout(timer);
       void unsub?.();
     };
-  }, [verify]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [verify]);
 
   // Web: pass through immediately
   if (verified) return <>{children}</>;

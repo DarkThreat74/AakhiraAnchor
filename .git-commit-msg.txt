@@ -1,36 +1,36 @@
-Add Capacitor native app packaging (Mode B remote URL)
+Fix mobile layout bugs and native shell issues
 
-Wraps the deployed Next.js app in a Capacitor 8 native shell for iOS
-and Android App Store submission. All native features are gated behind
-isNativeApp() checks — web users see zero changes.
+Mobile layout fixes:
+- Public calendar prayer times bar: switch from overflow-x-auto to
+  flex-wrap (same fix as main day view)
+- Public calendar prayer marker pills: add pr-1 to prevent right-edge
+  clipping (same fix as main day view)
+- Public calendar reminder pills: add pr-1 to prevent right-edge clipping
+- ComparisonRow: reduce name column width (w-24→w-20) and gap (gap-3→gap-2)
+  on mobile so 5 prayer dots fit on 320px screens
+- Friend stats text: add truncate to prevent overflow with long numbers
 
-Native bridge (src/lib/native-bridge.ts):
-- Platform detection (sync, SSR-safe)
-- Haptics (impact + notification styles)
-- Native share sheet (falls back to navigator.share on web)
-- Biometric auth (Face ID / Touch ID)
-- Push notifications (APNs/FCM)
-- App state listener, deep link listener, status bar, splash screen
+Native shell fixes:
+- capacitor.config.ts: change contentInset from "automatic" to "never"
+  to prevent double safe-area padding (CSS env() handles it)
+- NativeShellEnhancements: fix CSS selectors (.native-shell html →
+  html.native-shell) since the class is on <html> not inside it
+- NativeShellEnhancements: set viewport maximum-scale=1/user-scalable=no
+  only on native (moved from layout.tsx to preserve WCAG 1.4.4 on web)
+- BiometricGate: fix stale closure on "verified" in onAppStateChange
+  using a ref so re-prompt works on every return from background
+- getPushToken: fix race condition where listener could miss the
+  registration event, and clean up listener on timeout
 
-Components:
-- NativeShellEnhancements: native-only CSS, no-op on web
-- BiometricGate: Face ID/Touch ID gate, pass-through on web
-- DeepLinkHandler: navigates deep-linked URLs inside the app
-
-Wired into existing features:
-- Haptics on check-in, sunnah toggle, undo, qadaa adjust
-- Native share sheet for prayer code
-- Native push registration, SW disabled on native
-
-App Store compliance:
-- Account deletion API + Settings UI
-- Privacy Policy at /privacy, Terms at /terms
-- Deep link association files at /.well-known/
-
-Config:
-- capacitor.config.ts: Mode B, offline.html fallback
-- .gitignore: excludes /android/ and /ios/
-- package.json: cap:sync, cap:add, cap:open scripts
+Settings page native fixes:
+- Show "Disabled (native app)" for SW status and "Native push (APNs/FCM)"
+  for push status instead of "checking..." forever
+- Show "Native app" in platform display
+- Default notifPermission to "default" on native so Enable button shows
+- handleEnableNotifications: use Capacitor push on native instead of SW
+- handleTestNotification: use LocalNotifications on native instead of SW
+- Hide "Test background push" button on native (relies on web push)
+- Hide "Reset service worker & reload" button on native (no SW)
 
 Generated with [Devin](https://devin.ai)
 

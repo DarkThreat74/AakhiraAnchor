@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { isNativeApp } from "@/lib/native-bridge";
 
 interface PrayerSettings {
   latitude: string;
@@ -162,14 +163,25 @@ export default function SettingsClient({
 
   // Load share link status on mount
   useEffect(() => {
-    if ("Notification" in window) {
+    if (isNativeApp()) {
+      // On native, Notification API may not exist. Default to "default"
+      // so the Enable button shows. The native push permission is requested
+      // when the user taps Enable.
+      requestAnimationFrame(() => setNotifPermission("default"));
+    } else if ("Notification" in window) {
       const perm = Notification.permission;
       requestAnimationFrame(() => setNotifPermission(perm));
     } else {
       requestAnimationFrame(() => setNotifPermission("denied"));
     }
 
-    if ("serviceWorker" in navigator) {
+    if (isNativeApp()) {
+      // Native app: SW is intentionally disabled, push uses APNs/FCM
+      requestAnimationFrame(() => {
+        setSwStatus("Disabled (native app)");
+        setPushStatus("Native push (APNs/FCM)");
+      });
+    } else if ("serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (reg) {
           setSwStatus("Registered (scope: " + reg.scope + ")");
@@ -521,6 +533,28 @@ export default function SettingsClient({
     setNotifEnabling(true);
     setNotifMsg(null);
     try {
+      // On native, use Capacitor push notifications instead of web push
+      if (isNativeApp()) {
+        const { requestPushPermission, getPushToken, getPlatform } = await import("@/lib/native-bridge");
+        const granted = await requestPushPermission();
+        if (granted) {
+          const token = await getPushToken();
+          if (token) {
+            await fetch("/api/notifications/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ platform: getPlatform(), token, native: true }),
+            }).catch(() => {});
+          }
+          setNotifPermission("granted");
+          setNotifMsg("Notifications enabled! You'll get alerts at each prayer time.");
+          window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
+        } else {
+          setNotifMsg("Notification permission was not granted.");
+        }
+        return;
+      }
       if (!("Notification" in window)) {
         setNotifMsg("Notifications are not supported on this device.");
         return;
@@ -648,6 +682,23 @@ export default function SettingsClient({
   async function handleTestNotification() {
     setNotifMsg(null);
     try {
+      // On native, use local notifications instead of SW showNotification
+      if (isNativeApp()) {
+        const { LocalNotifications } = await import("@capacitor/local-notifications");
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: Date.now(),
+              title: "Test notification from Waqt",
+              body: "If you can see this, notifications are working correctly.",
+              smallIcon: "icon",
+            },
+          ],
+        });
+        setNotifMsg("Test notification sent. Check your notifications.");
+        setTimeout(() => setNotifMsg(null), 4000);
+        return;
+      }
       if (!("Notification" in window) || Notification.permission !== "granted") {
         setNotifMsg("Enable notifications first.");
         return;
@@ -1231,7 +1282,7 @@ export default function SettingsClient({
             <div className="space-y-0.5 text-[11px]" style={{ color: "var(--color-ink-soft)" }}>
               <p><span style={{ color: "var(--color-ink-muted)" }}>SW:</span> {swStatus}</p>
               <p><span style={{ color: "var(--color-ink-muted)" }}>Push:</span> {pushStatus}</p>
-              <p><span style={{ color: "var(--color-ink-muted)" }}>Platform:</span> {typeof navigator !== "undefined" ? (navigator.userAgent.includes("iPhone") || navigator.userAgent.includes("iPad") ? "iOS" : "Desktop/Android") : "unknown"}</p>
+              <p><span style={{ color: "var(--color-ink-muted)" }}>Platform:</span> {isNativeApp() ? "Native app" : typeof navigator !== "undefined" ? (navigator.userAgent.includes("iPhone") || navigator.userAgent.includes("iPad") ? "iOS Web" : "Desktop/Android Web") : "unknown"}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1259,25 +1310,29 @@ export default function SettingsClient({
                   <Send className="h-4 w-4" />
                   Test local
                 </button>
-                <button
-                  onClick={handleServerPushTest}
-                  className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
-                  style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
-                >
-                  <Send className="h-4 w-4" />
-                  Test background push
-                </button>
+                {!isNativeApp() && (
+                  <button
+                    onClick={handleServerPushTest}
+                    className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
+                    style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
+                  >
+                    <Send className="h-4 w-4" />
+                    Test background push
+                  </button>
+                )}
               </>
             )}
           </div>
           <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--color-paper-3)" }}>
-            <button
-              onClick={handleResetSW}
-              className="text-xs font-medium underline underline-offset-2"
-              style={{ color: "var(--color-ink-muted)" }}
-            >
-              Reset service worker & reload
-            </button>
+            {!isNativeApp() && (
+              <button
+                onClick={handleResetSW}
+                className="text-xs font-medium underline underline-offset-2"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                Reset service worker & reload
+              </button>
+            )}
           </div>
         </div>
 

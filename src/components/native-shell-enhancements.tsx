@@ -12,6 +12,17 @@ export default function NativeShellEnhancements() {
   useEffect(() => {
     if (!isNativeApp()) return;
 
+    // Update viewport for native (disable zoom, extend into safe areas)
+    // On web, the viewport allows zoom (WCAG 1.4.4). Inside the native shell,
+    // zoom is disabled for app-like behavior.
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+      viewport.setAttribute(
+        "content",
+        "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+      );
+    }
+
     // Add native class to <html> for scoped CSS
     document.documentElement.classList.add("native-shell");
 
@@ -26,15 +37,15 @@ export default function NativeShellEnhancements() {
         user-select: none;
         -webkit-touch-callout: none;
       }
-      .native-shell html,
-      .native-shell body {
+      html.native-shell,
+      html.native-shell body {
         overscroll-behavior: none;
         -webkit-overflow-scrolling: touch;
       }
       .native-shell * {
         -webkit-tap-highlight-color: transparent;
       }
-      .native-shell body {
+      html.native-shell body {
         overflow-x: hidden;
       }
     `;

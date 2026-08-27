@@ -375,7 +375,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
 
       {/* Prayer times bar */}
       {prayerTimes && (
-        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:mb-4 sm:flex-wrap sm:overflow-visible">
+        <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4">
           {PRAYER_NAMES.map((prayer) => {
             const rawTime = prayerTimes[prayer.key];
             if (!rawTime) return null;
@@ -383,7 +383,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             return (
               <div
                 key={prayer.key}
-                className="flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-2.5 py-1.5 sm:px-3"
+                className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 sm:flex-none sm:px-3"
                 style={{
                   borderColor: "var(--color-paper-3)",
                   backgroundColor: "var(--color-paper)",
@@ -473,7 +473,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
               return (
                 <div
                   key={prayer.key}
-                  className="absolute z-10 flex items-center"
+                  className="absolute z-10 flex items-center pr-1"
                   style={{ top: top - 7, left: TIME_COL, right: 0 }}
                 >
                   <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
@@ -502,7 +502,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             return (
               <div
                 key={event.id}
-                className="absolute z-15 flex items-center"
+                className="absolute z-15 flex items-center pr-1"
                 style={{ top: top - 7, left: TIME_COL, right: 0 }}
               >
                 <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />

@@ -61,8 +61,9 @@ export const viewport: Viewport = {
   themeColor: "#1a1815",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // NOTE: maximumScale/userScalable are NOT set here — they violate WCAG 1.4.4
+  // on web (users must be able to zoom). NativeShellEnhancements applies them
+  // only inside the Capacitor shell via the viewport meta tag override.
   viewportFit: "cover",
 };
 
