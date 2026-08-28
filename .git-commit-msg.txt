@@ -1,41 +1,25 @@
-App Store readiness: privacy manifest, support page, deep links, metadata
+App Store readiness: error boundaries, 404 page, tap targets, cleanup
 
-Code-level fixes for Apple App Store submission:
+Error handling (Apple rejects blank-screen crashes):
+- Added src/app/error.tsx — route-level error boundary with retry button
+- Added src/app/global-error.tsx — root layout error boundary with
+  inline styles (no CSS dependency, renders its own <html>/<body>)
+- Added src/app/not-found.tsx — custom 404 page with link home
 
-Privacy & compliance:
-- Created PrivacyInfo.xcprivacy privacy manifest declaring all data
-  collection (email, name, coarse location, device ID, product
-  interaction, user content) and required-reason APIs (UserDefaults,
-  file timestamps, system boot time, disk space)
-- Created Waqt.entitlements template (Associated Domains + APNs)
-- Created Info.plist additions template (NSFaceIDUsageDescription,
-  NSAppTransportSecurity, orientations, encryption exemption)
-- Created /support page (Apple requires a support URL)
-- Added /support to sitemap, robots.txt, and SW public route exclusions
+Removed unused plugin:
+- Removed @capacitor/camera — was installed but never imported.
+  Unused permission requests trigger Apple rejection.
+- Updated Info.plist template to remove camera usage comment
+- Updated privacy nutrition label to remove camera reference
 
-Universal Links / App Links:
-- Added /goals* to apple-app-site-association paths
-- Added /support, /api*, /privacy, /terms to exclusion list
-- Updated assetlinks.json formatting
+iOS tap target fixes (Apple HIG requires 44px minimum):
+- Calendar event delete button: 20px → 28px
+- Prayer sunnah toggle button: 28px → 32px
 
-App Store metadata:
-- Created app description (under 4000 chars)
-- Created review notes with demo account instructions and native
-  feature list for Guideline 4.2 compliance
-- Created privacy nutrition label reference
-- Created APP_STORE.md submission guide with step-by-step process
-  and guideline compliance checklist
-- Created scripts/setup-ios.sh automated iOS project setup script
-
-Routing fixes:
-- Added /prayer and /goals to proxy protected paths for instant
-  redirect when unauthenticated (was only protected server-side)
-- Added /goals to robots.txt disallow list
-- Added /goals/shared/ to robots.txt allow list (public shares)
-
-Service worker:
-- Bumped cache version to waqt-v17
-- Added /support to public route exclusions
+iOS text size fixes (8px is too small for iOS readability):
+- Prayer dashboard: prayer initial letter 8px → 9px
+- Prayer dashboard: sunnah count 8px → 9px
+- Calendar day view: sync indicator dot 8px → 9px
 
 Generated with [Devin](https://devin.ai)
 

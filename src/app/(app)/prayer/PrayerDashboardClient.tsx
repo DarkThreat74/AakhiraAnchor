@@ -1474,7 +1474,7 @@ function ComparisonRow({
                 {prayed ? (
                   <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: "var(--color-paper)" }} />
                 ) : (
-                  <span className="text-[8px] font-bold uppercase" style={{ color: "var(--color-ink-muted)" }}>
+                  <span className="text-[9px] font-bold uppercase" style={{ color: "var(--color-ink-muted)" }}>
                     {prayer.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -1488,7 +1488,7 @@ function ComparisonRow({
                 if (totalSunnahs === 0) return null;
                 return (
                   <span
-                    className="text-[8px] font-medium tabular-nums"
+                    className="text-[9px] font-medium tabular-nums"
                     style={{ color: sunnahCount > 0 ? "var(--color-success)" : "var(--color-ink-muted)" }}
                   >
                     {sunnahCount}/{totalSunnahs}
@@ -1544,7 +1544,7 @@ function SunnahPill({
         borderColor: prayed ? cat.border : "var(--color-paper-3)",
         color: prayed ? cat.text : "var(--color-ink-muted)",
         backgroundColor: prayed ? cat.bg : "transparent",
-        minHeight: 28,
+        minHeight: 32,
       }}
       title={disabled ? disabledReason : `${cat.label} — ${sunnah.label}`}
     >

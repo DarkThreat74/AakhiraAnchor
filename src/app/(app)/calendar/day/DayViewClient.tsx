@@ -870,7 +870,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   <p className="w-full truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
                     {event.title}
                     {event._pending && (
-                      <span className="ml-1 inline-block text-[8px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
+                      <span className="ml-1 inline-block text-[9px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
                         ●
                       </span>
                     )}
@@ -884,7 +884,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirm(event); }}
                     className="absolute right-0.5 top-0.5 shrink-0 rounded-full opacity-0 transition-opacity group-hover:opacity-100 hover:opacity-100 sm:opacity-40"
                     aria-label="Delete event"
-                    style={{ minHeight: 20, minWidth: 20 }}
+                    style={{ minHeight: 28, minWidth: 28 }}
                   >
                     <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
                   </button>

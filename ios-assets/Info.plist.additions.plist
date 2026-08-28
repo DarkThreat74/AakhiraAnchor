@@ -25,14 +25,8 @@
     <string>sound</string>
   </array>
 
-  <!-- OPTIONAL: Camera usage description (only if camera feature is used) -->
-  <!-- The @capacitor/camera plugin is installed but not actively used.
-       If camera is not used, do NOT add this key — unused permission
-       requests trigger rejection. -->
-  <!--
-  <key>NSCameraUsageDescription</key>
-  <string>Waqt needs camera access to capture photos for your profile.</string>
-  -->
+  <!-- NOTE: @capacitor/camera was removed — no NSCameraUsageDescription needed.
+       Do NOT add camera usage description if the camera is not used. -->
 
   <!-- App transport security — allow Capacitor to load the remote URL -->
   <key>NSAppTransportSecurity</key>

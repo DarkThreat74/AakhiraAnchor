@@ -67,7 +67,6 @@ THIRD-PARTY SDKs:
 - @capacitor/status-bar — status bar styling
 - @capacitor/splash-screen — launch screen
 - @capacitor/app — app lifecycle, deep links
-- @capacitor/camera — installed but not actively used (no permission requested)
-- @capacitor/local-notifications — installed for local notification support
+- @capacitor/local-notifications — local notification scheduling
 
 No advertising SDKs. No analytics SDKs. No tracking SDKs.
