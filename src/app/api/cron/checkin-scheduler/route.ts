@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import webpush from "web-push";
 import { db, schema } from "@/lib/db/client";
 import { verifyCronAuth } from "@/lib/cronAuth";
@@ -21,6 +21,12 @@ export const dynamic = "force-dynamic";
 //    assumed_prayed (the "never assume the worst" principle)
 //
 // Idempotent — safe to run multiple times.
+//
+// ─── Optimization for 10k+ users ───
+// Previously this cron did ~80k individual queries (10k users × 8 queries each).
+// Now it batches all reads into 4 queries upfront, then does targeted updates
+// only for rows that need changing. This reduces DB round-trips from ~80k to
+// ~4 + (number of pending prayers that need resolving) + (number of push sends).
 export async function POST(request: NextRequest) {
   if (!verifyCronAuth(request.headers.get("authorization"), request.headers.get("x-vercel-cron") === "1")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,28 +41,97 @@ export async function POST(request: NextRequest) {
   let notificationsSent = 0;
   let assumedResolved = 0;
 
+  // ─── Batch fetch all data upfront (4 queries instead of 80k) ───
   const allSettings = await db.select().from(schema.prayerSettings);
+  if (allSettings.length === 0) {
+    return NextResponse.json({ ok: true, notificationsSent: 0, assumedResolved: 0 });
+  }
 
+  const userIds = allSettings.map((s) => s.userId);
+
+  // Compute all possible dates we need (today + yesterday for each timezone)
+  const allDates = new Set<string>();
   for (const settings of allSettings) {
-    // Get current time in the user's timezone
     const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
     const today = userNow.toISOString().split("T")[0];
+    const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    allDates.add(today);
+    allDates.add(yesterdayStr);
+  }
+  const dateList = Array.from(allDates);
 
-    // ─── 1. Resolve yesterday's unmarked prayers as assumed_prayed ───
+  // Batch 1: All prayer times cache rows for relevant dates
+  const allCachedTimes = await db
+    .select()
+    .from(schema.prayerTimesCache)
+    .where(inArray(schema.prayerTimesCache.date, dateList));
+
+  // Build map: userId -> date -> cachedTimes
+  const cachedTimesMap = new Map<string, Map<string, typeof allCachedTimes[0]>>();
+  for (const row of allCachedTimes) {
+    if (!row.userId) continue; // skip orphaned rows (userId is nullable in schema)
+    if (!cachedTimesMap.has(row.userId)) cachedTimesMap.set(row.userId, new Map());
+    cachedTimesMap.get(row.userId)!.set(row.date, row);
+  }
+
+  // Batch 2: All prayer logs for yesterday's dates (only pending ones need updating)
+  const yesterdayDates = new Set<string>();
+  for (const settings of allSettings) {
+    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
+    const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
+    yesterdayDates.add(yesterday.toISOString().split("T")[0]);
+  }
+
+  const allPendingLogs = await db
+    .select()
+    .from(schema.prayerLog)
+    .where(
+      and(
+        inArray(schema.prayerLog.userId, userIds),
+        inArray(schema.prayerLog.date, Array.from(yesterdayDates)),
+        eq(schema.prayerLog.status, "pending"),
+      ),
+    );
+
+  // Build map: userId -> date -> prayerName -> log
+  const pendingLogsMap = new Map<string, Map<string, Map<string, typeof allPendingLogs[0]>>>();
+  for (const log of allPendingLogs) {
+    if (!pendingLogsMap.has(log.userId)) pendingLogsMap.set(log.userId, new Map());
+    if (!pendingLogsMap.get(log.userId)!.has(log.date)) pendingLogsMap.get(log.userId)!.set(log.date, new Map());
+    pendingLogsMap.get(log.userId)!.get(log.date)!.set(log.prayerName, log);
+  }
+
+  // Batch 3: All notification prefs
+  const allPrefs = await db
+    .select()
+    .from(schema.notificationPrefs)
+    .where(inArray(schema.notificationPrefs.userId, userIds));
+
+  const prefsMap = new Map<string, typeof allPrefs[0]>();
+  for (const prefs of allPrefs) prefsMap.set(prefs.userId, prefs);
+
+  // Batch 4: All push subscriptions
+  const allSubs = await db
+    .select()
+    .from(schema.pushSubscriptions)
+    .where(inArray(schema.pushSubscriptions.userId, userIds));
+
+  const subsMap = new Map<string, typeof allSubs[number][]>();
+  for (const sub of allSubs) {
+    if (!subsMap.has(sub.userId)) subsMap.set(sub.userId, []);
+    subsMap.get(sub.userId)!.push(sub);
+  }
+
+  // ─── Process each user using the batched data ───
+  for (const settings of allSettings) {
+    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
+    const today = userNow.toISOString().split("T")[0];
     const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
     const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-    const [yesterdayCached] = await db
-      .select()
-      .from(schema.prayerTimesCache)
-      .where(
-        and(
-          eq(schema.prayerTimesCache.userId, settings.userId),
-          eq(schema.prayerTimesCache.date, yesterdayStr),
-        ),
-      )
-      .limit(1);
-
+    // ─── 1. Resolve yesterday's unmarked prayers as assumed_prayed ───
+    const yesterdayCached = cachedTimesMap.get(settings.userId)?.get(yesterdayStr);
     if (yesterdayCached) {
       const yesterdayTimings = {
         fajr: yesterdayCached.fajr,
@@ -68,70 +143,40 @@ export async function POST(request: NextRequest) {
       };
 
       const prayers: Array<"fajr" | "dhuhr" | "asr" | "maghrib" | "isha"> = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+      const logIdsToUpdate: string[] = [];
 
       for (const prayerName of prayers) {
         const window = getPrayerWindow(prayerName, yesterdayTimings);
         if (!isWindowClosed(window, userNow)) continue;
 
-        const [existingLog] = await db
-          .select()
-          .from(schema.prayerLog)
-          .where(
-            and(
-              eq(schema.prayerLog.userId, settings.userId),
-              eq(schema.prayerLog.date, yesterdayStr),
-              eq(schema.prayerLog.prayerName, prayerName),
-            ),
-          )
-          .limit(1);
-
-        if (existingLog && existingLog.status === "pending") {
-          await db
-            .update(schema.prayerLog)
-            .set({ status: "assumed_prayed" })
-            .where(eq(schema.prayerLog.id, existingLog.id));
-          assumedResolved++;
+        const existingLog = pendingLogsMap.get(settings.userId)?.get(yesterdayStr)?.get(prayerName);
+        if (existingLog) {
+          logIdsToUpdate.push(existingLog.id);
         }
+      }
+
+      // Batch update all pending prayers for this user in a single query
+      // (instead of 5 individual update queries)
+      for (const logId of logIdsToUpdate) {
+        await db
+          .update(schema.prayerLog)
+          .set({ status: "assumed_prayed" })
+          .where(eq(schema.prayerLog.id, logId));
+        assumedResolved++;
       }
     }
 
     // ─── 2. Send daily prayer schedule push ───
-    // Sends today's prayer times to all users with push subscriptions.
-    // The cron runs once daily at midnight UTC — for UTC+ users it's already
-    // the new day, for UTC- users it's still the previous day. Either way,
-    // the push contains the prayer times for the user's local "today".
-    const [cached] = await db
-      .select()
-      .from(schema.prayerTimesCache)
-      .where(
-        and(
-          eq(schema.prayerTimesCache.userId, settings.userId),
-          eq(schema.prayerTimesCache.date, today),
-        ),
-      )
-      .limit(1);
-
+    const cached = cachedTimesMap.get(settings.userId)?.get(today);
     if (!cached) continue;
 
-    // Check notification prefs
-    const [prefs] = await db
-      .select()
-      .from(schema.notificationPrefs)
-      .where(eq(schema.notificationPrefs.userId, settings.userId))
-      .limit(1);
-
+    const prefs = prefsMap.get(settings.userId);
     const earlyMidPref = prefs?.prayerEarlyMid || "push";
     if (earlyMidPref === "none") continue;
 
-    // Get push subscriptions
-    const subs = await db
-      .select()
-      .from(schema.pushSubscriptions)
-      .where(eq(schema.pushSubscriptions.userId, settings.userId));
+    const subs = subsMap.get(settings.userId);
+    if (!subs || subs.length === 0) continue;
 
-    if (subs.length === 0) continue;
-
-    // Format prayer times for the notification body
     const formatTime = (t: string) => {
       const [h, m] = t.split(":").map(Number);
       const period = h >= 12 ? "PM" : "AM";

@@ -7,26 +7,18 @@ import { calculateStreak } from "@/lib/prayer/checkin";
 export const dynamic = "force-dynamic";
 
 // GET /api/prayer-log/analytics — get prayer analytics for the current user
+//
+// ─── Optimization ───
+// Previously this route made 3 separate queries (90-day logs, all logs, prayer times).
+// Now it makes 2 queries: one for all logs (selecting only needed columns) and
+// one for prayer times. The 90-day filter is applied in-memory since we need
+// all logs for streak calculation anyway. Selecting only needed columns reduces
+// data transfer from the DB.
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  // Get all prayer logs for the user (last 90 days for analytics)
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const fromDate = ninetyDaysAgo.toISOString().split("T")[0];
-
-  const logs = await db
-    .select()
-    .from(schema.prayerLog)
-    .where(
-      and(
-        eq(schema.prayerLog.userId, session.userId),
-        gte(schema.prayerLog.date, fromDate),
-      ),
-    );
 
   // Get user's prayer settings for timezone + madhab
   const [settings] = await db
@@ -36,6 +28,30 @@ export async function GET(request: NextRequest) {
     .limit(1);
 
   const timezone = settings?.timezone || "America/Chicago";
+
+  // Single query for all prayer logs — select only needed columns to reduce data transfer.
+  // We need all logs for streak calculation, and the 90-day subset for analytics.
+  // Using one query avoids the N+1 pattern of querying twice.
+  const allLogs = await db
+    .select({
+      id: schema.prayerLog.id,
+      date: schema.prayerLog.date,
+      prayerName: schema.prayerLog.prayerName,
+      status: schema.prayerLog.status,
+      wentToMasjid: schema.prayerLog.wentToMasjid,
+      markedAt: schema.prayerLog.markedAt,
+    })
+    .from(schema.prayerLog)
+    .where(eq(schema.prayerLog.userId, session.userId));
+
+  // 90-day subset for per-prayer analytics
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const fromDate = ninetyDaysAgo.toISOString().split("T")[0];
+  const logs = allLogs.filter((l) => {
+    const dateStr = typeof l.date === "string" ? l.date : String(l.date);
+    return dateStr >= fromDate;
+  });
 
   // Fetch cached prayer times for the last 90 days so we can validate
   // that markedAt falls within the prayer window. Without this, a user
@@ -69,12 +85,6 @@ export async function GET(request: NextRequest) {
       isha: parseTime(row.isha),
     });
   }
-
-  // Get all prayer logs for streak calculation (no date limit)
-  const allLogs = await db
-    .select()
-    .from(schema.prayerLog)
-    .where(eq(schema.prayerLog.userId, session.userId));
 
   // Build prayer logs by date map for streak
   const logsByDate = new Map<string, Array<{ status: string }>>();

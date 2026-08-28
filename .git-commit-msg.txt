@@ -1,43 +1,63 @@
-Add Learn section + fix prayer average time bug
+SQL optimization for 10k+ users — indexes + cron batching
 
-Learn section:
-- New /learn page with card-based accordion UI
-- Small "Learn" button in mobile top bar and desktop sidebar
-- 5 curated sections (all content sourced from authenticated hadith
-  collections — no AI-generated religious content):
-  1. Virtues of Salah (general) — river hadith, covenant with Allah
-  2. Virtues of Each Prayer — Fajr, Dhuhr, Asr, Maghrib, Isha with
-     unique hadiths for each
-  3. How to Pray — prerequisites + 18-step guide from takbir to salam
-  4. Witr Prayer — what it is, how many rakats, when to pray, how to
-     pray 3-rakat Witr, Qunoot, making up missed Witr
-  5. Sunnah Prayers — muakkadah and ghair muakkadah, Fajr sunnah
-     virtue hadith
-- Hadiths displayed with Arabic (Amiri font), English translation,
-  source citation, and authenticity grade
-- Progressive disclosure — only one section open at a time
-- Warm design matching existing tokens (paper/ink palette)
-- Callout blocks for key insights
-- Numbered steps for prayer guide
-- Bullet lists for prerequisites and sunnah schedules
+Research performed via agent-reach (Exa search) and Context7 (Neon docs)
+to identify PostgreSQL/Neon scaling best practices.
 
-Prayer average time fix:
-- Late check-ins (e.g., logging Fajr at 10 PM) no longer skew the
-  average prayer time
-- Analytics route now fetches cached prayer times for each day and
-  validates that markedAt falls within the prayer's valid window
-  before including it in the average
-- Prayer windows: Fajr → sunrise, Dhuhr → Asr, Asr → Maghrib,
-  Maghrib → Isha, Isha → midnight
-- 15-minute grace period before prayer start for early pray-ers
-- Check-ins outside the window are silently excluded from the average
-  (the prayer still counts as prayed, just doesn't affect timing stats)
+─ Missing indexes added (migration 0006) ─
 
-Routing:
-- Added /learn to proxy protected paths
-- Added /learn to robots.txt disallow list
-- Added /learn to apple-app-site-association Universal Links
-- Bumped SW cache version to waqt-v18
+Critical (tables had NO indexes, causing full table scans):
+- events: composite (user_id, start_at) for calendar day/month queries
+- events: BRIN index on start_at for time-series range scans
+  (100-1000x smaller than B-tree, ideal for append-only data)
+- events: partial index on start_at WHERE notify=true AND notified_at IS NULL
+  for the notification cron
+- events: (user_id, notified_at) for notification cleanup
+- push_subscriptions: (user_id) for cron push dispatch
+- goal_share_tokens: (user_id) for listing/revoking tokens
+- qadaa_log_entries: (user_id) for qadaa history queries
+
+Performance (existing tables, additional indexes):
+- prayer_log: partial (user_id, date) WHERE status IN prayed/assumed_prayed
+  for analytics queries
+- prayer_log: BRIN index on date for cron range scans
+- prayer_times_cache: BRIN index on date for cron batch fetches
+- goals: composite (user_id, sort_order, created_at) eliminates sort step
+  in list query
+- sunnah_log: partial (user_id, date) WHERE prayed=true for dashboard
+
+All BRIN indexes use autosummarize=on for up-to-date range summaries.
+
+─ Cron batch optimization (checkin-scheduler) ─
+
+Previously: 10k users × 8 queries each = ~80k DB round-trips
+Now: 4 batch queries upfront + targeted updates only
+
+Batch 1: All prayer times cache rows for relevant dates (1 query)
+Batch 2: All pending prayer logs for yesterday's dates (1 query)
+Batch 3: All notification prefs (1 query)
+Batch 4: All push subscriptions (1 query)
+
+Then iterates users using in-memory Maps, only hitting DB for:
+- Updates to pending prayers that need resolving (assumed_prayed)
+- Push notification sends (external API, not DB)
+- Cleanup of expired push subscriptions (404/410)
+
+─ Analytics route optimization ─
+
+Previously: 3 separate queries (90-day logs, all logs, prayer times)
+Now: 2 queries (all logs with column selection, prayer times)
+
+Selecting only needed columns (id, date, prayerName, status,
+wentToMasjid, markedAt) reduces data transfer. The 90-day filter
+is applied in-memory since we need all logs for streak calculation
+anyway, avoiding a second DB round-trip.
+
+─ Drizzle schema updated ─
+
+All new indexes declared in schema.ts using Drizzle's index() API
+so they're tracked by drizzle-kit. The migration SQL in
+drizzle/0006_index_optimization.sql is the source of truth for
+the actual DDL.
 
 Generated with [Devin](https://devin.ai)
 

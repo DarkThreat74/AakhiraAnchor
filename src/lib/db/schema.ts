@@ -22,6 +22,7 @@ import {
   jsonb,
   primaryKey,
   uniqueIndex,
+  index,
   pgEnum,
 } from 'drizzle-orm/pg-core';
 
@@ -125,6 +126,8 @@ export const prayerTimesCache = pgTable(
   },
   (table) => [
     uniqueIndex('prayer_times_cache_user_date_idx').on(table.userId, table.date),
+    // BRIN index for cron range scans (fetch all rows for a date across all users)
+    index('prayer_times_cache_date_brin_idx').using('brin', table.date),
   ],
 );
 
@@ -150,7 +153,10 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   p256dh: text('p256dh').notNull(),
   auth: text('auth').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  // Hot path: cron fetches all subs for a user to send push notifications
+  userIdIdx: index('push_subscriptions_user_id_idx').on(table.userId),
+}));
 
 // ─── Prayer Log (one row per user per prayer per day) ───
 
@@ -174,6 +180,10 @@ export const prayerLog = pgTable(
       table.date,
       table.prayerName,
     ),
+    // Partial index for analytics queries (filter on prayed/assumed_prayed)
+    index('prayer_log_user_date_prayed_idx').on(table.userId, table.date),
+    // BRIN index for cron range scans (append-only, ordered by date)
+    index('prayer_log_date_brin_idx').using('brin', table.date),
   ],
 );
 
@@ -198,6 +208,8 @@ export const sunnahLog = pgTable(
       table.date,
       table.sunnahKey,
     ),
+    // Partial index for dashboard queries (filter on prayed=true)
+    index('sunnah_log_user_date_prayed_idx').on(table.userId, table.date),
   ],
 );
 
@@ -250,7 +262,10 @@ export const qadaaLogEntries = pgTable('qadaa_log_entries', {
   // Capped at 1-20 per submission
   amountLogged: integer('amount_logged').notNull(),
   loggedAt: timestamp('logged_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  // Query: fetch qadaa log entries by user
+  userIdIdx: index('qadaa_log_entries_user_id_idx').on(table.userId),
+}));
 
 // ─── Calendar Events ───
 
@@ -272,7 +287,16 @@ export const events = pgTable('events', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   // When a push notification was sent for this event (null = not notified yet)
   notifiedAt: timestamp('notified_at', { withTimezone: true }),
-});
+}, (table) => ({
+  // Hot path: calendar day/month view (user_id = $1 AND start_at BETWEEN $2 AND $3)
+  userStartIdx: index('events_user_start_idx').on(table.userId, table.startAt),
+  // Notification cron: find events needing notification (partial index)
+  pendingNotifyIdx: index('events_pending_notify_idx').on(table.startAt),
+  // BRIN index for time-series range scans (100-1000x smaller than B-tree)
+  startAtBrinIdx: index('events_start_at_brin_idx').using('brin', table.startAt),
+  // Notification cleanup: find events by user + notification status
+  userNotifiedIdx: index('events_user_notified_idx').on(table.userId, table.notifiedAt),
+}));
 
 // ─── Daily Huddle ───
 
@@ -395,14 +419,25 @@ export const goals = pgTable('goals', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-});
+}, (table) => ({
+  // Index for querying goals by user
+  userIdIdx: index('goals_user_id_idx').on(table.userId),
+  // Index for querying children of a goal
+  parentIdIdx: index('goals_parent_id_idx').on(table.parentId),
+  // Composite index for list query: WHERE user_id = $1 ORDER BY sort_order, created_at
+  // Eliminates the sort step
+  userSortCreatedIdx: index('goals_user_sort_created_idx').on(table.userId, table.sortOrder, table.createdAt),
+}));
 
 export const goalShareTokens = pgTable('goal_share_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   token: text('token').unique().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  // Query: list/revoke share tokens by user
+  userIdIdx: index('goal_share_tokens_user_id_idx').on(table.userId),
+}));
 
 // ─── Type Exports (for use in app code) ───
 
