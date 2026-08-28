@@ -1,25 +1,43 @@
-App Store readiness: error boundaries, 404 page, tap targets, cleanup
+Add Learn section + fix prayer average time bug
 
-Error handling (Apple rejects blank-screen crashes):
-- Added src/app/error.tsx — route-level error boundary with retry button
-- Added src/app/global-error.tsx — root layout error boundary with
-  inline styles (no CSS dependency, renders its own <html>/<body>)
-- Added src/app/not-found.tsx — custom 404 page with link home
+Learn section:
+- New /learn page with card-based accordion UI
+- Small "Learn" button in mobile top bar and desktop sidebar
+- 5 curated sections (all content sourced from authenticated hadith
+  collections — no AI-generated religious content):
+  1. Virtues of Salah (general) — river hadith, covenant with Allah
+  2. Virtues of Each Prayer — Fajr, Dhuhr, Asr, Maghrib, Isha with
+     unique hadiths for each
+  3. How to Pray — prerequisites + 18-step guide from takbir to salam
+  4. Witr Prayer — what it is, how many rakats, when to pray, how to
+     pray 3-rakat Witr, Qunoot, making up missed Witr
+  5. Sunnah Prayers — muakkadah and ghair muakkadah, Fajr sunnah
+     virtue hadith
+- Hadiths displayed with Arabic (Amiri font), English translation,
+  source citation, and authenticity grade
+- Progressive disclosure — only one section open at a time
+- Warm design matching existing tokens (paper/ink palette)
+- Callout blocks for key insights
+- Numbered steps for prayer guide
+- Bullet lists for prerequisites and sunnah schedules
 
-Removed unused plugin:
-- Removed @capacitor/camera — was installed but never imported.
-  Unused permission requests trigger Apple rejection.
-- Updated Info.plist template to remove camera usage comment
-- Updated privacy nutrition label to remove camera reference
+Prayer average time fix:
+- Late check-ins (e.g., logging Fajr at 10 PM) no longer skew the
+  average prayer time
+- Analytics route now fetches cached prayer times for each day and
+  validates that markedAt falls within the prayer's valid window
+  before including it in the average
+- Prayer windows: Fajr → sunrise, Dhuhr → Asr, Asr → Maghrib,
+  Maghrib → Isha, Isha → midnight
+- 15-minute grace period before prayer start for early pray-ers
+- Check-ins outside the window are silently excluded from the average
+  (the prayer still counts as prayed, just doesn't affect timing stats)
 
-iOS tap target fixes (Apple HIG requires 44px minimum):
-- Calendar event delete button: 20px → 28px
-- Prayer sunnah toggle button: 28px → 32px
-
-iOS text size fixes (8px is too small for iOS readability):
-- Prayer dashboard: prayer initial letter 8px → 9px
-- Prayer dashboard: sunnah count 8px → 9px
-- Calendar day view: sync indicator dot 8px → 9px
+Routing:
+- Added /learn to proxy protected paths
+- Added /learn to robots.txt disallow list
+- Added /learn to apple-app-site-association Universal Links
+- Bumped SW cache version to waqt-v18
 
 Generated with [Devin](https://devin.ai)
 

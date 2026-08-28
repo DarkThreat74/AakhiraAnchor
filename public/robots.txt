@@ -8,6 +8,7 @@ Disallow: /onboarding
 Disallow: /calendar
 Disallow: /prayer
 Disallow: /goals
+Disallow: /learn
 
 # Public calendar shares are indexable
 Allow: /user/public/

@@ -37,6 +37,39 @@ export async function GET(request: NextRequest) {
 
   const timezone = settings?.timezone || "America/Chicago";
 
+  // Fetch cached prayer times for the last 90 days so we can validate
+  // that markedAt falls within the prayer window. Without this, a user
+  // who logs Fajr at 10 PM (because they forgot) would skew the average.
+  const prayerTimesRows = await db
+    .select()
+    .from(schema.prayerTimesCache)
+    .where(
+      and(
+        eq(schema.prayerTimesCache.userId, session.userId),
+        gte(schema.prayerTimesCache.date, fromDate),
+      ),
+    );
+
+  // Build a map: date -> { fajr, sunrise, dhuhr, asr, maghrib, isha } in minutes-from-midnight (UTC)
+  const prayerTimesByDate = new Map<string, Record<string, number>>();
+  for (const row of prayerTimesRows) {
+    const dateStr = typeof row.date === "string" ? row.date : String(row.date);
+    const parseTime = (t: string | Date): number => {
+      const s = typeof t === "string" ? t : t.toISOString();
+      // time column returns "HH:MM:SS" — extract hours and minutes
+      const match = s.match(/(\d+):(\d+)/);
+      return match ? parseInt(match[1]) * 60 + parseInt(match[2]) : -1;
+    };
+    prayerTimesByDate.set(dateStr, {
+      fajr: parseTime(row.fajr),
+      sunrise: parseTime(row.sunrise),
+      dhuhr: parseTime(row.dhuhr),
+      asr: parseTime(row.asr),
+      maghrib: parseTime(row.maghrib),
+      isha: parseTime(row.isha),
+    });
+  }
+
   // Get all prayer logs for streak calculation (no date limit)
   const allLogs = await db
     .select()
@@ -96,17 +129,73 @@ export async function GET(request: NextRequest) {
     const totalDays = prayedLogs.length;
     const masjidCount = prayedLogs.filter((l) => l.wentToMasjid === true).length;
 
-    // Calculate average prayer time from markedAt
+    // Calculate average prayer time from markedAt — but ONLY include
+    // check-ins where markedAt falls within the prayer's valid window.
+    // This prevents late check-ins (e.g., logging Fajr at 10 PM) from
+    // skewing the average.
     const markedTimes: number[] = [];
     for (const log of prayedLogs) {
-      if (log.markedAt) {
-        const marked = new Date(log.markedAt);
-        const localStr = marked.toLocaleString("en-US", { timeZone: timezone, hour12: false });
-        const match = localStr.match(/(\d+):(\d+)/);
-        if (match) {
-          markedTimes.push(parseInt(match[1]) * 60 + parseInt(match[2]));
-        }
+      if (!log.markedAt) continue;
+      const marked = new Date(log.markedAt);
+      const localStr = marked.toLocaleString("en-US", { timeZone: timezone, hour12: false });
+      const match = localStr.match(/(\d+):(\d+)/);
+      if (!match) continue;
+      const markedMinutes = parseInt(match[1]) * 60 + parseInt(match[2]);
+
+      // Look up prayer times for this log's date
+      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+      const times = prayerTimesByDate.get(dateStr);
+      if (!times) continue; // No cached prayer times for this date — skip
+
+      const prayerStart = times[prayer];
+      if (prayerStart < 0) continue;
+
+      // Define the prayer window end:
+      // - Fajr: ends at sunrise
+      // - Dhuhr: ends at Asr
+      // - Asr: ends at Maghrib
+      // - Maghrib: ends at Isha
+      // - Isha: ends at midnight (1200 minutes = 20:00 UTC-ish, but use 24*60)
+      let windowEnd: number;
+      switch (prayer) {
+        case "fajr":
+          windowEnd = times.sunrise >= 0 ? times.sunrise : prayerStart + 120;
+          break;
+        case "dhuhr":
+          windowEnd = times.asr >= 0 ? times.asr : prayerStart + 300;
+          break;
+        case "asr":
+          windowEnd = times.maghrib >= 0 ? times.maghrib : prayerStart + 240;
+          break;
+        case "maghrib":
+          windowEnd = times.isha >= 0 ? times.isha : prayerStart + 90;
+          break;
+        case "isha":
+          // Isha can be prayed until Fajr of the next day, but for averaging
+          // purposes, cap at midnight to avoid including extreme late-night
+          // check-ins. Also allow a small grace period (30 min) before the
+          // prayer start for those who pray slightly early.
+          windowEnd = 24 * 60; // midnight
+          break;
+        default:
+          windowEnd = prayerStart + 120;
       }
+
+      // Allow a 15-minute grace period before the prayer start (some users
+      // pray slightly early, especially for Dhuhr on Fridays)
+      const windowStart = prayerStart - 15;
+
+      // Handle wrap-around: if windowEnd < windowStart (e.g., Isha spans midnight),
+      // check if markedMinutes >= windowStart OR markedMinutes <= windowEnd
+      const inWindow =
+        windowEnd < windowStart
+          ? markedMinutes >= windowStart || markedMinutes <= windowEnd
+          : markedMinutes >= windowStart && markedMinutes <= windowEnd;
+
+      if (inWindow) {
+        markedTimes.push(markedMinutes);
+      }
+      // If not in window, skip — don't include in average
     }
 
     const avgTime = markedTimes.length > 0

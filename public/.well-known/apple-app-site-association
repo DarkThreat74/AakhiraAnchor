@@ -8,6 +8,7 @@
           "/prayer*",
           "/calendar*",
           "/goals*",
+          "/learn*",
           "/settings*",
           "/onboarding*",
           "NOT /",
