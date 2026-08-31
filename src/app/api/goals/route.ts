@@ -156,10 +156,11 @@ export async function PATCH(request: Request) {
       updates.title = trimmed.slice(0, 200);
     }
     if (body.description !== undefined) {
-      if (body.description.length > 2000) {
+      const desc = body.description ?? "";
+      if (desc.length > 2000) {
         return NextResponse.json({ error: "Description must be 2000 characters or less" }, { status: 400 });
       }
-      updates.description = body.description.trim() || null;
+      updates.description = desc.trim() || null;
     }
     if (body.status !== undefined) {
       if (!["active", "done", "archived"].includes(body.status)) {

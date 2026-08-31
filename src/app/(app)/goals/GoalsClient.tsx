@@ -944,22 +944,36 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
 
 // ── Tree View ──
 
+/** Count completed children (recursive) for progress badge */
+function countTreeDone(node: GoalNode): { total: number; done: number } {
+  let total = 0;
+  let done = 0;
+  function walk(n: GoalNode) {
+    for (const c of n.children) {
+      if (c.status !== "archived") {
+        total++;
+        if (c.status === "done") done++;
+        walk(c);
+      }
+    }
+  }
+  walk(node);
+  return { total, done };
+}
+
 function TreeView(props: ViewProps) {
   return (
     <div className="overflow-x-auto pb-4">
-      <div
-        className="inline-flex min-w-full flex-col gap-6"
-        style={{ minWidth: "max-content" }}
-      >
+      <div className="inline-flex min-w-full flex-col gap-5" style={{ minWidth: "max-content" }}>
         {props.tree.map((node) => (
-          <TreeBranch key={node.id} node={node} {...props} />
+          <TreeBranch key={node.id} node={node} depth={0} {...props} />
         ))}
       </div>
     </div>
   );
 }
 
-function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
+function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; depth: number }) {
   const [expanded, setExpanded] = useState(true);
   const [addingChild, setAddingChild] = useState(false);
   const [childTitle, setChildTitle] = useState("");
@@ -969,6 +983,10 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
   const isDone = node.status === "done";
   const hasChildren = node.children.length > 0;
   const hasDescription = !!node.description;
+  const isRoot = depth === 0;
+
+  const childProgress = hasChildren ? countTreeDone(node) : null;
+  const allChildrenDone = childProgress !== null && childProgress.done === childProgress.total && childProgress.total > 0;
 
   const handleAddChild = () => {
     if (childTitle.trim()) {
@@ -980,26 +998,34 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
     }
   };
 
+  // Depth-based styling
+  const accentColors = ["var(--color-accent)", "var(--color-warmth)", "var(--color-accent-soft)", "var(--color-ink-muted)"];
+  const stripeColor = isDone ? "var(--color-success)" : accentColors[depth % accentColors.length];
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div
-        className="rounded-xl border px-3 py-2.5"
+        className="relative overflow-hidden rounded-2xl border transition-shadow"
         style={{
-          borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
+          borderColor: isDone ? "var(--color-success)" : isRoot ? "var(--color-paper-3)" : "var(--color-paper-3)",
           backgroundColor: "var(--color-paper)",
-          minWidth: 180,
-          maxWidth: 280,
+          minWidth: isRoot ? 260 : 220,
+          maxWidth: isRoot ? 420 : 340,
+          boxShadow: isRoot ? "0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.02)" : "none",
         }}
       >
-        <div className="flex items-center gap-2">
+        {/* Left accent stripe */}
+        <div
+          className="absolute left-0 top-0 bottom-0"
+          style={{ width: 3, backgroundColor: stripeColor }}
+        />
+
+        <div className="flex items-center gap-2 pl-3.5 pr-3 pt-2.5">
+          {/* Checkmark */}
           <button
             onClick={() => props.onToggleDone(node)}
             className="flex shrink-0 items-center justify-center rounded-full transition-colors"
-            style={{
-              minHeight: 36,
-              minWidth: 36,
-              padding: 0,
-            }}
+            style={{ minHeight: 32, minWidth: 32, padding: 0 }}
             aria-label={isDone ? "Mark as not done" : "Mark as done"}
           >
             <span
@@ -1013,6 +1039,7 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
             </span>
           </button>
 
+          {/* Title / edit */}
           <div className="min-w-0 flex-1">
             {isEditing ? (
               <div className="space-y-1.5" onBlur={(e) => {
@@ -1047,10 +1074,10 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
                 />
               </div>
             ) : (
-              <div>
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => props.onEditStart(node)}
-                  className="block w-full truncate text-left text-sm font-medium"
+                  className="block min-w-0 flex-1 truncate text-left text-sm font-medium"
                   style={{
                     color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
                     textDecoration: isDone ? "line-through" : "none",
@@ -1058,150 +1085,184 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
                 >
                   {node.title}
                 </button>
-                {hasDescription && !showDetails && (
-                  <button
-                    onClick={() => setShowDetails(true)}
-                    className="mt-0.5 flex items-center gap-1 text-[11px]"
-                    style={{ color: "var(--color-ink-muted)" }}
+                {/* Progress badge for parents */}
+                {childProgress && childProgress.total > 0 && (
+                  <span
+                    className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums"
+                    style={{
+                      backgroundColor: allChildrenDone
+                        ? "color-mix(in oklab, var(--color-success) 15%, transparent)"
+                        : "var(--color-paper-2)",
+                      color: allChildrenDone ? "var(--color-success)" : "var(--color-ink-muted)",
+                    }}
                   >
-                    <AlignLeft className="h-3 w-3" />
-                    Details
-                  </button>
+                    {allChildrenDone && <Check className="h-2.5 w-2.5" />}
+                    {childProgress.done}/{childProgress.total}
+                  </span>
                 )}
               </div>
             )}
           </div>
 
+          {/* Expand/collapse */}
           {hasChildren && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="shrink-0 rounded p-0.5"
-              style={{ color: "var(--color-ink-muted)" }}
+              className="flex shrink-0 items-center justify-center rounded-md transition-colors"
+              style={{ color: "var(--color-ink-muted)", minHeight: 28, minWidth: 28 }}
               aria-label={expanded ? "Collapse" : "Expand"}
             >
-              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </button>
           )}
         </div>
 
-        {/* Description display */}
-        {hasDescription && showDetails && !isEditing && (
+        {/* Details row */}
+        {hasDescription && !isEditing && (
+          <div className="px-3.5 pb-2.5">
+            {showDetails ? (
+              <div
+                className="flex items-start gap-2 border-t pt-2 text-xs"
+                style={{ borderColor: "var(--color-paper-3)" }}
+              >
+                <AlignLeft className="mt-0.5 h-3 w-3 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
+                <p className="min-w-0 flex-1 whitespace-pre-wrap break-words" style={{ color: "var(--color-ink-soft)" }}>
+                  {node.description}
+                </p>
+                <button
+                  onClick={() => setShowDetails(false)}
+                  className="shrink-0 rounded p-0.5"
+                  style={{ color: "var(--color-ink-muted)" }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowDetails(true)}
+                className="flex items-center gap-1 text-[11px] transition-colors"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                <AlignLeft className="h-3 w-3" />
+                Details
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Action bar */}
+        {!isEditing && (
           <div
-            className="mt-2 flex items-start gap-2 border-t pt-2 text-xs"
+            className="flex items-center gap-1 border-t px-3.5 py-1.5"
             style={{ borderColor: "var(--color-paper-3)" }}
           >
-            <AlignLeft
-              className="mt-0.5 h-3 w-3 shrink-0"
-              style={{ color: "var(--color-ink-muted)" }}
-            />
-            <p
-              className="min-w-0 flex-1 whitespace-pre-wrap break-words"
-              style={{ color: "var(--color-ink-soft)" }}
-            >
-              {node.description}
-            </p>
             <button
-              onClick={() => setShowDetails(false)}
-              className="shrink-0 rounded p-0.5"
-              style={{ color: "var(--color-ink-muted)" }}
+              onClick={() => setAddingChild(true)}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
+              style={{ color: "var(--color-ink-muted)", minHeight: 28 }}
             >
-              <X className="h-3 w-3" />
+              <Plus className="h-3 w-3" />
+              Branch
+            </button>
+            <button
+              onClick={() => {
+                if (confirm("Delete this goal and all its branches?")) props.onDelete(node.id);
+              }}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
+              style={{ color: "var(--color-ink-muted)", minHeight: 28 }}
+            >
+              <Trash2 className="h-3 w-3" />
             </button>
           </div>
         )}
       </div>
 
-      {/* Actions row */}
-      <div className="flex items-center gap-1.5" style={{ paddingLeft: 12 }}>
-        <button
-          onClick={() => setAddingChild(true)}
-          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors"
-          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 32 }}
-        >
-          <Plus className="h-3 w-3" />
-          Branch
-        </button>
-        <button
-          onClick={() => {
-            if (confirm("Delete this goal and all its branches?")) props.onDelete(node.id);
-          }}
-          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors"
-          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 32 }}
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
-      </div>
-
       {/* Add child input */}
       {addingChild && (
-        <div className="space-y-1.5" style={{ paddingLeft: 12 }}>
-          <input
-            autoFocus
-            type="text"
-            value={childTitle}
-            onChange={(e) => setChildTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleAddChild();
-              if (e.key === "Escape") {
-                setAddingChild(false);
-                setChildTitle("");
-                setChildDescription("");
-              }
-            }}
-            placeholder="Sub-goal title"
-            className="w-full rounded border bg-transparent px-2 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)", maxWidth: 240 }}
-          />
-          <textarea
-            value={childDescription}
-            onChange={(e) => setChildDescription(e.target.value)}
-            placeholder="Add details (optional)..."
-            rows={2}
-            className="w-full resize-none rounded border bg-transparent px-2 py-1.5 text-xs outline-none"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", maxWidth: 240 }}
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={handleAddChild}
-              disabled={props.loading || !childTitle.trim()}
-              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
-            >
-              Add
-            </button>
-            <button
-              onClick={() => {
-                setAddingChild(false);
-                setChildTitle("");
-                setChildDescription("");
+        <div className="space-y-1.5" style={{ paddingLeft: 20 }}>
+          <div
+            className="rounded-xl border p-2.5"
+            style={{ borderColor: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 4%, var(--color-paper))", maxWidth: 300 }}
+          >
+            <input
+              autoFocus
+              type="text"
+              value={childTitle}
+              onChange={(e) => setChildTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAddChild();
+                if (e.key === "Escape") {
+                  setAddingChild(false);
+                  setChildTitle("");
+                  setChildDescription("");
+                }
               }}
-              className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-              style={{
-                borderColor: "var(--color-paper-3)",
-                color: "var(--color-ink-muted)",
-                minHeight: 36,
-              }}
-            >
-              Cancel
-            </button>
+              placeholder="Sub-goal title"
+              className="w-full rounded border bg-transparent px-2 py-1.5 text-sm outline-none"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)" }}
+            />
+            <textarea
+              value={childDescription}
+              onChange={(e) => setChildDescription(e.target.value)}
+              placeholder="Add details (optional)..."
+              rows={2}
+              className="mt-1.5 w-full resize-none rounded border bg-transparent px-2 py-1.5 text-xs outline-none"
+              style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+            />
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={handleAddChild}
+                disabled={props.loading || !childTitle.trim()}
+                className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 32 }}
+              >
+                {props.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}
+              </button>
+              <button
+                onClick={() => {
+                  setAddingChild(false);
+                  setChildTitle("");
+                  setChildDescription("");
+                }}
+                className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 32 }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Children with connectors */}
       {expanded && hasChildren && (
-        <div className="relative" style={{ paddingLeft: 24 }}>
+        <div className="relative" style={{ paddingLeft: 22 }}>
+          {/* Vertical spine */}
           <div
-            className="absolute left-2 top-0 bottom-0 w-px"
-            style={{ backgroundColor: "var(--color-paper-3)" }}
+            className="absolute bottom-0 top-0"
+            style={{
+              left: 7,
+              width: 2,
+              borderRadius: "1px",
+              backgroundColor: allChildrenDone ? "color-mix(in oklab, var(--color-success) 40%, var(--color-paper-3))" : "var(--color-paper-3)",
+            }}
           />
-          <div className="space-y-4">
+          <div className="space-y-3">
             {node.children.map((child) => (
               <div key={child.id} className="relative">
+                {/* Horizontal connector with rounded corner */}
                 <div
-                  className="absolute left-[-12px] top-5 h-px w-3"
-                  style={{ backgroundColor: "var(--color-paper-3)" }}
+                  className="absolute top-5"
+                  style={{
+                    left: -15,
+                    width: 15,
+                    height: 2,
+                    borderTopLeftRadius: 4,
+                    borderBottomLeftRadius: 4,
+                    backgroundColor: allChildrenDone ? "color-mix(in oklab, var(--color-success) 40%, var(--color-paper-3))" : "var(--color-paper-3)",
+                  }}
                 />
-                <TreeBranch node={child} {...props} />
+                <TreeBranch node={child} depth={depth + 1} {...props} />
               </div>
             ))}
           </div>

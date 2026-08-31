@@ -1,30 +1,30 @@
-Fix prayer button height, goal save-on-blur, goal checkmark size
+Fix goals DB save + redesign tree view
 
-1. Prayer buttons on calendar day view (schedule tab):
-   - Changed from flex-wrap to single-row flex on mobile
-   - Reduced vertical padding from py-1.5 to py-1 on mobile
-   - Removed gap-0.5 between label and time (tighter)
-   - Smaller font sizes on mobile (10px label, 9px time)
-   - Smaller checkmark icon on mobile (h-2.5 w-2.5)
-   - leading-tight to prevent line-height bloat
-   - Buttons no longer wrap to 2 rows — all 6 fit in one row
+1. Goals not saving to database:
+   - Root cause: handleEditSave sends description: null when the
+     description field is empty. The PATCH /api/goals route did
+     body.description.length on null, which throws a TypeError.
+     The catch block returned 500 and the goal never persisted.
+   - Fix: coerce null to empty string before length check and
+     trim in the API route (body.description ?? "").
 
-2. Goals not saving on blur:
-   - Added onBlur handler to the edit container in both ListView
-     and TreeView
-   - When focus leaves the title/description inputs entirely
-     (relatedTarget is outside the container), the goal saves
-     automatically
-   - Previously edits were lost when clicking away — only Enter
-     or Ctrl+Enter would save
-
-3. Goal checkmark circle too big:
-   - Separated the tap target (36px button) from the visual circle
-     (20px inner span with border)
-   - Previously the button itself was the circle with minHeight: 44
-     making it 44px — visually too large
-   - Now the button is a transparent 36px tap target wrapping a
-     20px circle, keeping accessibility while looking compact
+2. Redesigned TreeView (goals "map" view):
+   - Wider cards (root: 260-420px, children: 220-340px) — uses
+     available space instead of cramped 180-280px
+   - Root goals get subtle shadow + stronger visual weight
+   - Left accent stripe on every card, color-coded by depth:
+     accent (root) -> warmth (level 1) -> accent-soft (level 2)
+     -> green when done
+   - Progress badges on parent nodes showing "done/total" child
+     count, with green + check when all children complete
+   - Connector lines upgraded from 1px gray to 2px with rounded
+     corners; turns green-tinted when all children done
+   - Action buttons (Branch, Delete) moved into a footer bar
+     inside the card with a top border separator
+   - Add-child input gets an accent-tinted container instead of
+     bare inputs floating in space
+   - Details toggle moved inside card body, cleaner layout
+   - Better spacing and visual hierarchy throughout
 
 Generated with [Devin](https://devin.ai)
 
