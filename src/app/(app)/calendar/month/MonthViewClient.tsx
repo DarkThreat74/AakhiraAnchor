@@ -112,8 +112,14 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month - 1, 1).getDay();
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    // Defer setState outside the effect body to avoid cascading renders
+    Promise.resolve().then(() => {
+      const now = new Date();
+      setToday(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
+    });
+  }, []);
 
   // Determine which days are "done" (past days in the current month)
   // A day is done if it's before today (in the current month)
@@ -150,7 +156,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 overflow-x-hidden px-4 py-3 sm:px-6 sm:py-4">
           <Link
             href={`/calendar/month?year=${prevYear}&month=${prevMonth}`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
             aria-label="Previous month"
           >
@@ -168,14 +174,14 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             >
               <Link
                 href="/calendar/day"
-                className="rounded-l-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+                className="min-h-11 rounded-l-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
                 style={{ color: "var(--color-ink-soft)" }}
               >
                 Day
               </Link>
               <Link
                 href={`/calendar/month?year=${year}&month=${month}`}
-                className="rounded-r-lg px-3 py-1.5 text-xs font-medium"
+                className="min-h-11 rounded-r-lg px-3 py-1.5 text-xs font-medium"
                 style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
               >
                 Month
@@ -185,7 +191,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
           <Link
             href={`/calendar/month?year=${nextYear}&month=${nextMonth}`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-soft)" }}
             aria-label="Next month"
           >
@@ -261,7 +267,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                     return (
                       <div
                         key={event.id}
-                        className="truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight sm:text-[10px]"
+                        className="truncate rounded px-1 py-0.5 text-[11px] font-medium leading-tight sm:text-[10px]"
                         style={{
                           backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
                           color: color,
@@ -274,7 +280,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                   })}
                   {blockEvents.length > maxVisibleEvents && (
                     <span
-                      className="px-1 text-[9px] font-medium sm:text-[10px]"
+                      className="px-1 text-[11px] font-medium sm:text-[10px]"
                       style={{ color: "var(--color-ink-muted)" }}
                     >
                       +{blockEvents.length - maxVisibleEvents} more
@@ -290,13 +296,13 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                             className="h-1.5 w-1.5 shrink-0 rounded-full"
                             style={{ backgroundColor: getReminderColor(event.title) }}
                           />
-                          <span className="truncate text-[9px] leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-soft)" }}>
+                          <span className="truncate text-[11px] leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-soft)" }}>
                             {event.title}
                           </span>
                         </div>
                       ))}
                       {reminderEvents.length > maxVisibleEvents && (
-                        <span className="text-[9px] sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        <span className="text-[11px] sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
                           +{reminderEvents.length - maxVisibleEvents} more
                         </span>
                       )}

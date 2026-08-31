@@ -208,7 +208,7 @@ export default function PrayerCheckinPopup({
           </h2>
           <button
             onClick={() => { play("close"); onClose(); }}
-            className="rounded-lg p-1 transition-colors hover:bg-[var(--color-paper-2)]"
+            className="min-h-11 min-w-11 rounded-lg p-2 transition-colors hover:bg-[var(--color-paper-2)]"
             style={{ color: "var(--color-ink-muted)" }}
             aria-label="Close"
           >
@@ -254,7 +254,7 @@ export default function PrayerCheckinPopup({
               <button
                 onClick={handlePrayedYes}
                 disabled={loading}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-success)",
                   backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)",
@@ -267,7 +267,7 @@ export default function PrayerCheckinPopup({
               <button
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                className="min-h-11 flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-paper-3)",
                   color: "var(--color-ink-muted)",
@@ -288,7 +288,7 @@ export default function PrayerCheckinPopup({
               <button
                 onClick={handlePrayedYes}
                 disabled={loading}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-success)",
                   backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)",
@@ -301,7 +301,7 @@ export default function PrayerCheckinPopup({
               <button
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                className="min-h-11 flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-paper-3)",
                   color: "var(--color-ink-muted)",
@@ -330,7 +330,7 @@ export default function PrayerCheckinPopup({
             {sunnahDefs.length > 0 && (
               <button
                 onClick={() => setStep("sunnah")}
-                className="mb-2 w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
+                className="mb-2 min-h-11 w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
                 style={{
                   borderColor: "var(--color-accent)",
                   color: "var(--color-accent)",
@@ -342,7 +342,7 @@ export default function PrayerCheckinPopup({
             <button
               onClick={handleUndo}
               disabled={loading}
-              className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+              className="min-h-11 w-full rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
               style={{
                 borderColor: "var(--color-paper-3)",
                 color: "var(--color-ink-muted)",
@@ -365,7 +365,7 @@ export default function PrayerCheckinPopup({
               <button
                 onClick={() => checkIn(true)}
                 disabled={loading}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-accent)",
                   backgroundColor: "color-mix(in oklab, var(--color-accent) 10%, transparent)",
@@ -378,7 +378,7 @@ export default function PrayerCheckinPopup({
               <button
                 onClick={() => checkIn(false)}
                 disabled={loading}
-                className="flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                className="min-h-11 flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
                 style={{
                   borderColor: "var(--color-paper-3)",
                   color: "var(--color-ink-soft)",
@@ -390,7 +390,7 @@ export default function PrayerCheckinPopup({
             <button
               onClick={() => setStep("main")}
               disabled={loading}
-              className="mt-2 w-full text-center text-xs font-medium transition-colors"
+              className="mt-2 min-h-11 w-full text-center text-xs font-medium transition-colors"
               style={{ color: "var(--color-ink-muted)" }}
             >
               Back
@@ -458,7 +458,7 @@ export default function PrayerCheckinPopup({
 
             <button
               onClick={() => onCheckedIn({ status: "prayed", wentToMasjid: null })}
-              className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
+              className="min-h-11 w-full rounded-lg border py-2.5 text-sm font-medium transition-colors"
               style={{
                 borderColor: "var(--color-paper-3)",
                 color: "var(--color-ink-soft)",

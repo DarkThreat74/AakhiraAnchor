@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import webpush from "web-push";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
@@ -62,17 +62,16 @@ export async function POST(request: NextRequest) {
   const succeeded = results.filter((r) => r.status === "fulfilled").length;
   const failed = results.filter((r) => r.status === "rejected").length;
 
-  // Clean up expired subscriptions
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    if (result.status === "rejected") {
-      const err = result.reason as { statusCode?: number };
-      if (err.statusCode === 404 || err.statusCode === 410) {
-        await db
-          .delete(schema.pushSubscriptions)
-          .where(eq(schema.pushSubscriptions.id, subs[i].id));
-      }
-    }
+  // Clean up expired subscriptions in a single batched delete
+  const expiredIds = results
+    .map((r, i) => ({ r, id: subs[i].id }))
+    .filter(({ r }) => r.status === "rejected" && [404, 410].includes((r.reason as { statusCode?: number }).statusCode ?? 0))
+    .map(({ id }) => id);
+
+  if (expiredIds.length > 0) {
+    await db
+      .delete(schema.pushSubscriptions)
+      .where(inArray(schema.pushSubscriptions.id, expiredIds));
   }
 
   return NextResponse.json({

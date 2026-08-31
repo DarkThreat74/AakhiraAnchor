@@ -327,7 +327,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8" style={{ minHeight: "100dvh" }}>
+    <div className="mx-auto max-w-4xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8" style={{ minHeight: "100dvh" }}>
       {/* ── Header ── */}
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -351,7 +351,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
               style={{
                 backgroundColor: view === "list" ? "var(--color-ink)" : "transparent",
                 color: view === "list" ? "var(--color-paper)" : "var(--color-ink-muted)",
-                minHeight: 36,
+                minHeight: 44,
               }}
               aria-label="List view"
             >
@@ -364,7 +364,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
               style={{
                 backgroundColor: view === "tree" ? "var(--color-ink)" : "transparent",
                 color: view === "tree" ? "var(--color-paper)" : "var(--color-ink-muted)",
-                minHeight: 36,
+                minHeight: 44,
               }}
               aria-label="Tree view"
             >
@@ -379,8 +379,8 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
             style={{
               borderColor: "var(--color-paper-3)",
               color: "var(--color-ink-soft)",
-              minHeight: 36,
-              minWidth: 36,
+              minHeight: 44,
+              minWidth: 44,
             }}
             aria-label="Share goals"
           >
@@ -441,7 +441,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
               onClick={handleAddRoot}
               disabled={loading || !newTitle.trim()}
               className="rounded-lg px-4 py-2 text-xs font-medium transition-colors disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
             >
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add goal"}
             </button>
@@ -455,7 +455,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
               style={{
                 borderColor: "var(--color-paper-3)",
                 color: "var(--color-ink-muted)",
-                minHeight: 36,
+                minHeight: 44,
               }}
             >
               Cancel
@@ -747,8 +747,8 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
           onClick={() => props.onToggleDone(node)}
           className="flex shrink-0 items-center justify-center rounded-full transition-colors"
           style={{
-            minHeight: 36,
-            minWidth: 36,
+            minHeight: 44,
+            minWidth: 44,
             padding: 0,
           }}
           aria-label={isDone ? "Mark as not done" : "Mark as done"}
@@ -828,7 +828,7 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
           <button
             onClick={() => setAddingChild(true)}
             className="rounded p-1.5 transition-colors"
-            style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
+            style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
             aria-label="Add sub-goal"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -838,7 +838,7 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
               if (confirm("Delete this goal and all its sub-goals?")) props.onDelete(node.id);
             }}
             className="rounded p-1.5 transition-colors"
-            style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
+            style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
             aria-label="Delete goal"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -908,7 +908,7 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
               onClick={handleAddChild}
               disabled={props.loading || !childTitle.trim()}
               className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 36 }}
+              style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
             >
               Add
             </button>
@@ -922,7 +922,7 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
               style={{
                 borderColor: "var(--color-paper-3)",
                 color: "var(--color-ink-muted)",
-                minHeight: 36,
+                minHeight: 44,
               }}
             >
               Cancel
@@ -1025,7 +1025,7 @@ function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; dep
           <button
             onClick={() => props.onToggleDone(node)}
             className="flex shrink-0 items-center justify-center rounded-full transition-colors"
-            style={{ minHeight: 32, minWidth: 32, padding: 0 }}
+            style={{ minHeight: 44, minWidth: 44, padding: 0 }}
             aria-label={isDone ? "Mark as not done" : "Mark as done"}
           >
             <span
@@ -1109,7 +1109,7 @@ function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; dep
             <button
               onClick={() => setExpanded(!expanded)}
               className="flex shrink-0 items-center justify-center rounded-md transition-colors"
-              style={{ color: "var(--color-ink-muted)", minHeight: 28, minWidth: 28 }}
+              style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
               aria-label={expanded ? "Collapse" : "Expand"}
             >
               {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -1159,7 +1159,7 @@ function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; dep
             <button
               onClick={() => setAddingChild(true)}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
-              style={{ color: "var(--color-ink-muted)", minHeight: 28 }}
+              style={{ color: "var(--color-ink-muted)", minHeight: 44 }}
             >
               <Plus className="h-3 w-3" />
               Branch
@@ -1169,7 +1169,7 @@ function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; dep
                 if (confirm("Delete this goal and all its branches?")) props.onDelete(node.id);
               }}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
-              style={{ color: "var(--color-ink-muted)", minHeight: 28 }}
+              style={{ color: "var(--color-ink-muted)", minHeight: 44 }}
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -1214,7 +1214,7 @@ function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; dep
                 onClick={handleAddChild}
                 disabled={props.loading || !childTitle.trim()}
                 className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
-                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 32 }}
+                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
               >
                 {props.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}
               </button>
@@ -1225,7 +1225,7 @@ function TreeBranch({ node, depth, ...props }: ViewProps & { node: GoalNode; dep
                   setChildDescription("");
                 }}
                 className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 32 }}
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 44 }}
               >
                 Cancel
               </button>

@@ -128,11 +128,16 @@ export default function PrayerDashboard() {
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [madhab, setMadhab] = useState<string>("standard");
   const [sunnahError, setSunnahError] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
 
-  // Track online/offline status
+  // Track online/offline status + initialize time on client only (avoids hydration mismatch)
   useEffect(() => {
+    // Defer setState outside the effect body to avoid cascading renders
+    Promise.resolve().then(() => {
+      setCurrentTime(new Date());
+      setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    });
     const on = () => setIsOnline(true);
     const off = () => setIsOnline(false);
     window.addEventListener("online", on);
@@ -143,7 +148,7 @@ export default function PrayerDashboard() {
     };
   }, []);
 
-  const todayStr = new Date().toLocaleDateString("en-CA");
+  const todayStr = (currentTime ?? new Date(0)).toLocaleDateString("en-CA");
 
   const fetchTodayData = useCallback(async () => {
     try {
@@ -521,7 +526,7 @@ export default function PrayerDashboard() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className="truncate rounded-lg px-1 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm"
+            className="min-h-11 truncate rounded-lg px-1 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm"
             style={{
               backgroundColor: activeTab === tab.key ? "var(--color-paper)" : "transparent",
               color: activeTab === tab.key ? "var(--color-ink)" : "var(--color-ink-muted)",
@@ -544,7 +549,7 @@ export default function PrayerDashboard() {
                 <div>
                   <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Today&apos;s Progress</h2>
                   <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
-                    {currentTime.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                    {currentTime?.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                   </p>
                 </div>
                 {prayerTimes && (
@@ -567,7 +572,7 @@ export default function PrayerDashboard() {
                   const [ih, im] = prayerTimes.isha.split(" ")[0].split(":").map(Number);
                   const fajrMin = fh * 60 + fm;
                   const ishaMin = ih * 60 + im;
-                  const curMin = currentTime.getHours() * 60 + currentTime.getMinutes();
+                  const curMin = (currentTime ?? new Date(0)).getHours() * 60 + (currentTime ?? new Date(0)).getMinutes();
                   const dayDuration = ishaMin - fajrMin;
                   const dayElapsed = Math.min(Math.max(curMin - fajrMin, 0), dayDuration);
                   const dayPct = dayDuration > 0 ? (dayElapsed / dayDuration) * 100 : 0;
@@ -575,7 +580,7 @@ export default function PrayerDashboard() {
 
                   return (
                     <div className="mb-3 mt-1">
-                      <div className="mb-1 flex items-center justify-between gap-1 text-[10px] tabular-nums sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                      <div className="mb-1 flex items-center justify-between gap-1 text-[11px] tabular-nums sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
                         <span className="shrink-0">Fajr {format12h(prayerTimes.fajr)}</span>
                         <span className="min-w-0 truncate text-center" style={{ color: beforeDay ? "var(--color-ink-muted)" : "var(--color-accent)" }}>
                           {beforeDay ? "Day hasn't started" : `${Math.floor(dayPct)}% through`}
@@ -631,7 +636,7 @@ export default function PrayerDashboard() {
                   // Parse prayer start time
                   const [h, m] = time.split(" ")[0].split(":").map(Number);
                   const prayerMinutes = h * 60 + m;
-                  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                  const currentMinutes = (currentTime ?? new Date(0)).getHours() * 60 + (currentTime ?? new Date(0)).getMinutes();
 
                   // ── Determine window END ──
                   // Fajr's window ends at Sunrise (not Dhuhr)
@@ -687,7 +692,7 @@ export default function PrayerDashboard() {
                           {prayed ? (
                             <Check className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "var(--color-paper)" }} />
                           ) : (
-                            <span className="text-[10px] font-bold uppercase sm:text-xs" style={{ color: isCurrent ? color : "var(--color-ink-muted)" }}>
+                            <span className="text-[11px] font-bold uppercase sm:text-xs" style={{ color: isCurrent ? color : "var(--color-ink-muted)" }}>
                               {prayer.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -726,7 +731,7 @@ export default function PrayerDashboard() {
                               {/* Status badge */}
                               {prayed ? (
                                 <span
-                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
                                   style={{
                                     backgroundColor: "color-mix(in oklab, " + color + " 15%, transparent)",
                                     color: color,
@@ -736,7 +741,7 @@ export default function PrayerDashboard() {
                                 </span>
                               ) : isCurrent ? (
                                 <span
-                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
                                   style={{
                                     backgroundColor: "color-mix(in oklab, " + color + " 12%, transparent)",
                                     color: color,
@@ -746,7 +751,7 @@ export default function PrayerDashboard() {
                                 </span>
                               ) : timeStarted ? (
                                 <span
-                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
                                   style={{
                                     backgroundColor: "var(--color-paper-2)",
                                     color: "var(--color-ink-muted)",
@@ -756,7 +761,7 @@ export default function PrayerDashboard() {
                                 </span>
                               ) : (
                                 <span
-                                  className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                                  className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
                                   style={{
                                     backgroundColor: "var(--color-paper-2)",
                                     color: "var(--color-ink-muted)",
@@ -1133,7 +1138,7 @@ export default function PrayerDashboard() {
                     { key: "isha", label: "Isha", val: qadaa.ishaOwed },
                   ] as const).map((p) => (
                     <div key={p.key} className="flex flex-col items-center rounded-lg border py-2" style={{ borderColor: "var(--color-paper-3)" }}>
-                      <span className="text-[10px] font-medium" style={{ color: "var(--color-ink-muted)" }}>{p.label}</span>
+                      <span className="text-[11px] font-medium" style={{ color: "var(--color-ink-muted)" }}>{p.label}</span>
                       <span className="text-base font-bold tabular-nums" style={{ color: p.val > 0 ? "var(--color-warmth)" : "var(--color-success)" }}>
                         {p.val}
                       </span>
@@ -1170,7 +1175,7 @@ export default function PrayerDashboard() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setAdjustAmount(Math.max(1, adjustAmount - 1))}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border text-sm"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border text-sm"
                       style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
                     >
                       -
@@ -1184,7 +1189,7 @@ export default function PrayerDashboard() {
                     />
                     <button
                       onClick={() => setAdjustAmount(Math.min(20, adjustAmount + 1))}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border text-sm"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border text-sm"
                       style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
                     >
                       +
@@ -1227,7 +1232,7 @@ export default function PrayerDashboard() {
           <div className="px-4 py-4 sm:px-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
                   Your code
                 </label>
                 <div className="flex items-center gap-2">
@@ -1248,7 +1253,7 @@ export default function PrayerDashboard() {
                 </div>
               </div>
               <div className="flex-1">
-                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
                   Add friend
                 </label>
                 <div className="flex gap-2">
@@ -1297,7 +1302,7 @@ export default function PrayerDashboard() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>You</div>
-                    <div className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                    <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                       {myWeekPrayed} this week · {myComplete} complete days
                     </div>
                   </div>
@@ -1305,7 +1310,7 @@ export default function PrayerDashboard() {
                     <div className="flex items-center gap-1 text-lg font-bold tabular-nums" style={{ color: "var(--color-accent)" }}>
                       <Flame className="h-4 w-4" /> {myStreak}
                     </div>
-                    <div className="text-[9px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
+                    <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
                   </div>
                 </div>
 
@@ -1330,7 +1335,7 @@ export default function PrayerDashboard() {
                         <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
                           {friend.firstName || friend.displayName || "Friend"}
                         </div>
-                        <div className="truncate text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        <div className="truncate text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                           {friend.thisWeekPrayed} this week · {friend.totalCompleteDays} complete · {friend.masjidPct}% masjid
                         </div>
                       </div>
@@ -1338,7 +1343,7 @@ export default function PrayerDashboard() {
                         <div className="flex items-center gap-1 text-lg font-bold tabular-nums" style={{ color: imWinning ? "var(--color-ink-soft)" : "var(--color-warmth)" }}>
                           <Flame className="h-4 w-4" /> {friend.streak}
                         </div>
-                        <div className="text-[9px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
+                        <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
                       </div>
                       <button
                         onClick={() => handleRemoveFriend(friend.id)}
@@ -1378,7 +1383,7 @@ function ComparisonRow({
   todayLogs: Array<{ prayerName: string; status: string }>;
   todaySunnahs: string[];
   prayerTimes: PrayerTimes | null;
-  currentTime: Date;
+  currentTime: Date | null;
   madhab: string;
   timezone: string | null;
 }) {
@@ -1398,7 +1403,7 @@ function ComparisonRow({
     let currentMinutes: number;
     if (isMe || !timezone) {
       // Use viewer's local time
-      currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+      currentMinutes = (currentTime ?? new Date(0)).getHours() * 60 + (currentTime ?? new Date(0)).getMinutes();
     } else {
       // Use friend's timezone to get their current local time
       try {
@@ -1409,7 +1414,7 @@ function ComparisonRow({
         const [h, m] = friendTimeStr.split(":").map(Number);
         currentMinutes = h * 60 + m;
       } catch {
-        currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+        currentMinutes = (currentTime ?? new Date(0)).getHours() * 60 + (currentTime ?? new Date(0)).getMinutes();
       }
     }
     for (let i = PRAYER_ORDER.length - 1; i >= 0; i--) {
@@ -1427,11 +1432,11 @@ function ComparisonRow({
       style={isMe ? { backgroundColor: "color-mix(in oklab, var(--color-accent) 4%, transparent)" } : undefined}
     >
       {/* Name + streak */}
-      <div className="w-20 shrink-0 sm:w-32">
+      <div className="min-w-20 shrink-0 sm:min-w-32">
         <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
           {isMe ? "You" : name}
         </div>
-        <div className="flex items-center gap-1 text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+        <div className="flex items-center gap-1 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
           <Flame className="h-3 w-3" style={{ color: "var(--color-warmth)" }} />
           <span className="tabular-nums">{streak}d</span>
           {!isMe && timezone && (
@@ -1474,7 +1479,7 @@ function ComparisonRow({
                 {prayed ? (
                   <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: "var(--color-paper)" }} />
                 ) : (
-                  <span className="text-[9px] font-bold uppercase" style={{ color: "var(--color-ink-muted)" }}>
+                  <span className="text-[11px] font-bold uppercase" style={{ color: "var(--color-ink-muted)" }}>
                     {prayer.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -1488,7 +1493,7 @@ function ComparisonRow({
                 if (totalSunnahs === 0) return null;
                 return (
                   <span
-                    className="text-[9px] font-medium tabular-nums"
+                    className="text-[11px] font-medium tabular-nums"
                     style={{ color: sunnahCount > 0 ? "var(--color-success)" : "var(--color-ink-muted)" }}
                   >
                     {sunnahCount}/{totalSunnahs}
@@ -1539,12 +1544,12 @@ function SunnahPill({
     <button
       onClick={disabled ? undefined : onToggle}
       disabled={disabled}
-      className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[11px]"
+      className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 sm:text-[11px]"
       style={{
         borderColor: prayed ? cat.border : "var(--color-paper-3)",
         color: prayed ? cat.text : "var(--color-ink-muted)",
         backgroundColor: prayed ? cat.bg : "transparent",
-        minHeight: 32,
+        minHeight: 44,
       }}
       title={disabled ? disabledReason : `${cat.label} — ${sunnah.label}`}
     >
@@ -1568,13 +1573,13 @@ function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; l
     >
       <div className="mb-1.5 flex items-center gap-1.5" style={{ color }}>
         {icon}
-        <span className="text-[10px] font-medium uppercase tracking-wide sm:text-[11px]">{label}</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide sm:text-[11px]">{label}</span>
       </div>
       <div className="flex items-baseline gap-1">
         <span className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-ink)" }}>
           {value}
         </span>
-        <span className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>{sub}</span>
+        <span className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>{sub}</span>
       </div>
     </div>
   );
@@ -1584,7 +1589,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="text-sm font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>{value}</div>
-      <div className="text-[9px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>{label}</div>
+      <div className="text-[11px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>{label}</div>
     </div>
   );
 }

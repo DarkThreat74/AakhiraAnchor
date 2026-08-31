@@ -144,9 +144,9 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[auth/login]", err);
     return NextResponse.json(
-      { error: `Server error: ${message}` },
+      { error: "Could not sign in. Please try again." },
       { status: 500 },
     );
   }

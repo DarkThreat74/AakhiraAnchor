@@ -41,13 +41,23 @@ export function getCheckinStage(
   const { startTime, endTime } = window;
 
   // Parse prayer times as today's timestamps
-  const start = parseTimeToday(startTime, now);
+  let start = parseTimeToday(startTime, now);
   let end = parseTimeToday(endTime, now);
 
-  // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr)
-  // If end < start, the window crosses midnight — add 24h to end
+  // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr).
+  // If end < start, the window crosses midnight. Two cases:
+  //   1. now >= start → we're in the evening portion; end is tomorrow → add 24h to end
+  //   2. now < end   → we're in the morning portion after midnight; start was yesterday → subtract 24h from start
+  const DAY_MS = 24 * 60 * 60 * 1000;
   if (end < start) {
-    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+    if (now >= start) {
+      end = new Date(end.getTime() + DAY_MS);
+    } else if (now < end) {
+      start = new Date(start.getTime() - DAY_MS);
+    } else {
+      // now is between end and start (e.g., afternoon between Fajr and Isha) — window not open
+      return STAGES.NONE;
+    }
   }
 
   if (now < start || now >= end) {
@@ -79,12 +89,23 @@ export function getCheckinStage(
  * If so, the prayer should be marked as assumed_prayed.
  */
 export function isWindowClosed(window: PrayerWindow, now: Date): boolean {
-  const start = parseTimeToday(window.startTime, now);
+  let start = parseTimeToday(window.startTime, now);
   let end = parseTimeToday(window.endTime, now);
 
-  // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr)
+  // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr).
+  // Same two-case logic as getCheckinStage above.
+  const DAY_MS = 24 * 60 * 60 * 1000;
   if (end < start) {
-    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+    if (now >= start) {
+      end = new Date(end.getTime() + DAY_MS);
+    } else if (now < end) {
+      start = new Date(start.getTime() - DAY_MS);
+    } else {
+      // now is between end and start — the window hasn't opened yet today
+      // (e.g., afternoon between Fajr-close and Isha-start). The previous
+      // night's Isha window already closed; today's hasn't opened.
+      return true;
+    }
   }
 
   return now >= end;

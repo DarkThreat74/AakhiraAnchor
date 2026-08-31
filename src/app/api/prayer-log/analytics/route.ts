@@ -29,9 +29,14 @@ export async function GET(request: NextRequest) {
 
   const timezone = settings?.timezone || "America/Chicago";
 
-  // Single query for all prayer logs — select only needed columns to reduce data transfer.
-  // We need all logs for streak calculation, and the 90-day subset for analytics.
-  // Using one query avoids the N+1 pattern of querying twice.
+  // 90-day lookback window — push the filter into the DB so we don't transfer
+  // the user's entire lifetime of prayer logs. The 90-day window is sufficient
+  // for both streak calculation (recent streak) and per-prayer analytics.
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const fromDate = ninetyDaysAgo.toISOString().split("T")[0];
+
+  // Single query for prayer logs in the 90-day window — select only needed columns.
   const allLogs = await db
     .select({
       id: schema.prayerLog.id,
@@ -42,16 +47,15 @@ export async function GET(request: NextRequest) {
       markedAt: schema.prayerLog.markedAt,
     })
     .from(schema.prayerLog)
-    .where(eq(schema.prayerLog.userId, session.userId));
+    .where(
+      and(
+        eq(schema.prayerLog.userId, session.userId),
+        gte(schema.prayerLog.date, fromDate),
+      ),
+    );
 
-  // 90-day subset for per-prayer analytics
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const fromDate = ninetyDaysAgo.toISOString().split("T")[0];
-  const logs = allLogs.filter((l) => {
-    const dateStr = typeof l.date === "string" ? l.date : String(l.date);
-    return dateStr >= fromDate;
-  });
+  // The 90-day subset IS the full set now.
+  const logs = allLogs;
 
   // Fetch cached prayer times for the last 90 days so we can validate
   // that markedAt falls within the prayer window. Without this, a user

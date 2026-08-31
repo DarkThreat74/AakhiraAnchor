@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { isWindowClosed, getPrayerWindow } from "@/lib/prayer/stateMachine";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 // POST /api/cron/checkin-scheduler — runs once daily (Vercel Hobby limitation)
 //
@@ -125,95 +126,105 @@ export async function POST(request: NextRequest) {
 
   // ─── Process each user using the batched data ───
   for (const settings of allSettings) {
-    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
-    const today = userNow.toISOString().split("T")[0];
-    const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    try {
+      const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
+      const today = userNow.toISOString().split("T")[0];
+      const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
+      const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-    // ─── 1. Resolve yesterday's unmarked prayers as assumed_prayed ───
-    const yesterdayCached = cachedTimesMap.get(settings.userId)?.get(yesterdayStr);
-    if (yesterdayCached) {
-      const yesterdayTimings = {
-        fajr: yesterdayCached.fajr,
-        sunrise: yesterdayCached.sunrise,
-        dhuhr: yesterdayCached.dhuhr,
-        asr: yesterdayCached.asr,
-        maghrib: yesterdayCached.maghrib,
-        isha: yesterdayCached.isha,
+      // ─── 1. Resolve yesterday's unmarked prayers as assumed_prayed ───
+      const yesterdayCached = cachedTimesMap.get(settings.userId)?.get(yesterdayStr);
+      if (yesterdayCached) {
+        const yesterdayTimings = {
+          fajr: yesterdayCached.fajr,
+          sunrise: yesterdayCached.sunrise,
+          dhuhr: yesterdayCached.dhuhr,
+          asr: yesterdayCached.asr,
+          maghrib: yesterdayCached.maghrib,
+          isha: yesterdayCached.isha,
+        };
+
+        const prayers: Array<"fajr" | "dhuhr" | "asr" | "maghrib" | "isha"> = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+        const logIdsToUpdate: string[] = [];
+
+        for (const prayerName of prayers) {
+          const window = getPrayerWindow(prayerName, yesterdayTimings);
+          if (!isWindowClosed(window, userNow)) continue;
+
+          const existingLog = pendingLogsMap.get(settings.userId)?.get(yesterdayStr)?.get(prayerName);
+          if (existingLog) {
+            logIdsToUpdate.push(existingLog.id);
+          }
+        }
+
+        // Single batched update for all of this user's pending prayers
+        if (logIdsToUpdate.length > 0) {
+          await db
+            .update(schema.prayerLog)
+            .set({ status: "assumed_prayed" })
+            .where(inArray(schema.prayerLog.id, logIdsToUpdate));
+          assumedResolved += logIdsToUpdate.length;
+        }
+      }
+
+      // ─── 2. Send daily prayer schedule push ───
+      const cached = cachedTimesMap.get(settings.userId)?.get(today);
+      if (!cached) continue;
+
+      const prefs = prefsMap.get(settings.userId);
+      const earlyMidPref = prefs?.prayerEarlyMid || "push";
+      if (earlyMidPref === "none") continue;
+
+      const subs = subsMap.get(settings.userId);
+      if (!subs || subs.length === 0) continue;
+
+      const formatTime = (t: string) => {
+        const [h, m] = t.split(":").map(Number);
+        const period = h >= 12 ? "PM" : "AM";
+        const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${displayH}:${String(m).padStart(2, "0")} ${period}`;
       };
 
-      const prayers: Array<"fajr" | "dhuhr" | "asr" | "maghrib" | "isha"> = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
-      const logIdsToUpdate: string[] = [];
+      const body = [
+        `Fajr: ${formatTime(cached.fajr)}`,
+        `Dhuhr: ${formatTime(cached.dhuhr)}`,
+        `Asr: ${formatTime(cached.asr)}`,
+        `Maghrib: ${formatTime(cached.maghrib)}`,
+        `Isha: ${formatTime(cached.isha)}`,
+      ].join(" · ");
 
-      for (const prayerName of prayers) {
-        const window = getPrayerWindow(prayerName, yesterdayTimings);
-        if (!isWindowClosed(window, userNow)) continue;
+      const payload = JSON.stringify({
+        title: "Today's prayer times",
+        body,
+        tag: `prayer-times-${today}`,
+        data: { url: "/calendar/day" },
+      });
 
-        const existingLog = pendingLogsMap.get(settings.userId)?.get(yesterdayStr)?.get(prayerName);
-        if (existingLog) {
-          logIdsToUpdate.push(existingLog.id);
+      for (const sub of subs) {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload,
+          );
+          notificationsSent++;
+        } catch (err) {
+          const e = err as { statusCode?: number };
+          if (e.statusCode === 404 || e.statusCode === 410) {
+            try {
+              await db
+                .delete(schema.pushSubscriptions)
+                .where(eq(schema.pushSubscriptions.id, sub.id));
+            } catch (deleteErr) {
+              console.error("[cron:checkin-scheduler] failed to delete expired sub", sub.id, deleteErr);
+            }
+          } else {
+            console.error("[cron:checkin-scheduler] push failed", sub.id, e.statusCode, err);
+          }
         }
       }
-
-      // Batch update all pending prayers for this user in a single query
-      // (instead of 5 individual update queries)
-      for (const logId of logIdsToUpdate) {
-        await db
-          .update(schema.prayerLog)
-          .set({ status: "assumed_prayed" })
-          .where(eq(schema.prayerLog.id, logId));
-        assumedResolved++;
-      }
-    }
-
-    // ─── 2. Send daily prayer schedule push ───
-    const cached = cachedTimesMap.get(settings.userId)?.get(today);
-    if (!cached) continue;
-
-    const prefs = prefsMap.get(settings.userId);
-    const earlyMidPref = prefs?.prayerEarlyMid || "push";
-    if (earlyMidPref === "none") continue;
-
-    const subs = subsMap.get(settings.userId);
-    if (!subs || subs.length === 0) continue;
-
-    const formatTime = (t: string) => {
-      const [h, m] = t.split(":").map(Number);
-      const period = h >= 12 ? "PM" : "AM";
-      const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      return `${displayH}:${String(m).padStart(2, "0")} ${period}`;
-    };
-
-    const body = [
-      `Fajr: ${formatTime(cached.fajr)}`,
-      `Dhuhr: ${formatTime(cached.dhuhr)}`,
-      `Asr: ${formatTime(cached.asr)}`,
-      `Maghrib: ${formatTime(cached.maghrib)}`,
-      `Isha: ${formatTime(cached.isha)}`,
-    ].join(" · ");
-
-    const payload = JSON.stringify({
-      title: "Today's prayer times",
-      body,
-      tag: `prayer-times-${today}`,
-      data: { url: "/calendar/day" },
-    });
-
-    for (const sub of subs) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          payload,
-        );
-        notificationsSent++;
-      } catch (err) {
-        const e = err as { statusCode?: number };
-        if (e.statusCode === 404 || e.statusCode === 410) {
-          await db
-            .delete(schema.pushSubscriptions)
-            .where(eq(schema.pushSubscriptions.id, sub.id));
-        }
-      }
+    } catch (userErr) {
+      // One failing user must not abort the entire cron run.
+      console.error("[cron:checkin-scheduler] user failed", settings.userId, userErr);
     }
   }
 

@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,16 @@ export const dynamic = "force-dynamic";
  * Requires authenticated session + body { confirm: "DELETE" } to prevent
  * accidental deletion.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await getSessionFromRequest(request as never);
+    const session = await getSessionFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("account-delete", ip, 3, 60 * 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
     }
 
     // Parse body safely

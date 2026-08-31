@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import MonthViewClient from "./MonthViewClient";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Month · Waqt" };
 
 export default async function MonthPage({
   searchParams,

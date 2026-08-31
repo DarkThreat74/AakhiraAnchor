@@ -5,6 +5,7 @@ import { verifyCronAuth } from "@/lib/cronAuth";
 import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 // POST /api/cron/prayer-times-sync — monthly, re-fetches prayer times for all users
 export async function POST(request: NextRequest) {
@@ -66,7 +67,8 @@ export async function POST(request: NextRequest) {
         });
 
       successCount++;
-    } catch {
+    } catch (err) {
+      console.error("[cron:prayer-times-sync] failed for user", settings.userId, err);
       failCount++;
     }
   }

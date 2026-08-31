@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import SettingsClient from "./SettingsClient";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Settings · Waqt" };
 
 export default async function SettingsPage() {
   const session = await getSession();

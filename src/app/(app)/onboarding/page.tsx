@@ -185,7 +185,7 @@ export default function OnboardingWizard() {
   const currentIdx = steps.indexOf(step);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-140px)] max-w-lg flex-col justify-center px-5 py-8 sm:px-6">
+    <div className="mx-auto flex min-h-[calc(100dvh-140px)] max-w-lg flex-col justify-center overflow-x-hidden px-5 py-8 sm:px-6">
       {/* Progress dots */}
       {step !== "done" && (
         <div className="mb-10 flex items-center justify-center gap-2">

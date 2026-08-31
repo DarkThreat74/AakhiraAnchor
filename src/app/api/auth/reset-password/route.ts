@@ -155,9 +155,9 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[auth/reset-password]", err);
     return NextResponse.json(
-      { error: `Server error: ${message}` },
+      { error: "Could not reset password. Please try again." },
       { status: 500 },
     );
   }

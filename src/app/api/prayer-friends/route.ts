@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, gte } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { calculateStreak } from "@/lib/prayer/checkin";
@@ -7,6 +7,11 @@ import { calculateStreak } from "@/lib/prayer/checkin";
 export const dynamic = "force-dynamic";
 
 // GET /api/prayer-friends — list the current user's prayer friends with real metrics
+//
+// ─── Optimization ───
+// Previously this route did 5 DB queries per friend (N+1). Now it batches all
+// reads into 5 total queries using inArray, and limits the prayer-log lookback
+// to 90 days so it can use the prayer_log_user_date_prayed_idx partial index.
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -19,6 +24,98 @@ export async function GET(request: NextRequest) {
     })
     .from(schema.prayerFriends)
     .where(eq(schema.prayerFriends.userId, session.userId));
+
+  if (friendships.length === 0) {
+    return NextResponse.json([]);
+  }
+
+  const friendIds = friendships.map((f) => f.friendId);
+
+  // 90-day lookback for history; 7-day for weekly count
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const fromStr = ninetyDaysAgo.toISOString().split("T")[0];
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const weekAgoStr = sevenDaysAgo.toISOString().split("T")[0];
+
+  // Batch all reads in parallel (5 queries total, not 5 per friend)
+  const [friendUsers, friendSettingsAll, friendLogsAll, todayLogsAll, todaySunnahAll] =
+    await Promise.all([
+      db
+        .select({
+          id: schema.users.id,
+          firstName: schema.users.firstName,
+          displayName: schema.users.displayName,
+        })
+        .from(schema.users)
+        .where(inArray(schema.users.id, friendIds)),
+      db
+        .select({ userId: schema.prayerSettings.userId, timezone: schema.prayerSettings.timezone })
+        .from(schema.prayerSettings)
+        .where(inArray(schema.prayerSettings.userId, friendIds)),
+      db
+        .select({
+          userId: schema.prayerLog.userId,
+          date: schema.prayerLog.date,
+          status: schema.prayerLog.status,
+          wentToMasjid: schema.prayerLog.wentToMasjid,
+        })
+        .from(schema.prayerLog)
+        .where(
+          and(
+            inArray(schema.prayerLog.userId, friendIds),
+            gte(schema.prayerLog.date, fromStr),
+          ),
+        ),
+      // Today's logs per friend — resolved below per timezone
+      db
+        .select({
+          userId: schema.prayerLog.userId,
+          date: schema.prayerLog.date,
+          prayerName: schema.prayerLog.prayerName,
+          status: schema.prayerLog.status,
+        })
+        .from(schema.prayerLog)
+        .where(
+          and(
+            inArray(schema.prayerLog.userId, friendIds),
+            gte(schema.prayerLog.date, weekAgoStr),
+          ),
+        ),
+      db
+        .select({ userId: schema.sunnahLog.userId, date: schema.sunnahLog.date, sunnahKey: schema.sunnahLog.sunnahKey })
+        .from(schema.sunnahLog)
+        .where(
+          and(
+            inArray(schema.sunnahLog.userId, friendIds),
+            eq(schema.sunnahLog.prayed, true),
+            gte(schema.sunnahLog.date, weekAgoStr),
+          ),
+        ),
+    ]);
+
+  // Index lookups
+  const settingsByUser = new Map(friendSettingsAll.map((s) => [s.userId, s.timezone || "America/Chicago"]));
+  const logsByUser = new Map<string, typeof friendLogsAll>();
+  for (const log of friendLogsAll) {
+    if (!logsByUser.has(log.userId)) logsByUser.set(log.userId, []);
+    logsByUser.get(log.userId)!.push(log);
+  }
+  const todayLogsByUserDate = new Map<string, Map<string, Array<{ prayerName: string; status: string }>>>();
+  for (const log of todayLogsAll) {
+    if (!todayLogsByUserDate.has(log.userId)) todayLogsByUserDate.set(log.userId, new Map());
+    const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+    if (!todayLogsByUserDate.get(log.userId)!.has(dateStr)) todayLogsByUserDate.get(log.userId)!.set(dateStr, []);
+    todayLogsByUserDate.get(log.userId)!.get(dateStr)!.push({ prayerName: log.prayerName, status: log.status });
+  }
+  const sunnahByUserDate = new Map<string, Map<string, string[]>>();
+  for (const s of todaySunnahAll) {
+    if (!sunnahByUserDate.has(s.userId)) sunnahByUserDate.set(s.userId, new Map());
+    const dateStr = typeof s.date === "string" ? s.date : String(s.date);
+    if (!sunnahByUserDate.get(s.userId)!.has(dateStr)) sunnahByUserDate.get(s.userId)!.set(dateStr, []);
+    sunnahByUserDate.get(s.userId)!.get(dateStr)!.push(s.sunnahKey);
+  }
 
   const friends: Array<{
     id: string;
@@ -35,39 +132,10 @@ export async function GET(request: NextRequest) {
     timezone: string;
   }> = [];
 
-  // 7 days ago for weekly count
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const weekAgoStr = sevenDaysAgo.toISOString().split("T")[0];
-
-  for (const f of friendships) {
-    const [friendUser] = await db
-      .select({
-        id: schema.users.id,
-        firstName: schema.users.firstName,
-        displayName: schema.users.displayName,
-      })
-      .from(schema.users)
-      .where(eq(schema.users.id, f.friendId))
-      .limit(1);
-
-    if (!friendUser) continue;
-
-    // Get friend's prayer logs
-    const friendLogs = await db
-      .select()
-      .from(schema.prayerLog)
-      .where(eq(schema.prayerLog.userId, f.friendId));
-
-    // Get friend's timezone
-    const [friendSettings] = await db
-      .select({ timezone: schema.prayerSettings.timezone })
-      .from(schema.prayerSettings)
-      .where(eq(schema.prayerSettings.userId, f.friendId))
-      .limit(1);
-
-    const timezone = friendSettings?.timezone || "America/Chicago";
+  for (const friendUser of friendUsers) {
+    const timezone = settingsByUser.get(friendUser.id) || "America/Chicago";
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+    const friendLogs = logsByUser.get(friendUser.id) ?? [];
 
     // Build logs by date map
     const logsByDate = new Map<string, Array<{ status: string }>>();
@@ -98,31 +166,8 @@ export async function GET(request: NextRequest) {
 
     const streak = calculateStreak(logsByDate, todayStr);
 
-    // Get today's prayer logs for this friend
-    const todayLogs = await db
-      .select({
-        prayerName: schema.prayerLog.prayerName,
-        status: schema.prayerLog.status,
-      })
-      .from(schema.prayerLog)
-      .where(
-        and(
-          eq(schema.prayerLog.userId, f.friendId),
-          eq(schema.prayerLog.date, todayStr),
-        ),
-      );
-
-    // Get today's sunnah logs for this friend
-    const todaySunnahLogs = await db
-      .select({ sunnahKey: schema.sunnahLog.sunnahKey })
-      .from(schema.sunnahLog)
-      .where(
-        and(
-          eq(schema.sunnahLog.userId, f.friendId),
-          eq(schema.sunnahLog.date, todayStr),
-          eq(schema.sunnahLog.prayed, true),
-        ),
-      );
+    const todayLogs = todayLogsByUserDate.get(friendUser.id)?.get(todayStr) ?? [];
+    const todaySunnahs = sunnahByUserDate.get(friendUser.id)?.get(todayStr) ?? [];
 
     friends.push({
       id: friendUser.id,
@@ -134,8 +179,8 @@ export async function GET(request: NextRequest) {
       masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
       thisWeekPrayed,
       lastPrayedDate,
-      todayLogs: todayLogs.map((l) => ({ prayerName: l.prayerName, status: l.status })),
-      todaySunnahs: todaySunnahLogs.map((l) => l.sunnahKey),
+      todayLogs,
+      todaySunnahs,
       timezone,
     });
   }

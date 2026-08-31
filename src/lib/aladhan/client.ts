@@ -54,21 +54,42 @@ export async function fetchMonthPrayerTimes(
 ): Promise<AlAdhanDayResponse["data"]> {
   const url = `${env.aladhanBaseUrl}/calendar/${year}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school}`;
 
-  const res = await fetch(url, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 86400 }, // Cache for 24h at fetch level
-  });
+  // Retry with timeout — a single hanging AlAdhan call should not exhaust the
+  // cron's 300s budget. Three attempts with 15s timeout each + backoff.
+  let lastErr: Error | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-  if (!res.ok) {
-    throw new Error(`AlAdhan API error: ${res.status}`);
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        throw new Error(`AlAdhan API error: ${res.status}`);
+      }
+
+      const json: AlAdhanDayResponse = await res.json();
+      if (json.code !== 200) {
+        throw new Error(`AlAdhan API returned code ${json.code}: ${json.status}`);
+      }
+
+      return json.data;
+    } catch (err) {
+      clearTimeout(timeout);
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      // Exponential backoff: 1s, 2s
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
   }
 
-  const json: AlAdhanDayResponse = await res.json();
-  if (json.code !== 200) {
-    throw new Error(`AlAdhan API returned code ${json.code}: ${json.status}`);
-  }
-
-  return json.data;
+  throw lastErr ?? new Error("AlAdhan fetch failed");
 }
 
 /**

@@ -645,11 +645,11 @@ export default function DayViewClient({ date }: { date: string }) {
                 }}
                 disabled={!isClickable}
               >
-                <span className="flex items-center gap-0.5 text-[10px] font-medium leading-tight sm:text-xs" style={{ color: prayer.color }}>
+                <span className="flex items-center gap-0.5 text-[11px] font-medium leading-tight sm:text-xs" style={{ color: prayer.color }}>
                   {prayer.label}
                   {isPrayed && <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" style={{ color: "var(--color-success)" }} />}
                 </span>
-                <span className="text-[9px] tabular-nums leading-tight sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                <span className="text-[11px] tabular-nums leading-tight sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                   {formatTime(time)}
                 </span>
               </button>
@@ -732,7 +732,7 @@ export default function DayViewClient({ date }: { date: string }) {
               style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
             >
               <div
-                className="shrink-0 pt-0.5 pr-1.5 text-right text-[10px] font-medium tabular-nums sm:pr-2"
+                className="shrink-0 pt-0.5 pr-1.5 text-right text-[11px] font-medium tabular-nums sm:pr-2"
                 style={{ color: "var(--color-ink-muted)", width: TIME_COL }}
               >
                 {formatHour(hour)}
@@ -766,7 +766,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
                   <button
                     onClick={isClickable ? (e: React.MouseEvent) => { e.stopPropagation(); setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }); } : undefined}
-                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-transform sm:px-2 sm:text-[10px]"
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium transition-transform sm:px-2 sm:text-[10px]"
                     style={{
                       backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 10%, var(--color-paper))" : "var(--color-paper)",
                       color: prayer.color,
@@ -798,7 +798,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 <div className="h-0.5 flex-1" style={{ backgroundColor: color, opacity: 0.7 }} />
                 <button
                   onClick={(e: React.MouseEvent) => { e.stopPropagation(); openEditForm(event); }}
-                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-opacity hover:opacity-80 sm:px-2 sm:text-[10px]"
+                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium transition-opacity hover:opacity-80 sm:px-2 sm:text-[10px]"
                   style={{
                     backgroundColor: "var(--color-paper)",
                     color: color,
@@ -893,13 +893,13 @@ export default function DayViewClient({ date }: { date: string }) {
                   <p className="w-full truncate text-center text-[11px] font-medium leading-tight sm:text-xs" style={{ color: "var(--color-ink)" }}>
                     {event.title}
                     {event._pending && (
-                      <span className="ml-1 inline-block text-[9px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
+                      <span className="ml-1 inline-block text-[11px] align-middle" style={{ color: "var(--color-warmth)" }} title="Pending sync">
                         ●
                       </span>
                     )}
                   </p>
                   {endStr && (
-                    <p className="w-full truncate text-center text-[9px] font-normal leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                    <p className="w-full truncate text-center text-[11px] font-normal leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
                       {formatTime(startStr)} – {formatTime(endStr)}
                     </p>
                   )}
@@ -907,7 +907,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirm(event); }}
                     className="absolute right-0.5 top-0.5 shrink-0 rounded-full opacity-0 transition-opacity group-hover:opacity-100 hover:opacity-100 sm:opacity-40"
                     aria-label="Delete event"
-                    style={{ minHeight: 28, minWidth: 28 }}
+                    style={{ minHeight: 44, minWidth: 44 }}
                   >
                     <X className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
                   </button>
@@ -986,7 +986,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 autoFocus
                 required
                 className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 40 }}
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
               />
 
               {/* Type toggle: Block vs Reminder */}
@@ -999,7 +999,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     borderColor: newType === "block" ? "var(--color-ink)" : "var(--color-paper-3)",
                     backgroundColor: newType === "block" ? "var(--color-ink)" : "var(--color-paper-2)",
                     color: newType === "block" ? "var(--color-paper)" : "var(--color-ink-soft)",
-                    minHeight: 36,
+                    minHeight: 44,
                   }}
                 >
                   Block
@@ -1012,7 +1012,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     borderColor: newType === "reminder" ? "var(--color-ink)" : "var(--color-paper-3)",
                     backgroundColor: newType === "reminder" ? "var(--color-ink)" : "var(--color-paper-2)",
                     color: newType === "reminder" ? "var(--color-paper)" : "var(--color-ink-soft)",
-                    minHeight: 36,
+                    minHeight: 44,
                   }}
                 >
                   Reminder
@@ -1024,7 +1024,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 <button
                   type="button"
                   onClick={() => setNewColor(null)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border-2 text-[9px] font-medium"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 text-[11px] font-medium"
                   style={{
                     borderColor: newColor === null ? "var(--color-ink)" : "var(--color-paper-3)",
                     backgroundColor: "var(--color-paper-2)",
@@ -1040,7 +1040,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     key={c.value}
                     type="button"
                     onClick={() => setNewColor(c.value)}
-                    className="h-7 w-7 rounded-full border-2"
+                    className="h-11 w-11 rounded-full border-2"
                     style={{
                       backgroundColor: c.value,
                       borderColor: newColor === c.value ? "var(--color-ink)" : "transparent",
@@ -1059,7 +1059,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     value={newStart}
                     onChange={(e) => setNewStart(e.target.value)}
                     className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
-                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 40 }}
+                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                   />
                 </div>
                 {newType !== "reminder" && (
@@ -1069,7 +1069,7 @@ export default function DayViewClient({ date }: { date: string }) {
                       value={newEnd}
                       onChange={(e) => setNewEnd(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
-                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 40 }}
+                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                     />
                   </div>
                 )}
@@ -1145,7 +1145,7 @@ export default function DayViewClient({ date }: { date: string }) {
                                     setRecurrenceDays([...recurrenceDays, idx].sort((a, b) => a - b));
                                   }
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-medium transition-colors sm:h-9 sm:w-9"
+                                className="flex h-11 w-11 items-center justify-center rounded-full text-[11px] font-medium transition-colors sm:h-9 sm:w-9"
                                 style={{
                                   backgroundColor: isSelected ? "var(--color-ink)" : "var(--color-paper)",
                                   color: isSelected ? "var(--color-paper)" : "var(--color-ink-muted)",
@@ -1172,7 +1172,7 @@ export default function DayViewClient({ date }: { date: string }) {
                         onChange={(e) => setRecurrenceEndDate(e.target.value)}
                         required={enableRecurrence}
                         className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
-                        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 40 }}
+                        style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
                       />
 
                       {/* Summary */}
@@ -1202,7 +1202,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   type="submit"
                   disabled={enableRecurrence && (recurrenceDays.length === 0 || !recurrenceEndDate)}
                   className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
-                  style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+                  style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
                 >
                   {editingEvent ? "Save" : enableRecurrence ? "Add recurring" : "Add"}
                 </button>
@@ -1211,7 +1211,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     type="button"
                     onClick={() => setDeleteConfirm(editingEvent)}
                     className="rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
-                    style={{ borderColor: "var(--color-error)", color: "var(--color-error)", minHeight: 40 }}
+                    style={{ borderColor: "var(--color-error)", color: "var(--color-error)", minHeight: 44 }}
                   >
                     Delete
                   </button>
@@ -1247,14 +1247,14 @@ export default function DayViewClient({ date }: { date: string }) {
                   closeForm();
                 }}
                 className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold"
-                style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 40 }}
+                style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
               >
                 Delete
               </button>
               <button
                 onClick={() => setDeleteConfirm(null)}
                 className="flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
               >
                 Cancel
               </button>

@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, daysCached: days.length });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[prayer-times/sync]", err);
     return NextResponse.json(
-      { error: `Failed to fetch prayer times: ${message}` },
+      { error: "Could not fetch prayer times. Please try again later." },
       { status: 502 },
     );
   }

@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import DayViewClient from "./DayViewClient";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Calendar · Waqt" };
 
 export default async function DayPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const session = await getSession();

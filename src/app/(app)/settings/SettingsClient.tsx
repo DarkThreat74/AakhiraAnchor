@@ -830,7 +830,7 @@ export default function SettingsClient({
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => handleThemeChange("light")}
-              className="flex flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
+              className="flex min-h-11 flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
               style={{
                 borderColor: theme === "light" ? "var(--color-accent)" : "var(--color-paper-3)",
                 backgroundColor: theme === "light" ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
@@ -843,7 +843,7 @@ export default function SettingsClient({
             </button>
             <button
               onClick={() => handleThemeChange("dark")}
-              className="flex flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
+              className="flex min-h-11 flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
               style={{
                 borderColor: theme === "dark" ? "var(--color-accent)" : "var(--color-paper-3)",
                 backgroundColor: theme === "dark" ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
@@ -856,7 +856,7 @@ export default function SettingsClient({
             </button>
             <button
               onClick={() => handleThemeChange("system")}
-              className="flex flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
+              className="flex min-h-11 flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 transition-colors"
               style={{
                 borderColor: theme === "system" ? "var(--color-accent)" : "var(--color-paper-3)",
                 backgroundColor: theme === "system" ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
@@ -921,14 +921,14 @@ export default function SettingsClient({
                     onClick={handleSaveName}
                     disabled={savingName || !nameInput.trim()}
                     className="rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-                    style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+                    style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
                   >
                     {savingName ? "Saving..." : "Save"}
                   </button>
                   <button
                     onClick={() => { setEditingName(false); setNameMsg(null); }}
                     className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-                    style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+                    style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
                   >
                     Cancel
                   </button>
@@ -960,7 +960,7 @@ export default function SettingsClient({
               <button
                 onClick={handleCopyPrayerCode}
                 className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
               >
                 {prayerCodeCopied ? (
                   <><Check className="h-3.5 w-3.5" style={{ color: "var(--color-success)" }} /> Copied</>
@@ -1028,7 +1028,7 @@ export default function SettingsClient({
                   onClick={handleSaveLocation}
                   disabled={savingLocation}
                   className="mt-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+                  style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
                 >
                   {savingLocation ? "Saving..." : "Save this location"}
                 </button>
@@ -1068,7 +1068,7 @@ export default function SettingsClient({
                 onClick={handleSaveMethod}
                 disabled={savingMethod}
                 className="mt-2 w-full rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-40 sm:w-auto sm:self-start"
-                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
+                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 44 }}
               >
                 {savingMethod ? "Saving..." : "Save method"}
               </button>
@@ -1111,7 +1111,7 @@ export default function SettingsClient({
                 onClick={handleSaveMadhab}
                 disabled={savingMadhab}
                 className="mt-2 w-full rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-40 sm:w-auto sm:self-start"
-                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
+                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 44 }}
               >
                 {savingMadhab ? "Saving..." : "Save madhab"}
               </button>
@@ -1148,7 +1148,7 @@ export default function SettingsClient({
                     className="flex flex-col items-center gap-0.5 rounded-lg border py-2"
                     style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
                   >
-                    <span className="text-[10px] font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                    <span className="text-[11px] font-medium" style={{ color: "var(--color-ink-muted)" }}>
                       {prayer.label}
                     </span>
                     <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--color-accent)" }}>
@@ -1291,7 +1291,7 @@ export default function SettingsClient({
                 onClick={handleEnableNotifications}
                 disabled={notifEnabling || notifPermission === "denied"}
                 className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
-                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 40 }}
+                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
               >
                 {notifEnabling ? (
                   <><RefreshCw className="h-4 w-4 animate-spin" /> Enabling...</>
@@ -1305,7 +1305,7 @@ export default function SettingsClient({
                 <button
                   onClick={handleTestNotification}
                   className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
-                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 40 }}
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
                 >
                   <Send className="h-4 w-4" />
                   Test local
@@ -1314,7 +1314,7 @@ export default function SettingsClient({
                   <button
                     onClick={handleServerPushTest}
                     className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors"
-                    style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 40 }}
+                    style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 44 }}
                   >
                     <Send className="h-4 w-4" />
                     Test background push

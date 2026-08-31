@@ -1,26 +1,55 @@
-Fix false "Set your location" notification when location is set
+Comprehensive audit: security, DB, cron, mobile, hydration, error handling
 
-The calendar day view showed "Set your location in Settings" even
-when the user's location was already configured. This happened
-because the message showed whenever prayerTimes was null and
-loading was false — but prayerTimes can be null for several
-reasons that have nothing to do with location:
+12 parallel subagents audited the codebase from different angles.
+This commit applies the verified fixes from that audit.
 
-  - User navigates to a date outside the cached month (sync only
-    fetches the current month, so the retry still 404s)
-  - Network error during prayer-times fetch
-  - AlAdhan API failure during sync
-  - Sync rate limit hit (5/hour)
+Security:
+- Replace 5-digit enumerable share token with 128-bit crypto-secure hex
+  token (closes IDOR allowing brute-force access to any user's shared
+  calendar/prayer times)
+- Sanitize all error responses that leaked internal error messages to
+  clients (auth/login, signup, reset-password, admin/auth, prayer-times/sync)
+- Add rate limiting to goals POST/PATCH/DELETE and auth/delete routes
+- Fix request as never type bypass in goals and auth/delete routes
 
-Fix: The /api/prayer-times GET endpoint now runs the settings
-lookup in parallel with the cache lookup and returns a
-`locationSet` boolean in the response body (both on 404 and
-success). The client tracks this flag and only shows the "Set
-your location" message when locationSet is actually false.
+Database & query performance:
+- Fix N+1 in GET /api/prayer-friends (5 queries per friend → 5 total
+  batched queries using inArray with 90-day lookback window)
+- Fix N+1 in POST /api/prayer-friends/add (parallelize + 90-day filter)
+- Batch cron checkin-scheduler updates (per-row UPDATE → single
+  inArray UPDATE per user)
+- Batch notifications/test expired-subscription deletes (loop → single
+  inArray DELETE)
+- Push 90-day filter into DB query in prayer-log/analytics (was loading
+  lifetime logs then filtering in memory)
 
-Also: the client now only attempts the sync retry when location
-is confirmed to be set, avoiding a wasted API call when the user
-genuinely has no location.
+Cron reliability:
+- Add maxDuration=300 to both cron routes
+- Wrap per-user processing in try/catch so one failing user cannot abort
+  the entire run
+- Add timeout (15s) + retry (3 attempts with backoff) to AlAdhan fetch
+- Log per-user failures in prayer-times-sync instead of silently swallowing
+- Fix Isha midnight-crossing logic in stateMachine.ts (was always adding
+  24h to end, never subtracting 24h from start for morning-after-midnight
+  case — yesterday's Isha was never resolved as assumed_prayed after Fajr)
+
+Mobile responsiveness:
+- Standardize all touch targets to 44px minimum (min-h-11)
+- Bump all text-[9px] and text-[10px] to text-[11px] minimum on mobile
+- Add overflow-x-hidden to GoalsClient, LearnClient, onboarding page roots
+- Fix fixed-width comparison row name column
+
+Hydration:
+- Fix new Date() in useState initializers (PrayerDashboardClient,
+  MonthViewClient) — initialize to null/empty and set in useEffect using
+  deferred Promise.resolve().then() pattern to avoid cascading renders
+
+Error handling & UX:
+- Add src/lib/logError.ts utility
+- Add (app)/error.tsx and (auth)/error.tsx error boundaries
+- Add (app)/loading.tsx loading state
+- Add per-page metadata titles to all (app) routes
+- Add console.error logging to all goals API catch blocks
 
 Generated with [Devin](https://devin.ai)
 

@@ -8,7 +8,7 @@ export default function LearnClient() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-8 sm:py-12">
+    <div className="mx-auto max-w-2xl overflow-x-hidden px-5 py-8 sm:py-12">
       {/* ── Header ── */}
       <div className="mb-8">
         <h1
@@ -178,7 +178,7 @@ function BlockRenderer({ block }: { block: LearnBlock }) {
               style={{ color: "var(--color-ink-soft)" }}
             >
               <span
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums"
                 style={{
                   backgroundColor: "color-mix(in oklab, var(--color-accent) 10%, transparent)",
                   color: "var(--color-accent)",

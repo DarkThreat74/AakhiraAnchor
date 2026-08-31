@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { eq, and } from "drizzle-orm";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,9 @@ export const dynamic = "force-dynamic";
  * POST /api/goals — create a new goal
  * PATCH /api/goals — update a goal
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getSessionFromRequest(request as never);
+    const session = await getSessionFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -24,16 +25,22 @@ export async function GET(request: Request) {
       .orderBy(schema.goals.sortOrder, schema.goals.createdAt);
 
     return NextResponse.json({ goals: rows });
-  } catch {
+  } catch (err) {
+    console.error("[goals/GET]", err);
     return NextResponse.json({ error: "Failed to fetch goals" }, { status: 500 });
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await getSessionFromRequest(request as never);
+    const session = await getSessionFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("goals-post", ip, 30, 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
     }
 
     let body: {
@@ -83,16 +90,22 @@ export async function POST(request: Request) {
       .returning();
 
     return NextResponse.json({ goal });
-  } catch {
+  } catch (err) {
+    console.error("[goals/POST]", err);
     return NextResponse.json({ error: "Failed to create goal" }, { status: 500 });
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   try {
-    const session = await getSessionFromRequest(request as never);
+    const session = await getSessionFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("goals-patch", ip, 60, 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
     }
 
     let body: {
@@ -180,16 +193,22 @@ export async function PATCH(request: Request) {
       .returning();
 
     return NextResponse.json({ goal: updated });
-  } catch {
+  } catch (err) {
+    console.error("[goals/PATCH]", err);
     return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
-    const session = await getSessionFromRequest(request as never);
+    const session = await getSessionFromRequest(request);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("goals-delete", ip, 20, 60 * 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
     }
 
     const url = new URL(request.url);
@@ -211,7 +230,8 @@ export async function DELETE(request: Request) {
     await db.delete(schema.goals).where(eq(schema.goals.id, id));
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error("[goals/DELETE]", err);
     return NextResponse.json({ error: "Failed to delete goal" }, { status: 500 });
   }
 }

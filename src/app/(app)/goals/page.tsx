@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import GoalsClient from "./GoalsClient";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Goals · Waqt" };
 
 export default async function GoalsPage() {
   const session = await getSession();

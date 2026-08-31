@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, gte } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
@@ -78,19 +78,33 @@ export async function POST(request: NextRequest) {
     { userId: friendUser.id, friendId: session.userId },
   ]);
 
-  // Get friend's streak for the response
-  const friendLogs = await db
-    .select()
-    .from(schema.prayerLog)
-    .where(eq(schema.prayerLog.userId, friendUser.id));
+  // Get friend's streak for the response — limit to 90-day window and run
+  // both queries in parallel to avoid sequential round-trips.
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const fromStr = ninetyDaysAgo.toISOString().split("T")[0];
 
-  const [friendSettings] = await db
-    .select({ timezone: schema.prayerSettings.timezone })
-    .from(schema.prayerSettings)
-    .where(eq(schema.prayerSettings.userId, friendUser.id))
-    .limit(1);
+  const [friendLogs, friendSettingsRows] = await Promise.all([
+    db
+      .select({
+        date: schema.prayerLog.date,
+        status: schema.prayerLog.status,
+      })
+      .from(schema.prayerLog)
+      .where(
+        and(
+          eq(schema.prayerLog.userId, friendUser.id),
+          gte(schema.prayerLog.date, fromStr),
+        ),
+      ),
+    db
+      .select({ timezone: schema.prayerSettings.timezone })
+      .from(schema.prayerSettings)
+      .where(eq(schema.prayerSettings.userId, friendUser.id))
+      .limit(1),
+  ]);
 
-  const timezone = friendSettings?.timezone || "America/Chicago";
+  const timezone = friendSettingsRows[0]?.timezone || "America/Chicago";
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 
   const logsByDate = new Map<string, Array<{ status: string }>>();

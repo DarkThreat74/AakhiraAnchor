@@ -130,9 +130,9 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[auth/signup]", err);
     return NextResponse.json(
-      { error: `Server error: ${message}` },
+      { error: "Could not create your account. Please try again." },
       { status: 500 },
     );
   }
