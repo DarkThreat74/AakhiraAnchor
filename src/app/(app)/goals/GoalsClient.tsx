@@ -745,21 +745,33 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
 
         <button
           onClick={() => props.onToggleDone(node)}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
+          className="flex shrink-0 items-center justify-center rounded-full transition-colors"
           style={{
-            borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
-            backgroundColor: isDone ? "var(--color-success)" : "transparent",
-            minHeight: 44,
-            minWidth: 44,
+            minHeight: 36,
+            minWidth: 36,
+            padding: 0,
           }}
           aria-label={isDone ? "Mark as not done" : "Mark as done"}
         >
-          {isDone && <Check className="h-3.5 w-3.5" style={{ color: "var(--color-paper)" }} />}
+          <span
+            className="flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors"
+            style={{
+              borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
+              backgroundColor: isDone ? "var(--color-success)" : "transparent",
+            }}
+          >
+            {isDone && <Check className="h-3 w-3" style={{ color: "var(--color-paper)" }} />}
+          </span>
         </button>
 
         <div className="min-w-0 flex-1">
           {isEditing ? (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" onBlur={(e) => {
+              // Save when focus leaves the edit container entirely
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                props.onEditSave(node.id);
+              }
+            }}>
               <input
                 autoFocus
                 type="text"
@@ -982,21 +994,32 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => props.onToggleDone(node)}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
+            className="flex shrink-0 items-center justify-center rounded-full transition-colors"
             style={{
-              borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
-              backgroundColor: isDone ? "var(--color-success)" : "transparent",
-              minHeight: 44,
-              minWidth: 44,
+              minHeight: 36,
+              minWidth: 36,
+              padding: 0,
             }}
             aria-label={isDone ? "Mark as not done" : "Mark as done"}
           >
-            {isDone && <Check className="h-3.5 w-3.5" style={{ color: "var(--color-paper)" }} />}
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors"
+              style={{
+                borderColor: isDone ? "var(--color-success)" : "var(--color-paper-3)",
+                backgroundColor: isDone ? "var(--color-success)" : "transparent",
+              }}
+            >
+              {isDone && <Check className="h-3 w-3" style={{ color: "var(--color-paper)" }} />}
+            </span>
           </button>
 
           <div className="min-w-0 flex-1">
             {isEditing ? (
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  props.onEditSave(node.id);
+                }
+              }}>
                 <input
                   autoFocus
                   type="text"

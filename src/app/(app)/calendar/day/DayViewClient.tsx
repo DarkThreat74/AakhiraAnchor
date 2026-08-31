@@ -601,7 +601,7 @@ export default function DayViewClient({ date }: { date: string }) {
 
       {/* Prayer times bar */}
       {prayerTimes && (
-        <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4">
+        <div className="mb-3 flex gap-1 sm:mb-4">
           {PRAYER_NAMES.map((prayer) => {
             const rawTime = prayerTimes[prayer.key];
             if (!rawTime) return null;
@@ -614,7 +614,7 @@ export default function DayViewClient({ date }: { date: string }) {
               <button
                 key={prayer.key}
                 onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
-                className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 transition-colors sm:flex-none sm:px-3"
+                className="flex min-w-0 flex-1 flex-col items-center gap-0 rounded-lg border px-1 py-1 transition-colors sm:flex-none sm:px-3 sm:py-1.5"
                 style={{
                   borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
                   backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
@@ -622,11 +622,11 @@ export default function DayViewClient({ date }: { date: string }) {
                 }}
                 disabled={!isClickable}
               >
-                <span className="flex items-center gap-1 text-[11px] font-medium sm:text-xs" style={{ color: prayer.color }}>
+                <span className="flex items-center gap-0.5 text-[10px] font-medium leading-tight sm:text-xs" style={{ color: prayer.color }}>
                   {prayer.label}
-                  {isPrayed && <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />}
+                  {isPrayed && <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" style={{ color: "var(--color-success)" }} />}
                 </span>
-                <span className="text-[10px] tabular-nums sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                <span className="text-[9px] tabular-nums leading-tight sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                   {formatTime(time)}
                 </span>
               </button>

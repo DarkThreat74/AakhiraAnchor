@@ -1,63 +1,30 @@
-SQL optimization for 10k+ users — indexes + cron batching
+Fix prayer button height, goal save-on-blur, goal checkmark size
 
-Research performed via agent-reach (Exa search) and Context7 (Neon docs)
-to identify PostgreSQL/Neon scaling best practices.
+1. Prayer buttons on calendar day view (schedule tab):
+   - Changed from flex-wrap to single-row flex on mobile
+   - Reduced vertical padding from py-1.5 to py-1 on mobile
+   - Removed gap-0.5 between label and time (tighter)
+   - Smaller font sizes on mobile (10px label, 9px time)
+   - Smaller checkmark icon on mobile (h-2.5 w-2.5)
+   - leading-tight to prevent line-height bloat
+   - Buttons no longer wrap to 2 rows — all 6 fit in one row
 
-─ Missing indexes added (migration 0006) ─
+2. Goals not saving on blur:
+   - Added onBlur handler to the edit container in both ListView
+     and TreeView
+   - When focus leaves the title/description inputs entirely
+     (relatedTarget is outside the container), the goal saves
+     automatically
+   - Previously edits were lost when clicking away — only Enter
+     or Ctrl+Enter would save
 
-Critical (tables had NO indexes, causing full table scans):
-- events: composite (user_id, start_at) for calendar day/month queries
-- events: BRIN index on start_at for time-series range scans
-  (100-1000x smaller than B-tree, ideal for append-only data)
-- events: partial index on start_at WHERE notify=true AND notified_at IS NULL
-  for the notification cron
-- events: (user_id, notified_at) for notification cleanup
-- push_subscriptions: (user_id) for cron push dispatch
-- goal_share_tokens: (user_id) for listing/revoking tokens
-- qadaa_log_entries: (user_id) for qadaa history queries
-
-Performance (existing tables, additional indexes):
-- prayer_log: partial (user_id, date) WHERE status IN prayed/assumed_prayed
-  for analytics queries
-- prayer_log: BRIN index on date for cron range scans
-- prayer_times_cache: BRIN index on date for cron batch fetches
-- goals: composite (user_id, sort_order, created_at) eliminates sort step
-  in list query
-- sunnah_log: partial (user_id, date) WHERE prayed=true for dashboard
-
-All BRIN indexes use autosummarize=on for up-to-date range summaries.
-
-─ Cron batch optimization (checkin-scheduler) ─
-
-Previously: 10k users × 8 queries each = ~80k DB round-trips
-Now: 4 batch queries upfront + targeted updates only
-
-Batch 1: All prayer times cache rows for relevant dates (1 query)
-Batch 2: All pending prayer logs for yesterday's dates (1 query)
-Batch 3: All notification prefs (1 query)
-Batch 4: All push subscriptions (1 query)
-
-Then iterates users using in-memory Maps, only hitting DB for:
-- Updates to pending prayers that need resolving (assumed_prayed)
-- Push notification sends (external API, not DB)
-- Cleanup of expired push subscriptions (404/410)
-
-─ Analytics route optimization ─
-
-Previously: 3 separate queries (90-day logs, all logs, prayer times)
-Now: 2 queries (all logs with column selection, prayer times)
-
-Selecting only needed columns (id, date, prayerName, status,
-wentToMasjid, markedAt) reduces data transfer. The 90-day filter
-is applied in-memory since we need all logs for streak calculation
-anyway, avoiding a second DB round-trip.
-
-─ Drizzle schema updated ─
-
-All new indexes declared in schema.ts using Drizzle's index() API
-so they're tracked by drizzle-kit. The migration SQL in
-drizzle/0006_index_optimization.sql is the source of truth for
-the actual DDL.
+3. Goal checkmark circle too big:
+   - Separated the tap target (36px button) from the visual circle
+     (20px inner span with border)
+   - Previously the button itself was the circle with minHeight: 44
+     making it 44px — visually too large
+   - Now the button is a transparent 36px tap target wrapping a
+     20px circle, keeping accessibility while looking compact
 
 Generated with [Devin](https://devin.ai)
 
