@@ -119,6 +119,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [checkinPopup, setCheckinPopup] = useState<{ prayer: PrayerKey; label: string } | null>(null);
   const [userTimezone, setUserTimezone] = useState("America/Chicago");
   const [userMadhab, setUserMadhab] = useState<string>("standard");
+  const [locationSet, setLocationSet] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,23 +151,45 @@ export default function DayViewClient({ date }: { date: string }) {
           if (!cancelled) {
             setPrayerTimes(prayerData);
             if (prayerData.madhab) setUserMadhab(prayerData.madhab);
+            if (prayerData.locationSet === false) setLocationSet(false);
+            else setLocationSet(true);
           }
         } else {
-          if (!cancelled) setPrayerTimes(null);
-          try {
-            const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
-            if (syncRes.ok && !cancelled) {
-              const retryRes = await fetch(`/api/prayer-times?date=${date}`);
-              if (retryRes.ok) {
-                const retryData = await retryRes.json();
-                if (!cancelled) {
-                  setPrayerTimes(retryData);
-                  if (retryData.madhab) setUserMadhab(retryData.madhab);
-                }
-              }
+          // Read locationSet from the 404 response body if available
+          let apiLocationSet = true;
+          if (prayerRes) {
+            try {
+              const errData = await prayerRes.json();
+              if (errData.locationSet === false) apiLocationSet = false;
+            } catch {
+              // non-JSON response (e.g. 401, 429) — assume location is set
             }
-          } catch {
-            // User needs to set location in settings
+          }
+          if (!cancelled) {
+            setPrayerTimes(null);
+            setLocationSet(apiLocationSet);
+          }
+          // Only attempt sync if location is actually set
+          if (apiLocationSet) {
+            try {
+              const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
+              if (syncRes.ok && !cancelled) {
+                const retryRes = await fetch(`/api/prayer-times?date=${date}`);
+                if (retryRes.ok) {
+                  const retryData = await retryRes.json();
+                  if (!cancelled) {
+                    setPrayerTimes(retryData);
+                    if (retryData.madhab) setUserMadhab(retryData.madhab);
+                    setLocationSet(true);
+                  }
+                }
+              } else if (syncRes?.status === 400) {
+                // Sync says no location set
+                if (!cancelled) setLocationSet(false);
+              }
+            } catch {
+              // Network error — don't change locationSet, leave as-is
+            }
           }
         }
 
@@ -635,8 +658,8 @@ export default function DayViewClient({ date }: { date: string }) {
         </div>
       )}
 
-      {/* No location message */}
-      {!prayerTimes && !loading && (
+      {/* No location message — only when location is actually not set */}
+      {!prayerTimes && !loading && !locationSet && (
         <div
           className="mb-3 flex items-center gap-2 rounded-xl border p-3 text-sm sm:mb-4"
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-soft)" }}

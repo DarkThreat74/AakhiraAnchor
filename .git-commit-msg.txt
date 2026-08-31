@@ -1,30 +1,26 @@
-Fix goals DB save + redesign tree view
+Fix false "Set your location" notification when location is set
 
-1. Goals not saving to database:
-   - Root cause: handleEditSave sends description: null when the
-     description field is empty. The PATCH /api/goals route did
-     body.description.length on null, which throws a TypeError.
-     The catch block returned 500 and the goal never persisted.
-   - Fix: coerce null to empty string before length check and
-     trim in the API route (body.description ?? "").
+The calendar day view showed "Set your location in Settings" even
+when the user's location was already configured. This happened
+because the message showed whenever prayerTimes was null and
+loading was false — but prayerTimes can be null for several
+reasons that have nothing to do with location:
 
-2. Redesigned TreeView (goals "map" view):
-   - Wider cards (root: 260-420px, children: 220-340px) — uses
-     available space instead of cramped 180-280px
-   - Root goals get subtle shadow + stronger visual weight
-   - Left accent stripe on every card, color-coded by depth:
-     accent (root) -> warmth (level 1) -> accent-soft (level 2)
-     -> green when done
-   - Progress badges on parent nodes showing "done/total" child
-     count, with green + check when all children complete
-   - Connector lines upgraded from 1px gray to 2px with rounded
-     corners; turns green-tinted when all children done
-   - Action buttons (Branch, Delete) moved into a footer bar
-     inside the card with a top border separator
-   - Add-child input gets an accent-tinted container instead of
-     bare inputs floating in space
-   - Details toggle moved inside card body, cleaner layout
-   - Better spacing and visual hierarchy throughout
+  - User navigates to a date outside the cached month (sync only
+    fetches the current month, so the retry still 404s)
+  - Network error during prayer-times fetch
+  - AlAdhan API failure during sync
+  - Sync rate limit hit (5/hour)
+
+Fix: The /api/prayer-times GET endpoint now runs the settings
+lookup in parallel with the cache lookup and returns a
+`locationSet` boolean in the response body (both on 404 and
+success). The client tracks this flag and only shows the "Set
+your location" message when locationSet is actually false.
+
+Also: the client now only attempts the sync retry when location
+is confirmed to be set, avoiding a wasted API call when the user
+genuinely has no location.
 
 Generated with [Devin](https://devin.ai)
 

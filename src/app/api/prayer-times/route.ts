@@ -26,30 +26,35 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing date parameter." }, { status: 400 });
   }
 
-  const [cached] = await db
-    .select()
-    .from(schema.prayerTimesCache)
-    .where(
-      and(
-        eq(schema.prayerTimesCache.userId, session.userId),
-        eq(schema.prayerTimesCache.date, dateStr),
-      ),
-    )
-    .limit(1);
+  // Check if user has location set (parallel with cache lookup)
+  const [settingsResult, cachedResult] = await Promise.all([
+    db
+      .select({ latitude: schema.prayerSettings.latitude, madhab: schema.prayerSettings.madhab })
+      .from(schema.prayerSettings)
+      .where(eq(schema.prayerSettings.userId, session.userId))
+      .limit(1),
+    db
+      .select()
+      .from(schema.prayerTimesCache)
+      .where(
+        and(
+          eq(schema.prayerTimesCache.userId, session.userId),
+          eq(schema.prayerTimesCache.date, dateStr),
+        ),
+      )
+      .limit(1),
+  ]);
+
+  const settings = settingsResult[0];
+  const cached = cachedResult[0];
+  const locationSet = !!(settings?.latitude);
 
   if (!cached) {
     return NextResponse.json(
-      { error: "No prayer times cached for this date. Sync first." },
+      { error: "No prayer times cached for this date. Sync first.", locationSet },
       { status: 404 },
     );
   }
 
-  // Also fetch the user's madhab so the client can show correct sunnah definitions
-  const [settings] = await db
-    .select({ madhab: schema.prayerSettings.madhab })
-    .from(schema.prayerSettings)
-    .where(eq(schema.prayerSettings.userId, session.userId))
-    .limit(1);
-
-  return NextResponse.json({ ...cached, madhab: settings?.madhab || "standard" });
+  return NextResponse.json({ ...cached, madhab: settings?.madhab || "standard", locationSet: true });
 }
