@@ -19,7 +19,8 @@ const REMINDER_COLORS = [
   "#15803d", "#b45309", "#1e40af", "#9f1239",
 ];
 
-function getReminderColor(title: string): string {
+function getReminderColor(title: string, chosenColor?: string | null): string {
+  if (chosenColor && chosenColor.length >= 4) return chosenColor;
   let hash = 0;
   for (let i = 0; i < title.length; i++) {
     hash = ((hash << 5) - hash) + title.charCodeAt(i);
@@ -294,7 +295,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                         <div key={event.id} className="flex items-center gap-1 truncate">
                           <span
                             className="h-1.5 w-1.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: getReminderColor(event.title) }}
+                            style={{ backgroundColor: getReminderColor(event.title, event.color) }}
                           />
                           <span className="truncate text-[11px] leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-soft)" }}>
                             {event.title}

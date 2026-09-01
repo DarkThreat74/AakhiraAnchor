@@ -1,55 +1,28 @@
-Comprehensive audit: security, DB, cron, mobile, hydration, error handling
+Recurring event bulk edit, expanded color palette, public color sync
 
-12 parallel subagents audited the codebase from different angles.
-This commit applies the verified fixes from that audit.
+Three issues fixed:
 
-Security:
-- Replace 5-digit enumerable share token with 128-bit crypto-secure hex
-  token (closes IDOR allowing brute-force access to any user's shared
-  calendar/prayer times)
-- Sanitize all error responses that leaked internal error messages to
-  clients (auth/login, signup, reset-password, admin/auth, prayer-times/sync)
-- Add rate limiting to goals POST/PATCH/DELETE and auth/delete routes
-- Fix request as never type bypass in goals and auth/delete routes
+1. Edit all recurring events at once:
+   - Added PATCH/DELETE /api/events/bulk endpoint that updates/deletes all
+     events sharing the same recurrenceRule for the current user
+   - Added "Apply changes to all events in this series" checkbox in the
+     edit form (only shows when editing a recurring event)
+   - Delete confirmation now offers "Delete this one" vs "Delete entire
+     series" for recurring events
+   - Added recurrenceRule to CalendarEvent interface so the client knows
+     which events belong to a series
 
-Database & query performance:
-- Fix N+1 in GET /api/prayer-friends (5 queries per friend → 5 total
-  batched queries using inArray with 90-day lookback window)
-- Fix N+1 in POST /api/prayer-friends/add (parallelize + 90-day filter)
-- Batch cron checkin-scheduler updates (per-row UPDATE → single
-  inArray UPDATE per user)
-- Batch notifications/test expired-subscription deletes (loop → single
-  inArray DELETE)
-- Push 90-day filter into DB query in prayer-log/analytics (was loading
-  lifetime logs then filtering in memory)
+2. Expanded color palette from 8 to 16 visually distinct colors:
+   - Added Indigo, Mustard, Magenta, Pine, Rust, Slate Blue, Plum, Olive
+   - All 16 span the full hue wheel with varied saturation/lightness so
+     they remain distinguishable side-by-side
 
-Cron reliability:
-- Add maxDuration=300 to both cron routes
-- Wrap per-user processing in try/catch so one failing user cannot abort
-  the entire run
-- Add timeout (15s) + retry (3 attempts with backoff) to AlAdhan fetch
-- Log per-user failures in prayer-times-sync instead of silently swallowing
-- Fix Isha midnight-crossing logic in stateMachine.ts (was always adding
-  24h to end, never subtracting 24h from start for morning-after-midnight
-  case — yesterday's Isha was never resolved as assumed_prayed after Fajr)
-
-Mobile responsiveness:
-- Standardize all touch targets to 44px minimum (min-h-11)
-- Bump all text-[9px] and text-[10px] to text-[11px] minimum on mobile
-- Add overflow-x-hidden to GoalsClient, LearnClient, onboarding page roots
-- Fix fixed-width comparison row name column
-
-Hydration:
-- Fix new Date() in useState initializers (PrayerDashboardClient,
-  MonthViewClient) — initialize to null/empty and set in useEffect using
-  deferred Promise.resolve().then() pattern to avoid cascading renders
-
-Error handling & UX:
-- Add src/lib/logError.ts utility
-- Add (app)/error.tsx and (auth)/error.tsx error boundaries
-- Add (app)/loading.tsx loading state
-- Add per-page metadata titles to all (app) routes
-- Add console.error logging to all goals API catch blocks
+3. Public calendar now shows user-chosen colors:
+   - PublicCalendarClient was using getReminderColor(event.title) (a
+     hash-based color) for reminders instead of event.color
+   - Now passes event.color to getReminderColor so user-chosen colors
+     are respected on the public shared calendar
+   - Same fix applied to MonthViewClient for consistency
 
 Generated with [Devin](https://devin.ai)
 

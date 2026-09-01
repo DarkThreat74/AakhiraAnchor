@@ -16,6 +16,7 @@ interface CalendarEvent {
   type: "block" | "task" | "reminder";
   color?: string | null;
   notify?: boolean;
+  recurrenceRule?: string | null;
   _pending?: boolean;
 }
 
@@ -59,16 +60,24 @@ const REMINDER_COLORS = [
   "#9f1239", // crimson
 ];
 
-// Color palette for event blocks — user-selectable
+// Color palette for event blocks — user-selectable (16 visually distinct colors)
 const EVENT_COLORS = [
   { label: "Teal", value: "#0e7490" },
-  { label: "Orange", value: "#c2410c" },
+  { label: "Burnt Orange", value: "#c2410c" },
   { label: "Violet", value: "#7c3aed" },
   { label: "Rose", value: "#be185d" },
-  { label: "Green", value: "#15803d" },
+  { label: "Forest Green", value: "#15803d" },
   { label: "Amber", value: "#b45309" },
-  { label: "Blue", value: "#1e40af" },
+  { label: "Royal Blue", value: "#1e40af" },
   { label: "Crimson", value: "#9f1239" },
+  { label: "Indigo", value: "#4338ca" },
+  { label: "Mustard", value: "#a16207" },
+  { label: "Magenta", value: "#a21caf" },
+  { label: "Pine", value: "#166534" },
+  { label: "Rust", value: "#7c2d12" },
+  { label: "Slate Blue", value: "#3730a3" },
+  { label: "Plum", value: "#86198f" },
+  { label: "Olive", value: "#4d7c0f" },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -84,7 +93,9 @@ const TYPE_BG: Record<string, string> = {
 };
 
 // Deterministic color assignment for reminders based on title
-function getReminderColor(title: string): string {
+// Falls back to user-chosen color if set
+function getReminderColor(title: string, chosenColor?: string | null): string {
+  if (chosenColor && chosenColor.length >= 4) return chosenColor;
   let hash = 0;
   for (let i = 0; i < title.length; i++) {
     hash = ((hash << 5) - hash) + title.charCodeAt(i);
@@ -112,6 +123,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [newColor, setNewColor] = useState<string | null>(null);
   const [newNotify, setNewNotify] = useState(true);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [editAllInSeries, setEditAllInSeries] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -515,6 +527,58 @@ export default function DayViewClient({ date }: { date: string }) {
       ? new Date(`${date}T${newStart}:00`).toISOString()
       : new Date(`${date}T${newEnd}:00`).toISOString();
 
+    // Bulk update — update all events in the recurring series
+    if (editAllInSeries && editingEvent.recurrenceRule) {
+      try {
+        const res = await fetch("/api/events/bulk", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recurrenceRule: editingEvent.recurrenceRule,
+            title: newTitle,
+            type: newType,
+            color: newColor,
+            notify: newNotify,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          clearApiCache();
+          // Refetch events for this date to reflect the bulk update
+          if ("caches" in window) {
+            await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
+          }
+          const refetch = await fetch(`/api/events?date=${date}`);
+          if (refetch.ok) {
+            const refreshed = await refetch.json();
+            const filtered = refreshed.filter((ev: { startAt: string }) => {
+              const d = new Date(ev.startAt);
+              const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return localDateStr === date;
+            });
+            setEvents(filtered);
+          }
+          setSuccessMsg(`Updated ${data.updated} events in series.`);
+          play("success");
+          setEditingEvent(null);
+          setNewTitle("");
+          setNewColor(null);
+          setNewNotify(true);
+          setEditAllInSeries(false);
+          setError(null);
+          setTimeout(() => setSuccessMsg(null), 3000);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || "Failed to update series.");
+        }
+      } catch {
+        setError("Network error.");
+      }
+      return;
+    }
+
+    // Single event update
     try {
       const res = await fetch(`/api/events/${editingEvent.id}`, {
         method: "PATCH",
@@ -552,6 +616,7 @@ export default function DayViewClient({ date }: { date: string }) {
           setNewTitle("");
           setNewColor(null);
           setNewNotify(true);
+          setEditAllInSeries(false);
           setError(null);
           setTimeout(() => setSuccessMsg(null), 3000);
           return;
@@ -566,6 +631,7 @@ export default function DayViewClient({ date }: { date: string }) {
         setNewTitle("");
         setNewColor(null);
         setNewNotify(true);
+        setEditAllInSeries(false);
         setError(null);
       } else {
         const data = await res.json().catch(() => ({}));
@@ -589,6 +655,7 @@ export default function DayViewClient({ date }: { date: string }) {
     setEnableRecurrence(false);
     setRecurrenceEndDate("");
     setRecurrenceDays([]);
+    setEditAllInSeries(false);
     setError(null);
     setShowAddForm(false);
   }
@@ -603,6 +670,7 @@ export default function DayViewClient({ date }: { date: string }) {
     setEnableRecurrence(false);
     setRecurrenceEndDate("");
     setRecurrenceDays([]);
+    setEditAllInSeries(false);
   }
 
   return (
@@ -787,7 +855,7 @@ export default function DayViewClient({ date }: { date: string }) {
             const minutes = timeToMinutes(startStr);
             if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
             const top = minutesToTop(minutes);
-            const color = getReminderColor(event.title);
+            const color = getReminderColor(event.title, event.color);
 
             return (
               <div
@@ -1191,6 +1259,25 @@ export default function DayViewClient({ date }: { date: string }) {
                 </div>
               )}
 
+              {/* Edit-all-in-series toggle for recurring events */}
+              {editingEvent && editingEvent.recurrenceRule && (
+                <label
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-xs"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editAllInSeries}
+                    onChange={(e) => setEditAllInSeries(e.target.checked)}
+                    className="h-4 w-4"
+                    style={{ accentColor: "var(--color-ink)" }}
+                  />
+                  <span style={{ color: "var(--color-ink-soft)" }}>
+                    Apply changes to <strong style={{ color: "var(--color-ink)" }}>all events</strong> in this series
+                  </span>
+                </label>
+              )}
+
               {/* Error message inside modal */}
               {error && (showAddForm || editingEvent) && (
                 <p className="text-xs" style={{ color: "var(--color-error)" }}>{error}</p>
@@ -1204,7 +1291,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
                   style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
                 >
-                  {editingEvent ? "Save" : enableRecurrence ? "Add recurring" : "Add"}
+                  {editingEvent ? (editAllInSeries ? "Save all" : "Save") : enableRecurrence ? "Add recurring" : "Add"}
                 </button>
                 {editingEvent && (
                   <button
@@ -1239,21 +1326,64 @@ export default function DayViewClient({ date }: { date: string }) {
             <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
               &ldquo;{deleteConfirm.title}&rdquo; will be permanently removed.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
                   handleDeleteEvent(deleteConfirm.id);
                   setDeleteConfirm(null);
                   closeForm();
                 }}
-                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                className="w-full rounded-lg px-4 py-2.5 text-sm font-semibold"
                 style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
               >
-                Delete
+                Delete this one
               </button>
+              {deleteConfirm.recurrenceRule && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/events/bulk", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ recurrenceRule: deleteConfirm.recurrenceRule }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        clearApiCache();
+                        if ("caches" in window) {
+                          await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
+                        }
+                        const refetch = await fetch(`/api/events?date=${date}`);
+                        if (refetch.ok) {
+                          const refreshed = await refetch.json();
+                          const filtered = refreshed.filter((ev: { startAt: string }) => {
+                            const d = new Date(ev.startAt);
+                            const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                            return localDateStr === date;
+                          });
+                          setEvents(filtered);
+                        }
+                        setSuccessMsg(`Deleted ${data.deleted} events in series.`);
+                        play("delete");
+                      } else {
+                        const data = await res.json().catch(() => ({}));
+                        setError(data.error || "Failed to delete series.");
+                      }
+                    } catch {
+                      setError("Network error.");
+                    }
+                    setDeleteConfirm(null);
+                    closeForm();
+                  }}
+                  className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium"
+                  style={{ borderColor: "var(--color-error)", color: "var(--color-error)", minHeight: 44 }}
+                >
+                  Delete entire series
+                </button>
+              )}
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium"
+                className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium"
                 style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
               >
                 Cancel

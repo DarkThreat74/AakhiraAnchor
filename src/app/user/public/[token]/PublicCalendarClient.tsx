@@ -51,7 +51,8 @@ const REMINDER_COLORS = [
   "#15803d", "#b45309", "#1e40af", "#9f1239",
 ];
 
-function getReminderColor(title: string): string {
+function getReminderColor(title: string, chosenColor?: string | null): string {
+  if (chosenColor && chosenColor.length >= 4) return chosenColor;
   let hash = 0;
   for (let i = 0; i < title.length; i++) {
     hash = ((hash << 5) - hash) + title.charCodeAt(i);
@@ -497,7 +498,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
             const minutes = timeToMinutes(startStr);
             if (minutes < HOURS[0] * 60 || minutes > (HOURS[HOURS.length - 1] + 1) * 60) return null;
             const top = minutesToTop(minutes);
-            const color = getReminderColor(event.title);
+            const color = getReminderColor(event.title, event.color);
 
             return (
               <div
@@ -803,7 +804,7 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
                       <div key={event.id} className="flex items-center gap-1 truncate">
                         <span
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: getReminderColor(event.title) }}
+                          style={{ backgroundColor: getReminderColor(event.title, event.color) }}
                         />
                         <span className="truncate text-[9px] leading-tight sm:text-[10px]" style={{ color: "var(--color-ink-soft)" }}>
                           {event.title}
