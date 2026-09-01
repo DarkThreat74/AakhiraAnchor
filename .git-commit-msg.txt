@@ -1,42 +1,29 @@
-Expand Learn, redesign Goals tree, scale to 100k users
+Audit and fix device fingerprinting: security, bottlenecks, UX gaps
 
-LEARN SECTION (8 new sections + mobile fix):
-- Added 8 new placeholder sections: Wudu & Ghusl, Prayer Times &
-  Significance, Khushu (Focus), Common Mistakes in Salah, Sujud as-Sahw,
-  Prayer in Congregation, Qadaa (Missed Prayers), Qasr (Travel Prayer)
-- All new sections use [Placeholder: ...] content pattern — no AI-generated
-  religious content, awaiting human curation per AGENTS.md rules
-- Fixed hadith block overflow on mobile by adding overflow-hidden
+SECURITY FIXES:
+- Added isValidFingerprintHash() validator (64-char hex regex) to prevent
+  non-hex strings from reaching DB queries in login, signup, and check-device
+- Fixed timing oracle in check-device route: when user doesn't exist, now
+  runs a dummy DB query to equalize response time (prevents email enumeration)
+- Reduced check-device rate limit from 20 to 10 requests/15min to slow
+  enumeration attempts
+- Login route now uses hex-validated fingerprint before querying trusted_devices
 
-GOALS SECTION (inline descriptions + tree redesign):
-- Description now shows inline under goal title in smaller font (text-[11px],
-  line-clamp-2) — no longer hidden behind a "Details" button click
-- Completely redesigned tree view from card-based with connectors to
-  outline-style matching the list view:
-  * Same row component: chevron | checkbox | title + description | progress
-  * Subtle vertical guide lines instead of prominent connectors
-  * Progress badges (X/Y or checkmark) for parent goals
-  * No horizontal scroll, no fixed widths — works on all mobile sizes
-  * Action buttons (Branch, Delete) inline on the right
-- Memoized goal tree building with useMemo to avoid O(n) rebuild on every
-  render
+BOTTLENECK FIXES:
+- Login trusted-device check: select only id column instead of full row
+- Login trusted-device update: fire-and-forget lastUsedAt update (non-blocking)
+- Login device trust on password success: replaced check-then-insert (2 queries)
+  with single onConflictDoUpdate upsert (1 query) — eliminates race condition
+- Signup device trust: same onConflictDoUpdate pattern
 
-PERFORMANCE (100k user scale):
-- Cron checkin-scheduler: batch processing in chunks of 500 users instead
-  of loading all users into memory and using inArray with 100k+ IDs
-- Cron prayer-times-sync: only syncs users with stale data (left join to
-  find users without current-month cache), processes in batches of 200
-  with 5-concurrent parallelism for AlAdhan API calls
-- Admin users: paginated (50/page) with eq(role,'user') instead of
-  ne(role,'admin') for index usage, replaced raw ANY() SQL with inArray
-- Events API: capped range to 31 days, added limit(1000)
-- Prayer-log range API: capped range to 180 days, added limit(1000)
-- Public events API: capped range to 31 days, added limit, added
-  Cache-Control headers (s-maxage=60, stale-while-revalidate=300)
-- Auth login: select only needed columns instead of full user row
-- next.config.ts: added compress, poweredByHeader=false, image formats,
-  experimental.optimizePackageImports for lucide-react/date-fns, caching
-  headers for /sw.js and /manifest.webmanifest
+UX GAPS FIXED:
+- Signup now trusts the device on account creation (was password-only next login)
+- Signup page generates and sends fingerprint hash on mount
+- Added trusted devices management UI to settings page:
+  * Lists all trusted devices with label, creation date, last used
+  * Revoke (delete) any trusted device with one tap
+  * Uses existing GET/DELETE /api/auth/trusted-devices API
+  * Mobile-optimized with 44px touch targets, truncation, responsive layout
 
 Generated with [Devin](https://devin.ai)
 

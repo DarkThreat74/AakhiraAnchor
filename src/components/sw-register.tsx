@@ -95,11 +95,28 @@ export default function ServiceWorkerRegister() {
     };
     window.addEventListener("online", handleOnline);
 
+    // ── iOS Safari fallback: Background Sync API is not supported ──
+    // When the app becomes visible again (user switches back to the tab),
+    // trigger a sync in case we came back online while in the background.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        navigator.serviceWorker.controller?.postMessage({ type: "SYNC_OUTBOX" });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // ── Also sync on initial load if online (catches cases where ──
+    // the app was reopened while online but SW didn't fire sync)
+    if (navigator.onLine) {
+      navigator.serviceWorker.controller?.postMessage({ type: "SYNC_OUTBOX" });
+    }
+
     return () => {
       clearInterval(interval);
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
       navigator.serviceWorker.removeEventListener("message", handleMessage);
       window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 

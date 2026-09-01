@@ -22,6 +22,7 @@ import type { Goal } from "@/lib/db/schema";
 import { buildGoalTree, countCompleted, type GoalNode } from "@/lib/goals/tree";
 import { shareNative, isNativeApp, hapticNotification } from "@/lib/native-bridge";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { getOfflineDB } from "@/lib/offline/db";
 
 type View = "list" | "tree";
 
@@ -45,7 +46,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
   const tree = useMemo(() => buildGoalTree(goals), [goals]);
   const { total, done } = useMemo(() => countCompleted(tree), [tree]);
 
-  // Fetch share status on mount
+  // Fetch share status on mount + cache goals in IndexedDB for offline use
   useEffect(() => {
     fetch("/api/goals/share", { method: "POST" })
       .then((r) => r.json().catch(() => ({})))
@@ -53,7 +54,32 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
         if (data.url) setShareUrl(data.url);
       })
       .catch(() => {});
-  }, []);
+
+    // Cache initial goals in IndexedDB for offline access
+    if (initialGoals.length > 0) {
+      try {
+        const db = getOfflineDB();
+        db.goals.clear().then(() =>
+          db.goals.bulkPut(initialGoals.map((g) => ({
+            id: g.id,
+            userId: g.userId,
+            parentId: g.parentId,
+            title: g.title,
+            description: g.description,
+            status: g.status,
+            sortOrder: g.sortOrder,
+            color: g.color,
+            createdAt: g.createdAt.toISOString(),
+            updatedAt: g.updatedAt.toISOString(),
+            completedAt: g.completedAt ? g.completedAt.toISOString() : null,
+            _cachedAt: Date.now(),
+          })))
+        ).catch(() => {});
+      } catch {
+        // non-critical
+      }
+    }
+  }, [initialGoals]);
 
   // Listen for SW sync events — refetch goals when offline writes are synced
   useEffect(() => {
@@ -63,7 +89,31 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
         fetch("/api/goals")
           .then((r) => r.json().catch(() => ({})))
           .then((data) => {
-            if (data.goals) setGoals(data.goals);
+            if (data.goals) {
+              setGoals(data.goals);
+              // Update IndexedDB cache
+              try {
+                const db = getOfflineDB();
+                db.goals.clear().then(() =>
+                  db.goals.bulkPut(data.goals.map((g: { id: string; userId: string; parentId: string | null; title: string; description: string | null; status: string; sortOrder: number; color: string | null; createdAt: string | Date; updatedAt: string | Date; completedAt: string | Date | null }) => ({
+                    id: g.id,
+                    userId: g.userId,
+                    parentId: g.parentId,
+                    title: g.title,
+                    description: g.description,
+                    status: g.status,
+                    sortOrder: g.sortOrder,
+                    color: g.color,
+                    createdAt: typeof g.createdAt === "string" ? g.createdAt : g.createdAt.toISOString(),
+                    updatedAt: typeof g.updatedAt === "string" ? g.updatedAt : g.updatedAt.toISOString(),
+                    completedAt: g.completedAt ? (typeof g.completedAt === "string" ? g.completedAt : g.completedAt.toISOString()) : null,
+                    _cachedAt: Date.now(),
+                  })))
+                ).catch(() => {});
+              } catch {
+                // non-critical
+              }
+            }
           })
           .catch(() => {});
       }

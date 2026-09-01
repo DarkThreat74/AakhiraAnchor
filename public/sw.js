@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v18";
+const CACHE_VERSION = "waqt-v19";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -34,6 +34,7 @@ const PRECACHE_URLS = [
   "/icon-192.png",
   "/icon-512.png",
   "/icon.svg",
+  "/offline.html",
 ];
 
 // ─── IndexedDB helpers for offline event outbox ───
@@ -162,6 +163,13 @@ self.addEventListener("install", (event) => {
       })
   );
 });
+
+// ─── Enable navigation preload for instant page loads ───
+// This lets the browser start fetching the navigation request while the
+// SW is still booting up, making page loads significantly faster.
+if ("navigationPreload" in self.registration) {
+  self.registration.navigationPreload.enable();
+}
 
 // ─── Activate: clear old caches, claim clients ───
 self.addEventListener("activate", (event) => {

@@ -5,6 +5,7 @@ import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X, WifiOff } fro
 import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { shareNative, hapticNotification } from "@/lib/native-bridge";
+import { getOfflineDB } from "@/lib/offline/db";
 
 interface PerPrayerStats {
   prayer: string;
@@ -183,7 +184,71 @@ export default function PrayerDashboard() {
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
+      // ── Step 1: Read from IndexedDB instantly (if cached) ──
+      // Render immediately with cached data — no spinner
+      try {
+        const db = getOfflineDB();
+        const [cachedAnalytics, cachedFriends, cachedQadaa, cachedLogs, cachedSunnah, cachedTimes] = await Promise.all([
+          db.analytics.get("current"),
+          db.friends.get("current"),
+          db.qadaa.get("current"),
+          db.prayerLogs.where("date").equals(todayStr).toArray(),
+          db.sunnahLogs.where("date").equals(todayStr).toArray(),
+          db.prayerTimes.get(todayStr),
+        ]);
+
+        if (cancelled) return;
+
+        let hasAnyCached = false;
+
+        if (cachedAnalytics?.data) {
+          setAnalytics(cachedAnalytics.data as typeof analytics);
+          if ((cachedAnalytics.data as { madhab?: string }).madhab) setMadhab((cachedAnalytics.data as { madhab?: string }).madhab as string);
+          hasAnyCached = true;
+        }
+        if (cachedFriends?.data && Array.isArray(cachedFriends.data)) {
+          setFriends(cachedFriends.data as typeof friends);
+          hasAnyCached = true;
+        }
+        if (cachedQadaa?.data) {
+          setQadaa(cachedQadaa.data as typeof qadaa);
+          hasAnyCached = true;
+        }
+        if (cachedLogs.length > 0) {
+          setTodayLogs(cachedLogs.map((l) => ({
+            prayerName: l.prayerName,
+            status: l.status,
+            wentToMasjid: l.wentToMasjid,
+          })));
+          hasAnyCached = true;
+        }
+        if (cachedSunnah.length > 0) {
+          setTodaySunnahs(cachedSunnah.filter((l) => l.prayed).map((l) => l.sunnahKey));
+          hasAnyCached = true;
+        }
+        if (cachedTimes) {
+          setPrayerTimes({
+            fajr: cachedTimes.fajr,
+            sunrise: cachedTimes.sunrise,
+            dhuhr: cachedTimes.dhuhr,
+            asr: cachedTimes.asr,
+            maghrib: cachedTimes.maghrib,
+            isha: cachedTimes.isha,
+          });
+          hasAnyCached = true;
+        }
+
+        // If we have ANY cached data, stop showing the loading spinner
+        if (hasAnyCached) {
+          if (!cancelled) setLoading(false);
+        }
+      } catch {
+        // IndexedDB read failed — continue to API fetch
+      }
+
+      // ── Step 2: Fetch from API in background ──
       try {
         const [analyticsRes, friendsRes, codeRes, qadaaRes, logsRes, sunnahRes, timesRes] = await Promise.all([
           fetch("/api/prayer-log/analytics").catch(() => null),
@@ -202,11 +267,13 @@ export default function PrayerDashboard() {
           if (data) {
             setAnalytics(data);
             if (data.madhab) setMadhab(data.madhab);
+            try { await getOfflineDB().analytics.put({ id: "current", data, _cachedAt: Date.now() }); } catch { /* non-critical */ }
           }
         }
         if (friendsRes?.ok) {
           const data = await friendsRes.json().catch(() => []);
           if (Array.isArray(data)) setFriends(data);
+          try { await getOfflineDB().friends.put({ id: "current", data, _cachedAt: Date.now() }); } catch { /* non-critical */ }
         }
         if (codeRes?.ok) {
           const data = await codeRes.json().catch(() => ({}));
@@ -214,29 +281,80 @@ export default function PrayerDashboard() {
         }
         if (qadaaRes?.ok) {
           const data = await qadaaRes.json().catch(() => null);
-          if (data) setQadaa(data);
+          if (data) {
+            setQadaa(data);
+            try { await getOfflineDB().qadaa.put({ id: "current", data, _cachedAt: Date.now() }); } catch { /* non-critical */ }
+          }
         }
         if (logsRes?.ok) {
           const data = await logsRes.json().catch(() => null);
-          if (data) setTodayLogs(Array.isArray(data) ? data : data.logs || []);
+          if (data) {
+            const logsArray = Array.isArray(data) ? data : data.logs || [];
+            setTodayLogs(logsArray);
+            // Cache in IndexedDB
+            try {
+              const db = getOfflineDB();
+              await db.prayerLogs.where("date").equals(todayStr).delete();
+              await db.prayerLogs.bulkPut(logsArray.map((l: { prayerName: string; status: string; wentToMasjid: boolean | null; id?: string }) => ({
+                id: l.id || `${todayStr}_${l.prayerName}`,
+                userId: "",
+                date: todayStr,
+                prayerName: l.prayerName,
+                status: l.status,
+                wentToMasjid: l.wentToMasjid,
+                lastCheckinAt: null,
+                _cachedAt: Date.now(),
+              })));
+            } catch { /* non-critical */ }
+          }
         }
         if (sunnahRes?.ok) {
           const data = await sunnahRes.json().catch(() => []);
-          if (Array.isArray(data)) setTodaySunnahs(data.filter((l: { prayed: boolean }) => l.prayed).map((l: { sunnahKey: string }) => l.sunnahKey));
+          if (Array.isArray(data)) {
+            setTodaySunnahs(data.filter((l: { prayed: boolean }) => l.prayed).map((l: { sunnahKey: string }) => l.sunnahKey));
+            // Cache in IndexedDB
+            try {
+              const db = getOfflineDB();
+              await db.sunnahLogs.where("date").equals(todayStr).delete();
+              await db.sunnahLogs.bulkPut(data.map((l: { sunnahKey: string; prayed: boolean; id?: string }) => ({
+                id: l.id || `${todayStr}_${l.sunnahKey}`,
+                date: todayStr,
+                sunnahKey: l.sunnahKey,
+                prayed: l.prayed,
+                _cachedAt: Date.now(),
+              })));
+            } catch { /* non-critical */ }
+          }
         }
         if (timesRes?.ok) {
           const data = await timesRes.json().catch(() => null);
-          if (data) setPrayerTimes({
-            fajr: data.fajr,
-            sunrise: data.sunrise,
-            dhuhr: data.dhuhr,
-            asr: data.asr,
-            maghrib: data.maghrib,
-            isha: data.isha,
-          });
+          if (data) {
+            setPrayerTimes({
+              fajr: data.fajr,
+              sunrise: data.sunrise,
+              dhuhr: data.dhuhr,
+              asr: data.asr,
+              maghrib: data.maghrib,
+              isha: data.isha,
+            });
+            try {
+              await getOfflineDB().prayerTimes.put({
+                date: todayStr,
+                fajr: data.fajr,
+                sunrise: data.sunrise,
+                dhuhr: data.dhuhr,
+                asr: data.asr,
+                maghrib: data.maghrib,
+                isha: data.isha,
+                madhab: data.madhab || null,
+                locationSet: data.locationSet !== false,
+                _cachedAt: Date.now(),
+              });
+            } catch { /* non-critical */ }
+          }
         }
       } catch {
-        // ignore
+        // ignore — cached data is already showing
       } finally {
         if (!cancelled) setLoading(false);
       }

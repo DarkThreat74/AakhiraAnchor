@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
+import { clearOfflineCache } from "@/lib/offline/db";
+import { clearCachedPrayerSettings } from "@/lib/offline/settings-cache";
 
 interface PrayerSettings {
   latitude: string;
@@ -775,6 +777,9 @@ export default function SettingsClient({
 
   async function handleLogout() {
     setLoggingOut(true);
+    // Clear local offline cache to prevent cross-user data leakage on shared devices
+    try { await clearOfflineCache(); } catch { /* non-critical */ }
+    try { clearCachedPrayerSettings(); } catch { /* non-critical */ }
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch {

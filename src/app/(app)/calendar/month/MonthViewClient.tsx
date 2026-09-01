@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { getOfflineDB } from "@/lib/offline/db";
 
 interface CalendarEvent {
   id: string;
@@ -60,11 +61,69 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
     let cancelled = false;
 
     (async () => {
-      try {
-        const fromStr = `${year}-${String(month).padStart(2, "0")}-01`;
-        const daysInMonth = new Date(year, month, 0).getDate();
-        const toStr = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+      const fromStr = `${year}-${String(month).padStart(2, "0")}-01`;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const toStr = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
 
+      // ── Step 1: Read from IndexedDB instantly (if cached) ──
+      // Build date keys for the whole month and query IndexedDB
+      try {
+        const db = getOfflineDB();
+        const dateKeys: string[] = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+          dateKeys.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+        }
+
+        const [cachedEvents, cachedLogs] = await Promise.all([
+          db.events.where("_dateKey").anyOf(dateKeys).toArray(),
+          db.prayerLogs.where("date").anyOf(dateKeys).toArray(),
+        ]);
+
+        if (cancelled) return;
+
+        if (cachedEvents.length > 0) {
+          const grouped: Record<string, CalendarEvent[]> = {};
+          for (const e of cachedEvents) {
+            const eventDate = e._dateKey;
+            if (!grouped[eventDate]) grouped[eventDate] = [];
+            grouped[eventDate].push({
+              id: e.id,
+              title: e.title,
+              startAt: e.startAt,
+              endAt: e.endAt ?? "",
+              type: e.type as "block" | "task" | "reminder",
+              color: e.color,
+            });
+          }
+          for (const date of Object.keys(grouped)) {
+            grouped[date].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+          }
+          setEventsByDate(grouped);
+        }
+
+        if (cachedLogs.length > 0) {
+          const grouped: Record<string, PrayerLogEntry[]> = {};
+          for (const l of cachedLogs) {
+            if (!grouped[l.date]) grouped[l.date] = [];
+            grouped[l.date].push({
+              date: l.date,
+              prayerName: l.prayerName,
+              status: l.status,
+            });
+          }
+          setPrayerLogsByDate(grouped);
+        }
+
+        // If we have cached data, stop showing the spinner
+        if (cachedEvents.length > 0 || cachedLogs.length > 0) {
+          if (!cancelled) setLoading(false);
+        }
+      } catch {
+        // IndexedDB read failed — continue to API fetch
+      }
+
+      // ── Step 2: Fetch from API in background ──
+      try {
         const [eventsRes, logRes] = await Promise.all([
           fetch(`/api/events?from=${fromStr}&to=${toStr}`),
           fetch(`/api/prayer-log/range?from=${fromStr}&to=${toStr}`).catch(() => null),
@@ -84,6 +143,33 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             grouped[date].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
           }
           if (!cancelled) setEventsByDate(grouped);
+
+          // Cache events in IndexedDB
+          try {
+            const db = getOfflineDB();
+            // Delete old events for this month's date range
+            const dateKeys: string[] = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+              dateKeys.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+            }
+            await db.events.where("_dateKey").anyOf(dateKeys).delete();
+            await db.events.bulkPut(events.map((e) => {
+              const d = new Date(e.startAt);
+              const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return {
+                id: e.id,
+                userId: "",
+                title: e.title,
+                startAt: e.startAt,
+                endAt: e.endAt,
+                type: e.type,
+                color: e.color || null,
+                recurrenceRule: null,
+                _dateKey: eventDate,
+                _cachedAt: Date.now(),
+              };
+            }));
+          } catch { /* non-critical */ }
         }
 
         if (logRes?.ok && !cancelled) {
@@ -95,9 +181,29 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
             grouped[log.date].push(log);
           }
           if (!cancelled) setPrayerLogsByDate(grouped);
+
+          // Cache prayer logs in IndexedDB
+          try {
+            const db = getOfflineDB();
+            const dateKeys: string[] = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+              dateKeys.push(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+            }
+            await db.prayerLogs.where("date").anyOf(dateKeys).delete();
+            await db.prayerLogs.bulkPut(logs.map((l) => ({
+              id: `${l.date}_${l.prayerName}`,
+              userId: "",
+              date: l.date,
+              prayerName: l.prayerName,
+              status: l.status,
+              wentToMasjid: null,
+              lastCheckinAt: null,
+              _cachedAt: Date.now(),
+            })));
+          } catch { /* non-critical */ }
         }
       } catch {
-        // ignore
+        // ignore — cached data is already showing
       } finally {
         if (!cancelled) setLoading(false);
       }

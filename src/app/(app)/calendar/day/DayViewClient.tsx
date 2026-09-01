@@ -7,6 +7,8 @@ import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
 import { useUISFX } from "@/components/uisfx-provider";
 import { getDisplayAsrTime, type PrayerKey } from "@/lib/prayer/checkin";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { getOfflineDB } from "@/lib/offline/db";
+import { getCachedPrayerSettings, setCachedPrayerSettings } from "@/lib/offline/settings-cache";
 
 interface CalendarEvent {
   id: string;
@@ -133,10 +135,77 @@ export default function DayViewClient({ date }: { date: string }) {
   const [userMadhab, setUserMadhab] = useState<string>("standard");
   const [locationSet, setLocationSet] = useState(true);
 
+  // ── Load cached prayer settings from localStorage instantly ──
+  // This avoids a network round-trip for timezone/madhab on every page load
+  useEffect(() => {
+    const cached = getCachedPrayerSettings();
+    if (cached) {
+      // Defer setState to avoid cascading renders
+      Promise.resolve().then(() => {
+        setUserTimezone(cached.timezone);
+        setUserMadhab(cached.madhab || "standard");
+      });
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      // ── Step 1: Read from IndexedDB instantly (if cached) ──
+      // This makes the page render immediately with cached data, no spinner
+      try {
+        const db = getOfflineDB();
+        const [cachedEvents, cachedTimes, cachedLogs] = await Promise.all([
+          db.events.where("_dateKey").equals(date).toArray(),
+          db.prayerTimes.get(date),
+          db.prayerLogs.where("date").equals(date).toArray(),
+        ]);
+
+        if (cancelled) return;
+
+        if (cachedEvents.length > 0) {
+          setEvents(cachedEvents.map((e) => ({
+            id: e.id,
+            title: e.title,
+            startAt: e.startAt,
+            endAt: e.endAt ?? "",
+            type: e.type as "block" | "task" | "reminder",
+            color: e.color,
+            recurrenceRule: e.recurrenceRule,
+          })));
+        }
+
+        if (cachedTimes) {
+          setPrayerTimes({
+            fajr: cachedTimes.fajr,
+            sunrise: cachedTimes.sunrise,
+            dhuhr: cachedTimes.dhuhr,
+            asr: cachedTimes.asr,
+            maghrib: cachedTimes.maghrib,
+            isha: cachedTimes.isha,
+          });
+          if (cachedTimes.madhab) setUserMadhab(cachedTimes.madhab);
+          if (cachedTimes.locationSet === false) setLocationSet(false);
+        }
+
+        if (cachedLogs.length > 0) {
+          setPrayerLogs(cachedLogs.map((l) => ({
+            prayerName: l.prayerName,
+            status: l.status,
+            wentToMasjid: l.wentToMasjid,
+          })));
+        }
+
+        // If we have ANY cached data, stop showing the loading spinner
+        if (cachedEvents.length > 0 || cachedTimes || cachedLogs.length > 0) {
+          if (!cancelled) setLoading(false);
+        }
+      } catch {
+        // IndexedDB read failed — continue to API fetch
+      }
+
+      // ── Step 2: Fetch from API in background ──
       try {
         const [eventsRes, prayerRes, logRes] = await Promise.all([
           fetch(`/api/events?date=${date}`).catch(() => null),
@@ -148,14 +217,33 @@ export default function DayViewClient({ date }: { date: string }) {
 
         if (eventsRes?.ok) {
           const eventsData = await eventsRes.json();
-          // Filter to only events that fall on this date in the user's local timezone
-          // The API returns a wider window to handle timezone offsets
           const filtered = eventsData.filter((e: { startAt: string }) => {
             const d = new Date(e.startAt);
             const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             return localDateStr === date;
           });
           if (!cancelled) setEvents(filtered);
+
+          // Cache events in IndexedDB for offline use
+          try {
+            const db = getOfflineDB();
+            // Delete old events for this date, then insert fresh ones
+            await db.events.where("_dateKey").equals(date).delete();
+            await db.events.bulkPut(filtered.map((e: CalendarEvent & { id: string }) => ({
+              id: e.id,
+              userId: "", // not needed for client-side cache
+              title: e.title,
+              startAt: e.startAt,
+              endAt: e.endAt,
+              type: e.type,
+              color: e.color || null,
+              recurrenceRule: e.recurrenceRule || null,
+              _dateKey: date,
+              _cachedAt: Date.now(),
+            })));
+          } catch {
+            // IndexedDB write failed — non-critical
+          }
         }
 
         if (prayerRes?.ok) {
@@ -165,6 +253,25 @@ export default function DayViewClient({ date }: { date: string }) {
             if (prayerData.madhab) setUserMadhab(prayerData.madhab);
             if (prayerData.locationSet === false) setLocationSet(false);
             else setLocationSet(true);
+          }
+
+          // Cache prayer times in IndexedDB
+          try {
+            const db = getOfflineDB();
+            await db.prayerTimes.put({
+              date,
+              fajr: prayerData.fajr,
+              sunrise: prayerData.sunrise,
+              dhuhr: prayerData.dhuhr,
+              asr: prayerData.asr,
+              maghrib: prayerData.maghrib,
+              isha: prayerData.isha,
+              madhab: prayerData.madhab || null,
+              locationSet: prayerData.locationSet !== false,
+              _cachedAt: Date.now(),
+            });
+          } catch {
+            // non-critical
           }
         } else {
           // Read locationSet from the 404 response body if available
@@ -196,7 +303,6 @@ export default function DayViewClient({ date }: { date: string }) {
                   }
                 }
               } else if (syncRes?.status === 400) {
-                // Sync says no location set
                 if (!cancelled) setLocationSet(false);
               }
             } catch {
@@ -209,23 +315,49 @@ export default function DayViewClient({ date }: { date: string }) {
         if (logRes?.ok) {
           const logData = await logRes.json();
           if (!cancelled) setPrayerLogs(logData);
+
+          // Cache prayer logs in IndexedDB
+          try {
+            const db = getOfflineDB();
+            await db.prayerLogs.where("date").equals(date).delete();
+            await db.prayerLogs.bulkPut(logData.map((l: { prayerName: string; status: string; wentToMasjid: boolean | null; id?: string }) => ({
+              id: l.id || `${date}_${l.prayerName}`,
+              userId: "",
+              date,
+              prayerName: l.prayerName,
+              status: l.status,
+              wentToMasjid: l.wentToMasjid,
+              lastCheckinAt: null,
+              _cachedAt: Date.now(),
+            })));
+          } catch {
+            // non-critical
+          }
         }
 
-        // Fetch user timezone from settings
+        // Fetch user timezone from settings — update localStorage cache
         try {
           const settingsRes = await fetch("/api/settings/prayer-settings");
           if (settingsRes.ok && !cancelled) {
             const settingsData = await settingsRes.json();
-            if (settingsData.timezone) setUserTimezone(settingsData.timezone);
+            if (settingsData.timezone) {
+              setUserTimezone(settingsData.timezone);
+              // Cache in localStorage for instant offline access
+              setCachedPrayerSettings({
+                timezone: settingsData.timezone,
+                calculationMethod: settingsData.calculationMethod,
+                madhab: settingsData.madhab,
+                latitude: settingsData.latitude,
+                longitude: settingsData.longitude,
+              });
+            }
           }
         } catch {
-          // Use default timezone
+          // Use default timezone or cached value
         }
 
         if (!cancelled) setError(null);
       } catch {
-        // If offline, don't show an error — the SW will serve cached data
-        // via the stale-while-revalidate strategy. Just silently fail.
         if (!cancelled && !navigator.onLine) {
           setError(null);
         } else if (!cancelled) {
