@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { setSessionCookie } from "@/lib/auth/session";
-import { isValidEmail, isHoneypotTripped, isTimeTrapTripped } from "@/lib/validation";
+import { isValidEmail, isHoneypotTripped, isTimeTrapTripped, isValidFingerprintHash } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +27,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { email, password, website, company, renderedAt } = body as {
+  const { email, password, fingerprintHash, website, company, renderedAt } = body as {
     email?: string;
     password?: string;
+    fingerprintHash?: string;
     website?: string;
     company?: string;
     renderedAt?: number;
@@ -127,6 +128,24 @@ export async function POST(request: NextRequest) {
 
   // ── Set session ──
   await setSessionCookie(user);
+
+  // ── Trust this device if fingerprint provided ──
+  if (fingerprintHash && typeof fingerprintHash === "string" && isValidFingerprintHash(fingerprintHash)) {
+    try {
+      await db
+        .insert(schema.trustedDevices)
+        .values({
+          userId: user.id,
+          fingerprintHash,
+        })
+        .onConflictDoUpdate({
+          target: [schema.trustedDevices.userId, schema.trustedDevices.fingerprintHash],
+          set: { lastUsedAt: new Date() },
+        });
+    } catch {
+      // Non-critical — device trust is a convenience
+    }
+  }
 
   return NextResponse.json({ ok: true });
   } catch (err) {

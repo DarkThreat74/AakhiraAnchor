@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { isValidEmail } from "@/lib/validation";
+import { isValidEmail, isValidFingerprintHash } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,14 @@ export const dynamic = "force-dynamic";
 // Body: { email: string, fingerprintHash: string }
 // Returns: { trusted: boolean }
 // This does NOT log the user in — it only checks. Login happens via /api/auth/login.
+//
+// Security: This route is designed to NOT reveal whether an email exists.
+// - Invalid email or hash → immediate { trusted: false }
+// - Valid email but user not found → same response shape, same DB query count
+//   (we run a dummy query to equalize timing)
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request.headers);
-  if (!checkRateLimit("check-device", ip, 20, 15 * 60 * 1000)) {
+  if (!checkRateLimit("check-device", ip, 10, 15 * 60 * 1000)) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   }
 
@@ -27,11 +32,10 @@ export async function POST(request: NextRequest) {
 
   const normalizedEmail = email?.trim().toLowerCase();
   if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-    // Don't reveal whether email exists — just return trusted: false
     return NextResponse.json({ trusted: false });
   }
 
-  if (!fingerprintHash || typeof fingerprintHash !== "string" || fingerprintHash.length !== 64) {
+  if (!fingerprintHash || typeof fingerprintHash !== "string" || !isValidFingerprintHash(fingerprintHash)) {
     return NextResponse.json({ trusted: false });
   }
 
@@ -43,7 +47,13 @@ export async function POST(request: NextRequest) {
     .limit(1);
 
   if (!user) {
-    // Don't reveal whether email exists
+    // Timing equalization: run a dummy query so the response time is similar
+    // to the case where the user exists. This prevents email enumeration via timing.
+    await db
+      .select({ id: schema.trustedDevices.id })
+      .from(schema.trustedDevices)
+      .where(eq(schema.trustedDevices.fingerprintHash, fingerprintHash))
+      .limit(1);
     return NextResponse.json({ trusted: false });
   }
 

@@ -6,6 +6,7 @@
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TOKEN_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const FINGERPRINT_HASH_RE = /^[0-9a-f]{64}$/;
 
 export function isValidUUID(str: string): boolean {
   return UUID_RE.test(str);
@@ -17,6 +18,14 @@ export function isValidEmail(str: string): boolean {
 
 export function isValidToken(str: string): boolean {
   return TOKEN_RE.test(str);
+}
+
+/**
+ * Validate a SHA-256 fingerprint hash (64 lowercase hex chars).
+ * Prevents non-hex strings from reaching DB queries.
+ */
+export function isValidFingerprintHash(str: string): boolean {
+  return FINGERPRINT_HASH_RE.test(str);
 }
 
 /**

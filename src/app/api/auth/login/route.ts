@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { setSessionCookie } from "@/lib/auth/session";
-import { isValidEmail, isHoneypotTripped, isTimeTrapTripped } from "@/lib/validation";
+import { isValidEmail, isHoneypotTripped, isTimeTrapTripped, isValidFingerprintHash } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -75,9 +75,10 @@ export async function POST(request: NextRequest) {
   // ── Trusted device check ──
   // If a fingerprint hash is provided and matches a trusted device,
   // allow login without a password.
-  if (fingerprintHash && typeof fingerprintHash === "string" && fingerprintHash.length === 64) {
+  const validFingerprint = fingerprintHash && typeof fingerprintHash === "string" && isValidFingerprintHash(fingerprintHash);
+  if (validFingerprint) {
     const [trusted] = await db
-      .select()
+      .select({ id: schema.trustedDevices.id })
       .from(schema.trustedDevices)
       .where(and(
         eq(schema.trustedDevices.userId, user.id),
@@ -86,11 +87,12 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (trusted) {
-      // Update lastUsedAt
-      await db
-        .update(schema.trustedDevices)
+      // Update lastUsedAt — fire and forget, don't block login
+      db.update(schema.trustedDevices)
         .set({ lastUsedAt: new Date() })
-        .where(eq(schema.trustedDevices.id, trusted.id));
+        .where(eq(schema.trustedDevices.id, trusted.id))
+        .then(() => {})
+        .catch(() => {});
 
       await setSessionCookie({ id: user.id, email: user.email });
       return NextResponse.json({ ok: true, trustedDevice: true });
@@ -116,29 +118,21 @@ export async function POST(request: NextRequest) {
   await setSessionCookie({ id: user.id, email: user.email });
 
   // ── Trust this device if fingerprint provided ──
-  // (only after successful password login — this is how devices get trusted)
-  if (fingerprintHash && typeof fingerprintHash === "string" && fingerprintHash.length === 64) {
-    // Check if already trusted to avoid unique constraint violation
-    const [existing] = await db
-      .select({ id: schema.trustedDevices.id })
-      .from(schema.trustedDevices)
-      .where(and(
-        eq(schema.trustedDevices.userId, user.id),
-        eq(schema.trustedDevices.fingerprintHash, fingerprintHash),
-      ))
-      .limit(1);
-
-    if (!existing) {
-      await db.insert(schema.trustedDevices).values({
-        userId: user.id,
-        fingerprintHash,
-      });
-    } else {
-      // Update lastUsedAt
+  // Uses onConflictDoUpdate to upsert in a single query (no check-then-insert race)
+  if (validFingerprint) {
+    try {
       await db
-        .update(schema.trustedDevices)
-        .set({ lastUsedAt: new Date() })
-        .where(eq(schema.trustedDevices.id, existing.id));
+        .insert(schema.trustedDevices)
+        .values({
+          userId: user.id,
+          fingerprintHash,
+        })
+        .onConflictDoUpdate({
+          target: [schema.trustedDevices.userId, schema.trustedDevices.fingerprintHash],
+          set: { lastUsedAt: new Date() },
+        });
+    } catch {
+      // Non-critical — device trust is a convenience, not a security requirement
     }
   }
 

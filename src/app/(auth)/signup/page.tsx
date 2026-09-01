@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 import { ClawCaptcha } from "playcaptcha";
 import "playcaptcha/clawcaptcha.css";
+import { getHashedFingerprint } from "@/lib/auth/fingerprint";
 
 type Step = "email" | "captcha" | "password";
 
@@ -26,6 +27,12 @@ export default function SignupForm() {
   // The useEffect sets the real timestamp after mount.
   const renderedAtRef = useRef<number>(-1);
   useEffect(() => { renderedAtRef.current = Date.now(); }, []);
+
+  // ── Generate fingerprint on mount (non-blocking) ──
+  const [fingerprintHash, setFingerprintHash] = useState<string | null>(null);
+  useEffect(() => {
+    getHashedFingerprint().then(setFingerprintHash).catch(() => {});
+  }, []);
 
   // ── Step 1: email ──
   function handleEmailSubmit(e: React.FormEvent) {
@@ -87,6 +94,7 @@ export default function SignupForm() {
         body: JSON.stringify({
           email,
           password,
+          fingerprintHash: fingerprintHash || undefined,
           // Honeypots — server checks these too
           website: honeypotWebsite,
           company: honeypotCompany,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
 
@@ -160,6 +160,53 @@ export default function SettingsClient({
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Trusted devices state
+  interface TrustedDevice {
+    id: string;
+    label: string | null;
+    createdAt: string;
+    lastUsedAt: string;
+  }
+  const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const fetchTrustedDevices = useCallback(async () => {
+    setDevicesLoading(true);
+    try {
+      const res = await fetch("/api/auth/trusted-devices", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setTrustedDevices(data.devices || []);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setDevicesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    Promise.resolve().then(() => fetchTrustedDevices());
+  }, [fetchTrustedDevices]);
+
+  async function handleRevokeDevice(deviceId: string) {
+    setRevokingId(deviceId);
+    try {
+      const res = await fetch(`/api/auth/trusted-devices?id=${deviceId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setTrustedDevices((prev) => prev.filter((d) => d.id !== deviceId));
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setRevokingId(null);
+    }
+  }
 
   // Load share link status on mount
   useEffect(() => {
@@ -1334,6 +1381,70 @@ export default function SettingsClient({
               </button>
             )}
           </div>
+        </div>
+
+        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+
+        {/* ── Trusted Devices ── */}
+        <div className="p-4 sm:p-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Fingerprint className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Trusted devices
+            </h3>
+          </div>
+          <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+            Devices you&apos;ve logged in from can sign in without a password.
+            Revoke any you don&apos;t recognize.
+          </p>
+
+          {devicesLoading ? (
+            <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              <span>Loading devices…</span>
+            </div>
+          ) : trustedDevices.length === 0 ? (
+            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              No trusted devices yet. Your device becomes trusted after you log in with a password.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {trustedDevices.map((device) => {
+                const lastUsed = new Date(device.lastUsedAt);
+                const created = new Date(device.createdAt);
+                const daysAgo = Math.floor((Date.now() - lastUsed.getTime()) / (1000 * 60 * 60 * 24));
+                return (
+                  <div
+                    key={device.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                    style={{ borderColor: "var(--color-paper-3)" }}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <Smartphone className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                          {device.label || "Trusted device"}
+                        </p>
+                        <p className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                          Added {created.toLocaleDateString()} · Last used {daysAgo === 0 ? "today" : `${daysAgo}d ago`}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRevokeDevice(device.id)}
+                      disabled={revokingId === device.id}
+                      className="shrink-0 rounded-md p-1.5 transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
+                      style={{ minHeight: 36, minWidth: 36 }}
+                      aria-label="Revoke trusted device"
+                      title="Revoke"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--color-error)" }} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
