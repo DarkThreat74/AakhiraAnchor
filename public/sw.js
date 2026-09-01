@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v19";
+const CACHE_VERSION = "waqt-v20";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -157,10 +157,10 @@ self.addEventListener("install", (event) => {
     caches
       .open(STATIC_CACHE)
       .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
       .catch(() => {
         // If precache fails (e.g. offline), still install
       })
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -531,6 +531,21 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "CLEAR_API_CACHE") {
     // Clear API cache to prevent cross-user data leakage
     caches.delete(API_CACHE).catch(() => {});
+  }
+  if (event.data && event.data.type === "CLEAR_OUTBOX") {
+    // Clear the offline outbox to prevent queued writes from syncing to a different user
+    (async () => {
+      try {
+        const db = await openDB();
+        const tx = db.transaction(OUTBOX_STORE, "readwrite");
+        tx.objectStore(OUTBOX_STORE).clear();
+        await tx.done;
+      } catch {
+        // non-critical
+      }
+    })();
+    // Also clear all caches
+    caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n)))).catch(() => {});
   }
 });
 

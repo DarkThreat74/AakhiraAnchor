@@ -23,6 +23,7 @@ import { buildGoalTree, countCompleted, type GoalNode } from "@/lib/goals/tree";
 import { shareNative, isNativeApp, hapticNotification } from "@/lib/native-bridge";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { getOfflineDB } from "@/lib/offline/db";
+import { syncGoalsToCache } from "@/lib/offline/cache-writers";
 
 type View = "list" | "tree";
 
@@ -141,7 +142,11 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.goal) {
-          setGoals((prev) => [...prev, data.goal]);
+          setGoals((prev) => {
+            const updated = [...prev, data.goal];
+            syncGoalsToCache(updated);
+            return updated;
+          });
           void clearApiCache();
           if (isNativeApp()) void hapticNotification("success");
         } else {
@@ -182,7 +187,11 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.goal) {
-          setGoals((prev) => prev.map((g) => (g.id === id ? data.goal : g)));
+          setGoals((prev) => {
+            const updated = prev.map((g) => (g.id === id ? data.goal : g));
+            syncGoalsToCache(updated);
+            return updated;
+          });
           void clearApiCache();
           if (isNativeApp() && updates.status === "done") void hapticNotification("success");
         }
@@ -209,7 +218,9 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
               }
             }
           }
-          return prev.filter((g) => !toRemove.has(g.id));
+          const remaining = prev.filter((g) => !toRemove.has(g.id));
+          syncGoalsToCache(remaining);
+          return remaining;
         });
         void clearApiCache();
       }

@@ -7,6 +7,7 @@ import { getSunnahsForFard, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 import { useUISFX } from "@/components/uisfx-provider";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { hapticNotification, hapticImpact } from "@/lib/native-bridge";
+import { upsertSunnahLogToCache } from "@/lib/offline/cache-writers";
 
 interface PrayerCheckinPopup {
   prayer: PrayerKey;
@@ -138,6 +139,7 @@ export default function PrayerCheckinPopup({
       if (res.ok) {
         clearApiCache();
         setSunnahLogs((prev) => ({ ...prev, [sunnah.key]: !isLogged }));
+        upsertSunnahLogToCache(date, sunnah.key, !isLogged);
         void hapticImpact("light");
       } else {
         const data = await res.json().catch(() => ({}));

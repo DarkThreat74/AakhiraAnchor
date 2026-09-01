@@ -1,41 +1,18 @@
-Offline-first PWA: instant loads from IndexedDB, sync when online
+Offline-first: notification scheduler reads from IndexedDB cache
 
-ARCHITECTURE:
-- Added Dexie.js IndexedDB database (src/lib/offline/db.ts) as the client-side
-  source of truth for all app data (events, prayer times, prayer logs, sunnah
-  logs, analytics, friends, qadaa, goals)
-- Created useLocalData hook (src/lib/offline/useLocalData.ts) implementing the
-  local-first pattern: read from IndexedDB instantly → fetch from API in
-  background → update IndexedDB + React state
-- Added localStorage cache for prayer settings (timezone, madhab, calc method)
-  so the app never needs a network round-trip for timezone
+The notification scheduler runs every 5 minutes and on every visibility
+change, making 4+ API calls each time. When offline, it couldn't schedule
+any notifications because all prayer times and events came from the API.
 
-INSTANT LOADS (NO SPINNER):
-- DayViewClient: reads cached events, prayer times, prayer logs from IndexedDB
-  on mount → renders immediately. API fetch happens in background and updates
-  state + IndexedDB when it returns. Spinner only shows on first-ever visit.
-- MonthViewClient: same pattern — reads cached events + prayer logs for the
-  entire month from IndexedDB instantly, fetches fresh data in background.
-- PrayerDashboardClient: reads cached analytics, friends, qadaa, today's logs,
-  sunnahs, and prayer times from IndexedDB instantly. 7 API calls happen in
-  background and update both state and cache.
-- GoalsClient: caches goals in IndexedDB on mount, updates cache on sync.
+Updated schedulePrayerNotifications, checkMissedPrayers, and
+scheduleReminderNotifications to read from the IndexedDB cache first
+(works offline), falling back to the API only if the cache is empty.
 
-iOS SAFARI FALLBACK:
-- Background Sync API is not supported on iOS Safari. Added visibilitychange
-  listener in sw-register.tsx that triggers outbox sync when the app becomes
-  visible and online — catches cases where the user came back online while
-  the app was in the background.
-- Also syncs on initial load if online (catches app reopen while online).
-
-SERVICE WORKER IMPROVEMENTS:
-- Bumped cache version to waqt-v19
-- Added navigation preload support for faster page loads
-- Added /offline.html to precache URLs
-
-SECURITY:
-- Clear all IndexedDB offline cache + localStorage prayer settings on logout
-  to prevent cross-user data leakage on shared devices
+This means:
+- Notifications work offline using cached prayer times + events
+- Fewer API calls when online (uses cache, only hits API on cache miss)
+- The 5-minute re-schedule interval no longer generates 4+ network
+  requests per cycle when data is already cached
 
 Generated with [Devin](https://devin.ai)
 

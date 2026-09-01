@@ -5,7 +5,7 @@ import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLin
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
 import { clearOfflineCache } from "@/lib/offline/db";
-import { clearCachedPrayerSettings } from "@/lib/offline/settings-cache";
+import { clearCachedPrayerSettings, setCachedPrayerSettings } from "@/lib/offline/settings-cache";
 
 interface PrayerSettings {
   latitude: string;
@@ -345,6 +345,13 @@ export default function SettingsClient({
           calculationMethod: data.calculationMethod || selectedMethod,
           madhab: prayerSettings?.madhab || null,
         });
+        setCachedPrayerSettings({
+          timezone: locationResult.timezone,
+          calculationMethod: data.calculationMethod || selectedMethod,
+          madhab: prayerSettings?.madhab || null,
+          latitude: String(locationResult.lat),
+          longitude: String(locationResult.lng),
+        });
         setLocationMsg({ ok: true, text: "Location saved. Syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
@@ -385,6 +392,13 @@ export default function SettingsClient({
         const data = await res.json().catch(() => ({}));
         clearApiCache();
         setPrayerSettings({ ...prayerSettings, calculationMethod: data.calculationMethod || selectedMethod });
+        setCachedPrayerSettings({
+          timezone: prayerSettings.timezone,
+          calculationMethod: data.calculationMethod || selectedMethod,
+          madhab: selectedMadhab,
+          latitude: prayerSettings.latitude,
+          longitude: prayerSettings.longitude,
+        });
         setMethodMsg({ ok: true, text: "Method saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
@@ -424,6 +438,13 @@ export default function SettingsClient({
       if (res.ok) {
         clearApiCache();
         setPrayerSettings({ ...prayerSettings, madhab: selectedMadhab });
+        setCachedPrayerSettings({
+          timezone: prayerSettings.timezone,
+          calculationMethod: selectedMethod,
+          madhab: selectedMadhab,
+          latitude: prayerSettings.latitude,
+          longitude: prayerSettings.longitude,
+        });
         setMadhabMsg({ ok: true, text: "Madhab saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
@@ -780,6 +801,13 @@ export default function SettingsClient({
     // Clear local offline cache to prevent cross-user data leakage on shared devices
     try { await clearOfflineCache(); } catch { /* non-critical */ }
     try { clearCachedPrayerSettings(); } catch { /* non-critical */ }
+    try { clearApiCache(); } catch { /* non-critical */ }
+    // Tell service worker to clear its outbox too
+    try {
+      if (navigator.serviceWorker?.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "CLEAR_OUTBOX" });
+      }
+    } catch { /* non-critical */ }
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch {

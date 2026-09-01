@@ -6,6 +6,7 @@ import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs
 import { clearApiCache } from "@/lib/sw-helpers";
 import { shareNative, hapticNotification } from "@/lib/native-bridge";
 import { getOfflineDB } from "@/lib/offline/db";
+import { upsertSunnahLogToCache, cacheBlob } from "@/lib/offline/cache-writers";
 
 interface PerPrayerStats {
   prayer: string;
@@ -434,7 +435,11 @@ export default function PrayerDashboard() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && !data.offline && data.friend) {
         clearApiCache();
-        setFriends((prev) => [...prev, data.friend]);
+        setFriends((prev) => {
+          const updated = [...prev, data.friend];
+          cacheBlob("friends", updated);
+          return updated;
+        });
         setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}! You can now see each other's stats.`);
         setAddFriendCode("");
         setTimeout(() => setFriendSuccess(null), 4000);
@@ -457,7 +462,11 @@ export default function PrayerDashboard() {
       const res = await fetch(`/api/prayer-friends/remove?friendId=${friendId}`, { method: "DELETE" });
       if (res.ok) {
         clearApiCache();
-        setFriends((prev) => prev.filter((f) => f.id !== friendId));
+        setFriends((prev) => {
+          const updated = prev.filter((f) => f.id !== friendId);
+          cacheBlob("friends", updated);
+          return updated;
+        });
       }
     } catch {
       // ignore
@@ -478,6 +487,7 @@ export default function PrayerDashboard() {
         setTodaySunnahs((prev) =>
           !isLogged ? [...prev, sunnahKey] : prev.filter((k) => k !== sunnahKey),
         );
+        upsertSunnahLogToCache(todayStr, sunnahKey, !isLogged);
       } else {
         const data = await res.json().catch(() => ({}));
         setSunnahError(data.error || "Failed to update sunnah.");
@@ -508,17 +518,20 @@ export default function PrayerDashboard() {
       if (res.ok && !data.offline) {
         clearApiCache();
         setQadaa(data);
+        cacheBlob("qadaa", data);
         setQadaaMsg("Qadaa set up successfully.");
         setTimeout(() => setQadaaMsg(null), 3000);
       } else if (data.offline) {
-        setQadaa({
+        const offlineQadaa = {
           fajrOwed: setupFajr,
           dhuhrOwed: setupDhuhr,
           asrOwed: setupAsr,
           maghribOwed: setupMaghrib,
           ishaOwed: setupIsha,
           setupCompleted: true,
-        });
+        };
+        setQadaa(offlineQadaa);
+        cacheBlob("qadaa", offlineQadaa);
         setQadaaMsg("Saved offline — will sync when online.");
         setTimeout(() => setQadaaMsg(null), 3000);
       } else {
@@ -551,13 +564,16 @@ export default function PrayerDashboard() {
             };
             const col = colMap[adjustPrayer];
             if (col) {
-              setQadaa({ ...qadaa, [col]: Math.max(0, (qadaa[col] as number) + delta) });
+              const updated = { ...qadaa, [col]: Math.max(0, (qadaa[col] as number) + delta) };
+              setQadaa(updated);
+              cacheBlob("qadaa", updated);
             }
           }
           setQadaaMsg("Saved offline — will sync when online.");
         } else if (data && typeof data.fajrOwed === "number") {
-          // Server returned updated ledger — update local state
+          // Server returned updated ledger — update local state + cache
           setQadaa(data);
+          cacheBlob("qadaa", data);
           setQadaaMsg(delta > 0
             ? `Added ${delta} to ${PRAYER_LABELS[adjustPrayer]} qadaa.`
             : `Logged ${Math.abs(delta)} ${PRAYER_LABELS[adjustPrayer]} qadaa as prayed.`);

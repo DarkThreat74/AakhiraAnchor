@@ -9,6 +9,7 @@ import { getDisplayAsrTime, type PrayerKey } from "@/lib/prayer/checkin";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { getOfflineDB } from "@/lib/offline/db";
 import { getCachedPrayerSettings, setCachedPrayerSettings } from "@/lib/offline/settings-cache";
+import { syncEventsToCache, addEventToCache, updateEventInCache, deleteEventFromCache, upsertPrayerLogToCache } from "@/lib/offline/cache-writers";
 
 interface CalendarEvent {
   id: string;
@@ -395,6 +396,7 @@ export default function DayViewClient({ date }: { date: string }) {
               return localDateStr === date;
             });
             setEvents(filtered);
+            syncEventsToCache(date, filtered);
           }
         } catch {
           // ignore
@@ -417,6 +419,7 @@ export default function DayViewClient({ date }: { date: string }) {
               return localDateStr === date;
             });
             setEvents(filtered);
+            syncEventsToCache(date, filtered);
             setError(null);
           }
         } catch {
@@ -549,6 +552,7 @@ export default function DayViewClient({ date }: { date: string }) {
           const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
           if (localDateStr === date) {
             setEvents((prev) => [...prev, tempEvent]);
+            addEventToCache(date, tempEvent);
           }
           setSuccessMsg("Saved offline — will sync when online.");
           play("success");
@@ -579,11 +583,13 @@ export default function DayViewClient({ date }: { date: string }) {
               return localDateStr === date;
             });
             setEvents(filtered);
+            syncEventsToCache(date, filtered);
           }
           setSuccessMsg(`Created ${data.created} recurring events.`);
         } else {
           // Single event
           setEvents((prev) => [...prev, data]);
+          addEventToCache(date, data);
           // Clear SW API cache so next refetch includes the new event
           if ("caches" in window) {
             await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
@@ -622,6 +628,7 @@ export default function DayViewClient({ date }: { date: string }) {
     }
     // Optimistically remove from UI immediately
     setEvents((prev) => prev.filter((e) => e.id !== id));
+    deleteEventFromCache(id);
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -690,6 +697,7 @@ export default function DayViewClient({ date }: { date: string }) {
               return localDateStr === date;
             });
             setEvents(filtered);
+            syncEventsToCache(date, filtered);
           }
           setSuccessMsg(`Updated ${data.updated} events in series.`);
           play("success");
@@ -742,6 +750,7 @@ export default function DayViewClient({ date }: { date: string }) {
             _pending: true,
           };
           setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? localUpdated : e)));
+          updateEventInCache(localUpdated);
           setSuccessMsg("Saved offline — will sync when online.");
           play("success");
           setEditingEvent(null);
@@ -754,6 +763,7 @@ export default function DayViewClient({ date }: { date: string }) {
           return;
         }
         setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? updated : e)));
+        updateEventInCache(updated);
         play("success");
         // Clear SW API cache so stale events data isn't served on next refetch
         if ("caches" in window) {
@@ -1549,6 +1559,8 @@ export default function DayViewClient({ date }: { date: string }) {
               const filtered = prev.filter((l) => l.prayerName !== checkinPopup.prayer);
               return [...filtered, { prayerName: checkinPopup.prayer, status: result.status, wentToMasjid: result.wentToMasjid }];
             });
+            // Update IndexedDB cache so the check-in persists across page navigations
+            upsertPrayerLogToCache(date, checkinPopup.prayer, result.status, result.wentToMasjid);
             setCheckinPopup(null);
           }}
         />
