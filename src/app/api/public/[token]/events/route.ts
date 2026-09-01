@@ -49,6 +49,12 @@ export async function GET(
       return NextResponse.json({ error: "Invalid date range." }, { status: 400 });
     }
 
+    // Cap range to 31 days
+    const maxRange = 31 * 24 * 60 * 60 * 1000;
+    if (toDate.getTime() - fromDate.getTime() > maxRange) {
+      return NextResponse.json({ error: "Date range cannot exceed 31 days." }, { status: 400 });
+    }
+
     const events = await db
       .select({
         id: schema.events.id,
@@ -66,9 +72,13 @@ export async function GET(
           lte(schema.events.startAt, toDate),
         ),
       )
-      .orderBy(schema.events.startAt);
+      .orderBy(schema.events.startAt)
+      .limit(1000);
 
-    return NextResponse.json(events);
+    // Cache public responses for 60 seconds at the edge
+    const response = NextResponse.json(events);
+    response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+    return response;
   }
 
   // Single day query — use wide window to handle timezone offsets
@@ -99,7 +109,10 @@ export async function GET(
         lte(schema.events.startAt, endWithBuffer),
       ),
     )
-    .orderBy(schema.events.startAt);
+    .orderBy(schema.events.startAt)
+    .limit(500);
 
-  return NextResponse.json(events);
+  const response = NextResponse.json(events);
+  response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+  return response;
 }

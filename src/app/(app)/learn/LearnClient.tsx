@@ -220,7 +220,7 @@ function BlockRenderer({ block }: { block: LearnBlock }) {
 function HadithBlock({ hadith }: { hadith: Hadith }) {
   return (
     <div
-      className="rounded-lg px-4 py-4"
+      className="overflow-hidden rounded-lg px-4 py-4"
       style={{
         backgroundColor: "color-mix(in oklab, var(--color-accent) 4%, var(--color-paper))",
         border: "1px solid color-mix(in oklab, var(--color-accent) 15%, transparent)",

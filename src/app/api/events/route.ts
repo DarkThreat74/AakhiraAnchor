@@ -32,6 +32,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid date range." }, { status: 400 });
     }
 
+    // Cap range to 31 days to prevent unbounded queries
+    const maxRange = 31 * 24 * 60 * 60 * 1000;
+    if (toDate.getTime() - fromDate.getTime() > maxRange) {
+      return NextResponse.json({ error: "Date range cannot exceed 31 days." }, { status: 400 });
+    }
+
     const events = await db
       .select()
       .from(schema.events)
@@ -42,7 +48,8 @@ export async function GET(request: NextRequest) {
           lte(schema.events.startAt, toDate),
         ),
       )
-      .orderBy(schema.events.startAt);
+      .orderBy(schema.events.startAt)
+      .limit(1000);
 
     return NextResponse.json(events);
   }

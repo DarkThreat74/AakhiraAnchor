@@ -1,28 +1,42 @@
-Recurring event bulk edit, expanded color palette, public color sync
+Expand Learn, redesign Goals tree, scale to 100k users
 
-Three issues fixed:
+LEARN SECTION (8 new sections + mobile fix):
+- Added 8 new placeholder sections: Wudu & Ghusl, Prayer Times &
+  Significance, Khushu (Focus), Common Mistakes in Salah, Sujud as-Sahw,
+  Prayer in Congregation, Qadaa (Missed Prayers), Qasr (Travel Prayer)
+- All new sections use [Placeholder: ...] content pattern — no AI-generated
+  religious content, awaiting human curation per AGENTS.md rules
+- Fixed hadith block overflow on mobile by adding overflow-hidden
 
-1. Edit all recurring events at once:
-   - Added PATCH/DELETE /api/events/bulk endpoint that updates/deletes all
-     events sharing the same recurrenceRule for the current user
-   - Added "Apply changes to all events in this series" checkbox in the
-     edit form (only shows when editing a recurring event)
-   - Delete confirmation now offers "Delete this one" vs "Delete entire
-     series" for recurring events
-   - Added recurrenceRule to CalendarEvent interface so the client knows
-     which events belong to a series
+GOALS SECTION (inline descriptions + tree redesign):
+- Description now shows inline under goal title in smaller font (text-[11px],
+  line-clamp-2) — no longer hidden behind a "Details" button click
+- Completely redesigned tree view from card-based with connectors to
+  outline-style matching the list view:
+  * Same row component: chevron | checkbox | title + description | progress
+  * Subtle vertical guide lines instead of prominent connectors
+  * Progress badges (X/Y or checkmark) for parent goals
+  * No horizontal scroll, no fixed widths — works on all mobile sizes
+  * Action buttons (Branch, Delete) inline on the right
+- Memoized goal tree building with useMemo to avoid O(n) rebuild on every
+  render
 
-2. Expanded color palette from 8 to 16 visually distinct colors:
-   - Added Indigo, Mustard, Magenta, Pine, Rust, Slate Blue, Plum, Olive
-   - All 16 span the full hue wheel with varied saturation/lightness so
-     they remain distinguishable side-by-side
-
-3. Public calendar now shows user-chosen colors:
-   - PublicCalendarClient was using getReminderColor(event.title) (a
-     hash-based color) for reminders instead of event.color
-   - Now passes event.color to getReminderColor so user-chosen colors
-     are respected on the public shared calendar
-   - Same fix applied to MonthViewClient for consistency
+PERFORMANCE (100k user scale):
+- Cron checkin-scheduler: batch processing in chunks of 500 users instead
+  of loading all users into memory and using inArray with 100k+ IDs
+- Cron prayer-times-sync: only syncs users with stale data (left join to
+  find users without current-month cache), processes in batches of 200
+  with 5-concurrent parallelism for AlAdhan API calls
+- Admin users: paginated (50/page) with eq(role,'user') instead of
+  ne(role,'admin') for index usage, replaced raw ANY() SQL with inArray
+- Events API: capped range to 31 days, added limit(1000)
+- Prayer-log range API: capped range to 180 days, added limit(1000)
+- Public events API: capped range to 31 days, added limit, added
+  Cache-Control headers (s-maxage=60, stale-while-revalidate=300)
+- Auth login: select only needed columns instead of full user row
+- next.config.ts: added compress, poweredByHeader=false, image formats,
+  experimental.optimizePackageImports for lucide-react/date-fns, caching
+  headers for /sw.js and /manifest.webmanifest
 
 Generated with [Devin](https://devin.ai)
 

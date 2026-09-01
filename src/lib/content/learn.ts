@@ -435,4 +435,424 @@ export const learnSections: LearnSection[] = [
       },
     ],
   },
+
+  // ─── 6. Wudu & Ghusl ───
+  {
+    id: "wudu-and-ghusl",
+    title: "Wudu & Ghusl",
+    subtitle: "Ritual purification — the prerequisites for valid prayer",
+    icon: "Droplets",
+    content: [
+      {
+        type: "heading",
+        text: "When Wudu is Required",
+      },
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about when wudu is required and what breaks it. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Describe what nullifies wudu — e.g. natural discharges, deep sleep, loss of consciousness]",
+          "[Placeholder: Describe what requires ghusl (major ritual impurity) — e.g. marital relations, menstruation, postpartum bleeding]",
+          "[Placeholder: Describe the difference between things that break wudu vs. things that require ghusl]",
+          "[Placeholder: Describe touching the Quran and prayer as actions requiring wudu]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "The Steps of Wudu",
+      },
+      {
+        type: "steps",
+        items: [
+          "[Placeholder: Step 1 — Make the intention (niyyah) for wudu]",
+          "[Placeholder: Step 2 — Say Bismillah and wash both hands up to the wrists]",
+          "[Placeholder: Step 3 — Rinse the mouth three times]",
+          "[Placeholder: Step 4 — Clean the nostrils three times]",
+          "[Placeholder: Step 5 — Wash the face three times]",
+          "[Placeholder: Step 6 — Wash the right arm up to the elbow, then the left, three times each]",
+          "[Placeholder: Step 7 — Wipe the head (masah) once, including the ears]",
+          "[Placeholder: Step 8 — Wash the right foot up to the ankle, then the left, three times each]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "The Steps of Ghusl",
+      },
+      {
+        type: "steps",
+        items: [
+          "[Placeholder: Step 1 — Make the intention (niyyah) for ghusl]",
+          "[Placeholder: Step 2 — Wash both hands and the private areas]",
+          "[Placeholder: Step 3 — Perform a complete wudu as described above]",
+          "[Placeholder: Step 4 — Pour water over the head three times, ensuring it reaches the roots of the hair]",
+          "[Placeholder: Step 5 — Wash the entire body, starting with the right side, ensuring no part is left dry]",
+          "[Placeholder: Step 6 — Ensure water reaches all areas, including under nails and skin folds]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about the importance of purification as a prerequisite for valid prayer, and the spiritual dimension of cleanliness in Islam]",
+      },
+    ],
+  },
+
+  // ─── 7. Prayer Times & Their Significance ───
+  {
+    id: "prayer-times-significance",
+    title: "Prayer Times & Their Significance",
+    subtitle: "When each prayer begins and ends, and why the timing matters",
+    icon: "Clock",
+    content: [
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about the significance of each prayer's timing and why Muslims pray at specific astronomical moments. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "heading",
+        text: "The Five Prayer Windows",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Fajr — begins at true dawn (Fajr as-Sadiq) when light appears horizontally on the horizon, ends at sunrise]",
+          "[Placeholder: Dhuhr — begins when the sun passes its zenith (midday), ends when the shadow of an object equals its length]",
+          "[Placeholder: Asr — begins when the shadow of an object equals its length (Hanafi: twice its length), ends just before sunset]",
+          "[Placeholder: Maghrib — begins immediately after sunset, ends when the red twilight (shafaq ahmar) disappears]",
+          "[Placeholder: Isha — begins when the red twilight disappears, ends at true dawn (Fajr as-Sadiq) — preferred time is first half of the night]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "Calculating Prayer Times",
+      },
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about how prayer times are calculated — the astronomical basis, the role of latitude/longitude, and the different calculation methods used by Islamic authorities worldwide. To be filled with vetted, human-curated material.]",
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about why timing matters — praying within the window is an obligation, and the beginning of the window carries greater reward]",
+      },
+    ],
+  },
+
+  // ─── 8. Khushu — Focus in Prayer ───
+  {
+    id: "khushu",
+    title: "Khushu — Focus in Prayer",
+    subtitle: "How to pray with a calm, attentive heart",
+    icon: "Heart",
+    content: [
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about what khushu means — the state of humility, presence, and stillness of the heart during prayer. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "heading",
+        text: "Practical Techniques",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Arrive early and sit quietly before prayer to settle the mind]",
+          "[Placeholder: Understand the meaning of what you recite — reflect on the translation of Al-Fatihah and other surahs]",
+          "[Placeholder: Pray as though you can see Allah, or at least knowing that Allah sees you]",
+          "[Placeholder: Vary your recitation to keep the mind engaged rather than on autopilot]",
+          "[Placeholder: Pause briefly at each transition (standing to ruku, ruku to sujud) to be present]",
+          "[Placeholder: Make a specific dua in sujud, as the Prophet ﷺ said the closest a servant is to his Lord is in sujud]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "Common Distractions",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Intrusive thoughts about daily tasks and worries]",
+          "[Placeholder: Physical discomfort — tight clothing, hunger, needing the restroom]",
+          "[Placeholder: Environmental noise and movement around you]",
+          "[Placeholder: Rushing through rakats to finish quickly]",
+          "[Placeholder: Looking around or checking the time repeatedly]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about khushu being the essence of prayer — that a prayer without presence is like a body without a soul]",
+      },
+    ],
+  },
+
+  // ─── 9. Common Mistakes in Salah ───
+  {
+    id: "common-mistakes",
+    title: "Common Mistakes in Salah",
+    subtitle: "Errors that affect validity or reduce reward — and how to fix them",
+    icon: "AlertCircle",
+    content: [
+      {
+        type: "heading",
+        text: "Before Prayer",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Wudu issues — not washing the required areas completely, leaving parts of the skin dry]",
+          "[Placeholder: Clothing issues — not covering the awrah properly, wearing transparent or tight clothing]",
+          "[Placeholder: Not facing the qibla correctly, or not verifying the direction]",
+          "[Placeholder: Praying in a place that is ritually impure (najis) without realizing]",
+          "[Placeholder: Not making a clear intention (niyyah) for the specific prayer]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "During Prayer",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Rushing through the prayer — reciting too fast, not pausing between positions]",
+          "[Placeholder: Incorrect posture in ruku — back not straight, hands not on knees]",
+          "[Placeholder: Incorrect posture in sujud — not prostrating on seven bones, not still]",
+          "[Placeholder: Missing stillness (tuma'ninah) — each position should be held briefly before moving]",
+          "[Placeholder: Looking around during prayer instead of keeping eyes on the place of prostration]",
+          "[Placeholder: Reciting Al-Fatihah incorrectly or too quickly to articulate the letters]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "After Prayer",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Leaving immediately without making dua or dhikr]",
+          "[Placeholder: Not performing the sunnah prayers that follow]",
+          "[Placeholder: Turning away from the qibla immediately after salam without reflection]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about how most mistakes are honest errors that don't invalidate the prayer, but correcting them increases reward and focus]",
+      },
+    ],
+  },
+
+  // ─── 10. Sujud as-Sahw ───
+  {
+    id: "sujud-as-sahw",
+    title: "Sujud as-Sahw",
+    subtitle: "Forgetfulness prostrations — what to do when you add or skip something",
+    icon: "RefreshCw",
+    content: [
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about sujud as-sahw — the prostrations of forgetfulness performed when something is added, omitted, or doubted in the prayer. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "heading",
+        text: "When Sujud as-Sahw is Required",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Adding something to the prayer that is not part of it — e.g. an extra ruku or sujud]",
+          "[Placeholder: Omitting something obligatory (wajib) from the prayer — e.g. missing a required sitting or recitation]",
+          "[Placeholder: Doubting the number of rakats performed — unsure whether you prayed 3 or 4]",
+          "[Placeholder: Forgetting the first tashahhud and standing for the next rakat]",
+          "[Placeholder: Forgetting to sit between the two prostrations]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "How to Perform It",
+      },
+      {
+        type: "steps",
+        items: [
+          "[Placeholder: Step 1 — Complete the prayer as you remember it, reaching the final tashahhud]",
+          "[Placeholder: Step 2 — After the tashahhud, before the salam, say Allahu Akbar and prostrate]",
+          "[Placeholder: Step 3 — Say Subhana Rabbiyal A'la three times in the first prostration]",
+          "[Placeholder: Step 4 — Rise saying Allahu Akbar and sit briefly]",
+          "[Placeholder: Step 5 — Say Allahu Akbar and prostrate a second time]",
+          "[Placeholder: Step 6 — Say Subhana Rabbiyal A'la three times in the second prostration]",
+          "[Placeholder: Step 7 — Rise saying Allahu Akbar, sit for the final salam, and give salam to both sides]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about sujud as-sahw being a mercy — honest mistakes do not invalidate the prayer, and this prostration restores what was lost]",
+      },
+    ],
+  },
+
+  // ─── 11. Prayer in Congregation (Jama'ah) ───
+  {
+    id: "prayer-in-congregation",
+    title: "Prayer in Congregation (Jama'ah)",
+    subtitle: "How to pray behind an Imam and the etiquette of group prayer",
+    icon: "Users",
+    content: [
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about prayer in congregation — the 27-fold reward mentioned in authentic hadith, and the spiritual and communal significance of praying together. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "heading",
+        text: "Forming the Lines",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Straighten the rows — stand shoulder to shoulder, ankle to ankle, with no gaps]",
+          "[Placeholder: The first row is the most rewarded; fill the front rows before the back]",
+          "[Placeholder: The imam stands at the front, centered, leading the prayer]",
+          "[Placeholder: Men form the front rows, women form the rows behind]",
+          "[Placeholder: Complete the first row before starting the second — do not leave gaps]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "Joining Late (Masbuq)",
+      },
+      {
+        type: "steps",
+        items: [
+          "[Placeholder: Step 1 — Join the congregation wherever the imam is (even if in ruku or sujud)",
+          "[Placeholder: Step 2 — Do not make up the missed rakats immediately; follow the imam until he completes the prayer",
+          "[Placeholder: Step 3 — After the imam gives salam, stand and make up the rakats you missed",
+          "[Placeholder: Step 4 — Pray the missed rakats as you would normally, with recitation and all positions",
+          "[Placeholder: Step 5 — If you caught the ruku of a rakat, that rakat counts for you",
+        ],
+      },
+      {
+        type: "heading",
+        text: "Etiquette",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Do not rush ahead of the imam — follow each movement only after the imam has settled]",
+          "[Placeholder: Do not recite aloud when the imam is reciting silently, and vice versa]",
+          "[Placeholder: Come to the masjid calmly — do not run, even if you are late]",
+          "[Placeholder: Do not walk in front of someone who is praying]",
+          "[Placeholder: Wait for the imam to fully complete the salam before moving]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about the communal bond of congregational prayer and how it unites the community beyond individual worship]",
+      },
+    ],
+  },
+
+  // ─── 12. Qadaa — Making Up Missed Prayers ───
+  {
+    id: "qadaa-missed-prayers",
+    title: "Qadaa — Making Up Missed Prayers",
+    subtitle: "How to catch up on prayers you were unable to perform on time",
+    icon: "History",
+    content: [
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about the obligation of making up missed prayers (qadaa) — when it applies, the difference between deliberate and unintentional missing, and the scholarly positions. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "heading",
+        text: "How to Make Up Prayers",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Prayers missed due to sleep or forgetfulness must be made up as soon as remembered]",
+          "[Placeholder: Prayers missed due to valid excuse (illness, unconsciousness) are made up when able]",
+          "[Placeholder: The order of missed prayers should be maintained — pray the earliest missed prayer first]",
+          "[Placeholder: Shortening is not permitted for qadaa — pray the full number of rakats for each missed prayer]",
+          "[Placeholder: Qadaa prayers can be prayed at any time, including times when voluntary prayer is normally discouraged]",
+          "[Placeholder: Make the intention (niyyah) clearly — specify which prayer you are making up]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "A Practical Plan",
+      },
+      {
+        type: "steps",
+        items: [
+          "[Placeholder: Step 1 — Assess how many prayers you have missed and list them in order]",
+          "[Placeholder: Step 2 — Commit to making up one or two qadaa prayers alongside each current prayer]",
+          "[Placeholder: Step 3 — Pray the qadaa before or after the current obligatory prayer, as is manageable]",
+          "[Placeholder: Step 4 — Track your progress so you know which prayers remain]",
+          "[Placeholder: Step 5 — Be consistent — a small daily effort clears a large backlog over time]",
+          "[Placeholder: Step 6 — Do not despair — Allah accepts sincere repentance and effort]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about the qadaa ledger feature in this app — it helps you track missed prayers and your progress in making them up, turning an overwhelming backlog into a manageable plan]",
+      },
+    ],
+  },
+
+  // ─── 13. Qasr — The Traveler's Prayer ───
+  {
+    id: "qasr-travel-prayer",
+    title: "Qasr — The Traveler's Prayer",
+    subtitle: "Shortening and combining prayers when you are on a journey",
+    icon: "Plane",
+    content: [
+      {
+        type: "paragraph",
+        text: "[Placeholder: This section will contain curated content about what makes one a traveler (musafir) according to Islamic jurisprudence — the distance threshold, the intention to travel, and the duration of stay. To be filled with vetted, human-curated material from authenticated sources.]",
+      },
+      {
+        type: "heading",
+        text: "Shortening (Qasr)",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: The four-rakat obligatory prayers (Dhuhr, Asr, Isha) are shortened to two rakats while traveling]",
+          "[Placeholder: Fajr and Maghrib are not shortened — they remain as they are]",
+          "[Placeholder: Sunnah and voluntary prayers are not shortened]",
+          "[Placeholder: Shortening begins when you leave your city and end your journey's preparation]",
+          "[Placeholder: Shortening continues for the duration of travel, and for a limited time if you stay in one place (scholars differ on the exact number of days)]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "Combining (Jam')",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Dhuhr and Asr can be combined — prayed together at the time of either one]",
+          "[Placeholder: Maghrib and Isha can be combined — prayed together at the time of either one]",
+          "[Placeholder: Fajr is not combined with any other prayer]",
+          "[Placeholder: Combining can be done as jam' taqdim (praying the second prayer at the time of the first) or jam' ta'khir (praying the first prayer at the time of the second)]",
+          "[Placeholder: Scholars differ on whether combining is permitted only during travel or also in other circumstances]",
+        ],
+      },
+      {
+        type: "heading",
+        text: "Practical Scenarios",
+      },
+      {
+        type: "list",
+        items: [
+          "[Placeholder: Scenario 1 — A long flight during which two prayer times pass; how to make up and combine]",
+          "[Placeholder: Scenario 2 — Arriving at a destination and unsure whether to shorten or pray full]",
+          "[Placeholder: Scenario 3 — Traveling for a conference for 4 days — do you shorten the entire stay?]",
+          "[Placeholder: Scenario 4 — Commuting daily a long distance — does this count as travel for qasr?]",
+        ],
+      },
+      {
+        type: "callout",
+        text: "[Placeholder: Callout about the concession of qasr being a mercy from Allah — travel is difficult, and the religion is designed to bring ease, not hardship]",
+      },
+    ],
+  },
 ];

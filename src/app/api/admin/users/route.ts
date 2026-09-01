@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { count, ne, desc, sql } from "drizzle-orm";
+import { count, eq, desc, sql, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { requireAdmin, AdminAuthError } from "@/lib/auth/admin";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/admin/users — list all non-admin users with details
+const PAGE_SIZE = 50;
+
+// GET /api/admin/users — paginated list of non-admin users with stats
+// Query params: ?page=1 (default 1), ?pageSize=50 (max 100)
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin(request);
 
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || String(PAGE_SIZE), 10)));
+    const offset = (page - 1) * pageSize;
+
+    // Paginated user query — use eq(role, 'user') instead of ne(role, 'admin') for index usage
     const users = await db
       .select({
         id: schema.users.id,
@@ -20,16 +29,23 @@ export async function GET(request: NextRequest) {
         role: schema.users.role,
       })
       .from(schema.users)
-      .where(ne(schema.users.role, "admin"))
-      .orderBy(desc(schema.users.createdAt));
+      .where(eq(schema.users.role, "user"))
+      .orderBy(desc(schema.users.createdAt))
+      .limit(pageSize)
+      .offset(offset);
 
-    // Get prayer log counts and last activity per user
+    // Get total count for pagination
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(schema.users)
+      .where(eq(schema.users.role, "user"));
+
     const userIds = users.map((u) => u.id);
     if (userIds.length === 0) {
-      return NextResponse.json({ users: [] });
+      return NextResponse.json({ users: [], total: 0, page, pageSize, totalPages: 0 });
     }
 
-    // Batch query: prayer log count + last checkin per user
+    // Batch queries using inArray (safe with ≤100 IDs per page)
     const logStats = await db
       .select({
         userId: schema.prayerLog.userId,
@@ -38,30 +54,27 @@ export async function GET(request: NextRequest) {
         prayedCount: sql<number>`count(*) filter (where ${schema.prayerLog.status} = 'prayed')`,
       })
       .from(schema.prayerLog)
-      .where(sql`${schema.prayerLog.userId} = any(${userIds})`)
+      .where(inArray(schema.prayerLog.userId, userIds))
       .groupBy(schema.prayerLog.userId);
 
-    // Batch query: event count per user
     const eventStats = await db
       .select({
         userId: schema.events.userId,
         eventCount: count(),
       })
       .from(schema.events)
-      .where(sql`${schema.events.userId} = any(${userIds})`)
+      .where(inArray(schema.events.userId, userIds))
       .groupBy(schema.events.userId);
 
-    // Batch query: friend count per user
     const friendStats = await db
       .select({
         userId: schema.prayerFriends.userId,
         friendCount: count(),
       })
       .from(schema.prayerFriends)
-      .where(sql`${schema.prayerFriends.userId} = any(${userIds})`)
+      .where(inArray(schema.prayerFriends.userId, userIds))
       .groupBy(schema.prayerFriends.userId);
 
-    // Merge stats into user objects
     const logMap = new Map(logStats.map((l) => [l.userId, l]));
     const eventMap = new Map(eventStats.map((e) => [e.userId, e.eventCount]));
     const friendMap = new Map(friendStats.map((f) => [f.userId, f.friendCount]));
@@ -78,7 +91,13 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ users: usersWithStats });
+    return NextResponse.json({
+      users: usersWithStats,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    });
   } catch (e) {
     if (e instanceof AdminAuthError) {
       return NextResponse.json({ error: e.message }, { status: e.status });

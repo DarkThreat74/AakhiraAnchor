@@ -23,11 +23,13 @@ export const maxDuration = 300;
 //
 // Idempotent — safe to run multiple times.
 //
-// ─── Optimization for 10k+ users ───
-// Previously this cron did ~80k individual queries (10k users × 8 queries each).
-// Now it batches all reads into 4 queries upfront, then does targeted updates
-// only for rows that need changing. This reduces DB round-trips from ~80k to
-// ~4 + (number of pending prayers that need resolving) + (number of push sends).
+// ─── Optimization for 100k+ users ───
+// Processes users in BATCHES of 500 to avoid:
+// - Postgres prepared-statement parameter limits (inArray with 100k IDs)
+// - Memory exhaustion from loading all data at once
+// - Single-function timeout from processing too many users sequentially
+const BATCH_SIZE = 500;
+
 export async function POST(request: NextRequest) {
   if (!verifyCronAuth(request.headers.get("authorization"), request.headers.get("x-vercel-cron") === "1")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,48 +44,72 @@ export async function POST(request: NextRequest) {
   let notificationsSent = 0;
   let assumedResolved = 0;
 
-  // ─── Batch fetch all data upfront (4 queries instead of 80k) ───
-  const allSettings = await db.select().from(schema.prayerSettings);
+  // Fetch all user IDs first (lightweight — just IDs, not full settings)
+  const allSettings = await db.select({
+    userId: schema.prayerSettings.userId,
+    timezone: schema.prayerSettings.timezone,
+    latitude: schema.prayerSettings.latitude,
+    longitude: schema.prayerSettings.longitude,
+    calculationMethod: schema.prayerSettings.calculationMethod,
+    madhab: schema.prayerSettings.madhab,
+  }).from(schema.prayerSettings);
+
   if (allSettings.length === 0) {
     return NextResponse.json({ ok: true, notificationsSent: 0, assumedResolved: 0 });
   }
 
-  const userIds = allSettings.map((s) => s.userId);
+  // Process in batches to avoid inArray with 100k+ IDs
+  for (let batchStart = 0; batchStart < allSettings.length; batchStart += BATCH_SIZE) {
+    const batch = allSettings.slice(batchStart, batchStart + BATCH_SIZE);
+    const batchUserIds = batch.map((s) => s.userId);
+
+    try {
+      const result = await processUserBatch(batch, batchUserIds);
+      notificationsSent += result.notificationsSent;
+      assumedResolved += result.assumedResolved;
+    } catch (batchErr) {
+      console.error("[cron:checkin-scheduler] batch failed at offset", batchStart, batchErr);
+    }
+  }
+
+  return NextResponse.json({ ok: true, notificationsSent, assumedResolved });
+}
+
+async function processUserBatch(
+  settings: Array<{ userId: string; timezone: string; latitude: string; longitude: string; calculationMethod: number; madhab: string | null }>,
+  userIds: string[],
+): Promise<{ notificationsSent: number; assumedResolved: number }> {
+  let notificationsSent = 0;
+  let assumedResolved = 0;
 
   // Compute all possible dates we need (today + yesterday for each timezone)
   const allDates = new Set<string>();
-  for (const settings of allSettings) {
-    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
+  const yesterdayDates = new Set<string>();
+  for (const s of settings) {
+    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: s.timezone }));
     const today = userNow.toISOString().split("T")[0];
     const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
     const yesterdayStr = yesterday.toISOString().split("T")[0];
     allDates.add(today);
     allDates.add(yesterdayStr);
+    yesterdayDates.add(yesterdayStr);
   }
   const dateList = Array.from(allDates);
 
-  // Batch 1: All prayer times cache rows for relevant dates
+  // Batch 1: prayer times cache rows for relevant dates
   const allCachedTimes = await db
     .select()
     .from(schema.prayerTimesCache)
     .where(inArray(schema.prayerTimesCache.date, dateList));
 
-  // Build map: userId -> date -> cachedTimes
   const cachedTimesMap = new Map<string, Map<string, typeof allCachedTimes[0]>>();
   for (const row of allCachedTimes) {
-    if (!row.userId) continue; // skip orphaned rows (userId is nullable in schema)
+    if (!row.userId) continue;
     if (!cachedTimesMap.has(row.userId)) cachedTimesMap.set(row.userId, new Map());
     cachedTimesMap.get(row.userId)!.set(row.date, row);
   }
 
-  // Batch 2: All prayer logs for yesterday's dates (only pending ones need updating)
-  const yesterdayDates = new Set<string>();
-  for (const settings of allSettings) {
-    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
-    const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
-    yesterdayDates.add(yesterday.toISOString().split("T")[0]);
-  }
-
+  // Batch 2: pending prayer logs for yesterday's dates
   const allPendingLogs = await db
     .select()
     .from(schema.prayerLog)
@@ -95,7 +121,6 @@ export async function POST(request: NextRequest) {
       ),
     );
 
-  // Build map: userId -> date -> prayerName -> log
   const pendingLogsMap = new Map<string, Map<string, Map<string, typeof allPendingLogs[0]>>>();
   for (const log of allPendingLogs) {
     if (!pendingLogsMap.has(log.userId)) pendingLogsMap.set(log.userId, new Map());
@@ -103,7 +128,7 @@ export async function POST(request: NextRequest) {
     pendingLogsMap.get(log.userId)!.get(log.date)!.set(log.prayerName, log);
   }
 
-  // Batch 3: All notification prefs
+  // Batch 3: notification prefs
   const allPrefs = await db
     .select()
     .from(schema.notificationPrefs)
@@ -112,7 +137,7 @@ export async function POST(request: NextRequest) {
   const prefsMap = new Map<string, typeof allPrefs[0]>();
   for (const prefs of allPrefs) prefsMap.set(prefs.userId, prefs);
 
-  // Batch 4: All push subscriptions
+  // Batch 4: push subscriptions
   const allSubs = await db
     .select()
     .from(schema.pushSubscriptions)
@@ -124,16 +149,16 @@ export async function POST(request: NextRequest) {
     subsMap.get(sub.userId)!.push(sub);
   }
 
-  // ─── Process each user using the batched data ───
-  for (const settings of allSettings) {
+  // Process each user using the batched data
+  for (const s of settings) {
     try {
-      const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: settings.timezone }));
+      const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: s.timezone }));
       const today = userNow.toISOString().split("T")[0];
       const yesterday = new Date(userNow.getTime() - 24 * 60 * 60 * 1000);
       const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-      // ─── 1. Resolve yesterday's unmarked prayers as assumed_prayed ───
-      const yesterdayCached = cachedTimesMap.get(settings.userId)?.get(yesterdayStr);
+      // 1. Resolve yesterday's unmarked prayers as assumed_prayed
+      const yesterdayCached = cachedTimesMap.get(s.userId)?.get(yesterdayStr);
       if (yesterdayCached) {
         const yesterdayTimings = {
           fajr: yesterdayCached.fajr,
@@ -151,13 +176,12 @@ export async function POST(request: NextRequest) {
           const window = getPrayerWindow(prayerName, yesterdayTimings);
           if (!isWindowClosed(window, userNow)) continue;
 
-          const existingLog = pendingLogsMap.get(settings.userId)?.get(yesterdayStr)?.get(prayerName);
+          const existingLog = pendingLogsMap.get(s.userId)?.get(yesterdayStr)?.get(prayerName);
           if (existingLog) {
             logIdsToUpdate.push(existingLog.id);
           }
         }
 
-        // Single batched update for all of this user's pending prayers
         if (logIdsToUpdate.length > 0) {
           await db
             .update(schema.prayerLog)
@@ -167,15 +191,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // ─── 2. Send daily prayer schedule push ───
-      const cached = cachedTimesMap.get(settings.userId)?.get(today);
+      // 2. Send daily prayer schedule push
+      const cached = cachedTimesMap.get(s.userId)?.get(today);
       if (!cached) continue;
 
-      const prefs = prefsMap.get(settings.userId);
+      const prefs = prefsMap.get(s.userId);
       const earlyMidPref = prefs?.prayerEarlyMid || "push";
       if (earlyMidPref === "none") continue;
 
-      const subs = subsMap.get(settings.userId);
+      const subs = subsMap.get(s.userId);
       if (!subs || subs.length === 0) continue;
 
       const formatTime = (t: string) => {
@@ -223,10 +247,9 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (userErr) {
-      // One failing user must not abort the entire cron run.
-      console.error("[cron:checkin-scheduler] user failed", settings.userId, userErr);
+      console.error("[cron:checkin-scheduler] user failed", s.userId, userErr);
     }
   }
 
-  return NextResponse.json({ ok: true, notificationsSent, assumedResolved });
+  return { notificationsSent, assumedResolved };
 }

@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   // ── Look up user ──
   const [user] = await db
-    .select()
+    .select({ id: schema.users.id, email: schema.users.email, passwordHash: schema.users.passwordHash, role: schema.users.role, firstName: schema.users.firstName })
     .from(schema.users)
     .where(eq(schema.users.email, normalizedEmail))
     .limit(1);
