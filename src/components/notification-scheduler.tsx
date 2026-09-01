@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { isNativeApp, requestPushPermission, getPushToken, getPlatform } from "@/lib/native-bridge";
+import { getOfflineDB } from "@/lib/offline/db";
 
 /**
  * Client-side notification scheduler.
@@ -99,21 +100,44 @@ export default function NotificationScheduler() {
 
   const schedulePrayerNotifications = useCallback(async (date: string) => {
     try {
-      let res = await fetch(`/api/prayer-times?date=${date}`);
-      if (!res.ok) {
-        // Prayer times not cached — trigger a sync, then retry
-        try {
-          await fetch("/api/prayer-times/sync", { method: "POST" });
-          // Wait a moment for the sync to complete
-          await new Promise((r) => setTimeout(r, 2000));
-          res = await fetch(`/api/prayer-times?date=${date}`);
-        } catch {
-          return;
+      // ── Read from IndexedDB first (works offline) ──
+      let data: PrayerTimes & { madhab?: string | null } | null = null;
+      try {
+        const db = getOfflineDB();
+        const cached = await db.prayerTimes.get(date);
+        if (cached && cached.fajr) {
+          data = {
+            fajr: cached.fajr,
+            sunrise: cached.sunrise,
+            dhuhr: cached.dhuhr,
+            asr: cached.asr,
+            maghrib: cached.maghrib,
+            isha: cached.isha,
+            madhab: cached.madhab,
+          };
         }
+      } catch {
+        // IndexedDB read failed — fall through to API
       }
-      if (!res.ok) return;
 
-      const data = await res.json().catch(() => null);
+      // ── If not in IndexedDB, fetch from API ──
+      if (!data) {
+        let res = await fetch(`/api/prayer-times?date=${date}`);
+        if (!res.ok) {
+          // Prayer times not cached — trigger a sync, then retry
+          try {
+            await fetch("/api/prayer-times/sync", { method: "POST" });
+            await new Promise((r) => setTimeout(r, 2000));
+            res = await fetch(`/api/prayer-times?date=${date}`);
+          } catch {
+            return;
+          }
+        }
+        if (!res.ok) return;
+
+        data = await res.json().catch(() => null);
+      }
+
       if (!data) return;
       // The API returns { ...cached, madhab } — extract just the prayer times
       const times: PrayerTimes = {
@@ -170,10 +194,33 @@ export default function NotificationScheduler() {
   const checkMissedPrayers = useCallback(async () => {
     try {
       const today = new Date().toLocaleDateString("en-CA");
-      const res = await fetch(`/api/prayer-times?date=${today}`);
-      if (!res.ok) return;
 
-      const data = await res.json().catch(() => null);
+      // ── Read from IndexedDB first (works offline) ──
+      let data: PrayerTimes | null = null;
+      try {
+        const db = getOfflineDB();
+        const cached = await db.prayerTimes.get(today);
+        if (cached && cached.fajr) {
+          data = {
+            fajr: cached.fajr,
+            sunrise: cached.sunrise,
+            dhuhr: cached.dhuhr,
+            asr: cached.asr,
+            maghrib: cached.maghrib,
+            isha: cached.isha,
+          };
+        }
+      } catch {
+        // IndexedDB read failed — fall through to API
+      }
+
+      // ── If not in IndexedDB, fetch from API ──
+      if (!data) {
+        const res = await fetch(`/api/prayer-times?date=${today}`);
+        if (!res.ok) return;
+        data = await res.json().catch(() => null);
+      }
+
       if (!data) return;
       const times: PrayerTimes = {
         fajr: data.fajr,
@@ -251,9 +298,31 @@ export default function NotificationScheduler() {
 
   const scheduleReminderNotifications = useCallback(async (date: string) => {
     try {
-      const res = await fetch(`/api/events?date=${date}`);
-      if (!res.ok) return;
-      const events: CalendarEvent[] = await res.json().catch(() => null);
+      // ── Read from IndexedDB first (works offline) ──
+      let events: CalendarEvent[] | null = null;
+      try {
+        const db = getOfflineDB();
+        const cached = await db.events.where("_dateKey").equals(date).toArray();
+        if (cached.length > 0) {
+          events = cached.map((e) => ({
+            id: e.id,
+            title: e.title,
+            startAt: e.startAt,
+            type: e.type as "block" | "task" | "reminder",
+            // notify flag not stored in cache — default to allowing notifications
+          }));
+        }
+      } catch {
+        // IndexedDB read failed — fall through to API
+      }
+
+      // ── If not in IndexedDB (or empty), fetch from API ──
+      if (!events || events.length === 0) {
+        const res = await fetch(`/api/events?date=${date}`);
+        if (!res.ok) return;
+        events = await res.json().catch(() => null);
+      }
+
       if (!events || !Array.isArray(events)) return;
 
       const now = new Date();
