@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
 import { clearOfflineCache } from "@/lib/offline/db";
@@ -73,6 +73,50 @@ function RedDot() {
   );
 }
 
+// Collapsible section wrapper
+function CollapsibleSection({
+  icon,
+  title,
+  badge,
+  badgeColor,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  badge?: string;
+  badgeColor?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <>
+      <div className="p-4 sm:p-6">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex w-full items-center justify-between gap-2"
+        >
+          <div className="flex items-center gap-2">
+            {icon}
+            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{title}</h2>
+            {badge && (
+              <span className="text-xs" style={{ color: badgeColor || "var(--color-ink-muted)" }}>{badge}</span>
+            )}
+          </div>
+          {open ? (
+            <ChevronUp className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
+          )}
+        </button>
+        {open && <div className="mt-4">{children}</div>}
+      </div>
+      <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+    </>
+  );
+}
+
 export default function SettingsClient({
   displayName: initialDisplayName,
   prayerSettings: initialSettings,
@@ -85,8 +129,7 @@ export default function SettingsClient({
   const [prayerSettings, setPrayerSettings] = useState<PrayerSettings | null>(initialSettings);
   const [todayPrayerTimes, setTodayPrayerTimes] = useState<PrayerTimes | null>(initialTimes);
 
-  // Theme state: "light" | "dark" | "system"
-  // Lazy initializer reads localStorage once — no effect needed
+  // Theme state
   const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
     if (typeof window === "undefined") return "system";
     const stored = localStorage.getItem("waqt:theme");
@@ -124,6 +167,7 @@ export default function SettingsClient({
   } | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationMsg, setLocationMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [editingLocation, setEditingLocation] = useState(false);
 
   // Calculation method state
   const [selectedMethod, setSelectedMethod] = useState<number>(initialSettings?.calculationMethod || 2);
@@ -213,9 +257,6 @@ export default function SettingsClient({
   // Load share link status on mount
   useEffect(() => {
     if (isNativeApp()) {
-      // On native, Notification API may not exist. Default to "default"
-      // so the Enable button shows. The native push permission is requested
-      // when the user taps Enable.
       requestAnimationFrame(() => setNotifPermission("default"));
     } else if ("Notification" in window) {
       const perm = Notification.permission;
@@ -225,7 +266,6 @@ export default function SettingsClient({
     }
 
     if (isNativeApp()) {
-      // Native app: SW is intentionally disabled, push uses APNs/FCM
       requestAnimationFrame(() => {
         setSwStatus("Disabled (native app)");
         setPushStatus("Native push (APNs/FCM)");
@@ -337,6 +377,7 @@ export default function SettingsClient({
           longitude: locationResult.lng,
           timezone: locationResult.timezone,
           calculationMethod: selectedMethod,
+          madhab: selectedMadhab,
         }),
       });
       if (res.ok) {
@@ -347,16 +388,17 @@ export default function SettingsClient({
           longitude: locationResult.lng,
           timezone: locationResult.timezone,
           calculationMethod: data.calculationMethod || selectedMethod,
-          madhab: prayerSettings?.madhab || null,
+          madhab: data.madhab || selectedMadhab,
         });
         setCachedPrayerSettings({
           timezone: locationResult.timezone,
           calculationMethod: data.calculationMethod || selectedMethod,
-          madhab: prayerSettings?.madhab || null,
+          madhab: data.madhab || selectedMadhab,
           latitude: String(locationResult.lat),
           longitude: String(locationResult.lng),
         });
         setLocationMsg({ ok: true, text: "Location saved. Syncing prayer times..." });
+        setEditingLocation(false);
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
           const syncData = await syncRes.json().catch(() => ({}));
@@ -376,57 +418,16 @@ export default function SettingsClient({
     }
   }
 
-  async function handleSaveMethod() {
+  // Unified save function for method + madhab — auto-called on dropdown change
+  async function savePrayerSettings(field: "method" | "madhab", methodVal?: number, madhabVal?: string) {
     if (!prayerSettings) return;
-    setSavingMethod(true);
-    setMethodMsg(null);
-    try {
-      const res = await fetch("/api/onboarding/save-settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          latitude: prayerSettings.latitude,
-          longitude: prayerSettings.longitude,
-          timezone: prayerSettings.timezone,
-          calculationMethod: selectedMethod,
-          madhab: selectedMadhab,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        clearApiCache();
-        setPrayerSettings({ ...prayerSettings, calculationMethod: data.calculationMethod || selectedMethod });
-        setCachedPrayerSettings({
-          timezone: prayerSettings.timezone,
-          calculationMethod: data.calculationMethod || selectedMethod,
-          madhab: selectedMadhab,
-          latitude: prayerSettings.latitude,
-          longitude: prayerSettings.longitude,
-        });
-        setMethodMsg({ ok: true, text: "Method saved. Re-syncing prayer times..." });
-        const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
-        if (syncRes.ok) {
-          const syncData = await syncRes.json().catch(() => ({}));
-          setMethodMsg({ ok: true, text: `Method updated. Prayer times re-synced (${syncData.daysCached ?? 0} days).` });
-          await refreshPrayerTimes();
-        } else {
-          setMethodMsg({ ok: true, text: "Method saved. Click Sync to update prayer times." });
-        }
-      } else {
-        const data = await res.json();
-        setMethodMsg({ ok: false, text: data.error || "Failed to save method." });
-      }
-    } catch {
-      setMethodMsg({ ok: false, text: "Network error." });
-    } finally {
-      setSavingMethod(false);
-    }
-  }
+    const method = methodVal ?? selectedMethod;
+    const madhab = madhabVal ?? selectedMadhab;
+    const setSaving = field === "method" ? setSavingMethod : setSavingMadhab;
+    const setMsg = field === "method" ? setMethodMsg : setMadhabMsg;
 
-  async function handleSaveMadhab() {
-    if (!prayerSettings) return;
-    setSavingMadhab(true);
-    setMadhabMsg(null);
+    setSaving(true);
+    setMsg(null);
     try {
       const res = await fetch("/api/onboarding/save-settings", {
         method: "POST",
@@ -435,37 +436,44 @@ export default function SettingsClient({
           latitude: prayerSettings.latitude,
           longitude: prayerSettings.longitude,
           timezone: prayerSettings.timezone,
-          calculationMethod: selectedMethod,
-          madhab: selectedMadhab,
+          calculationMethod: method,
+          madhab,
         }),
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         clearApiCache();
-        setPrayerSettings({ ...prayerSettings, madhab: selectedMadhab });
+        const updated = {
+          ...prayerSettings,
+          calculationMethod: data.calculationMethod || method,
+          madhab: data.madhab || madhab,
+        };
+        setPrayerSettings(updated);
         setCachedPrayerSettings({
           timezone: prayerSettings.timezone,
-          calculationMethod: selectedMethod,
-          madhab: selectedMadhab,
+          calculationMethod: data.calculationMethod || method,
+          madhab: data.madhab || madhab,
           latitude: prayerSettings.latitude,
           longitude: prayerSettings.longitude,
         });
-        setMadhabMsg({ ok: true, text: "Madhab saved. Re-syncing prayer times..." });
+        setMsg({ ok: true, text: "Saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
           const syncData = await syncRes.json().catch(() => ({}));
-          setMadhabMsg({ ok: true, text: `Madhab updated. Prayer times re-synced (${syncData.daysCached ?? 0} days).` });
+          setMsg({ ok: true, text: `Updated. Prayer times re-synced (${syncData.daysCached ?? 0} days).` });
           await refreshPrayerTimes();
         } else {
-          setMadhabMsg({ ok: true, text: "Madhab saved. Click Sync to update prayer times." });
+          setMsg({ ok: true, text: "Saved. Click Sync to update prayer times." });
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        setMadhabMsg({ ok: false, text: data.error || "Failed to save madhab." });
+        setMsg({ ok: false, text: data.error || "Failed to save." });
       }
     } catch {
-      setMadhabMsg({ ok: false, text: "Network error." });
+      setMsg({ ok: false, text: "Network error." });
     } finally {
-      setSavingMadhab(false);
+      setSaving(false);
+      setTimeout(() => setMsg(null), 4000);
     }
   }
 
@@ -607,7 +615,6 @@ export default function SettingsClient({
     setNotifEnabling(true);
     setNotifMsg(null);
     try {
-      // On native, use Capacitor push notifications instead of web push
       if (isNativeApp()) {
         const { requestPushPermission, getPushToken, getPlatform } = await import("@/lib/native-bridge");
         const granted = await requestPushPermission();
@@ -633,6 +640,33 @@ export default function SettingsClient({
         setNotifMsg("Notifications are not supported on this device.");
         return;
       }
+
+      // iOS Safari requires requestPermission() to be called synchronously
+      // inside the user gesture — any await before it consumes the gesture
+      // and the prompt is silently suppressed. So we ask FIRST.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as unknown as { standalone?: boolean }).standalone === true;
+
+      if (isIOS && !isStandalone) {
+        setNotifMsg("On iOS, add Waqt to your Home Screen first, then open it from the icon to enable push notifications.");
+        return;
+      }
+
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+
+      if (perm !== "granted") {
+        if (perm === "denied") {
+          setNotifMsg("Notifications were blocked. Enable them in your browser settings to receive prayer alerts.");
+        } else {
+          setNotifMsg("Notification permission was dismissed. Tap the button again to enable.");
+        }
+        return;
+      }
+
+      // Permission granted — now register SW and subscribe to push
       let reg: ServiceWorkerRegistration | undefined;
       if ("serviceWorker" in navigator) {
         reg = await navigator.serviceWorker.getRegistration();
@@ -645,68 +679,59 @@ export default function SettingsClient({
           }
         }
       }
-      const perm = await Notification.requestPermission();
-      setNotifPermission(perm);
-      if (perm === "granted") {
-        let pushSubscribed = false;
-        try {
-          if (reg && "PushManager" in window) {
-            let subscription = await reg.pushManager.getSubscription();
-            if (!subscription) {
-              const keyRes = await fetch("/api/notifications/vapid-public-key");
-              if (keyRes.ok) {
-                const { publicKey } = await keyRes.json();
-                if (publicKey) {
-                  subscription = await reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
-                  });
-                }
+
+      let pushSubscribed = false;
+      try {
+        if (reg && "PushManager" in window) {
+          let subscription = await reg.pushManager.getSubscription();
+          if (!subscription) {
+            const keyRes = await fetch("/api/notifications/vapid-public-key");
+            if (keyRes.ok) {
+              const { publicKey } = await keyRes.json();
+              if (publicKey) {
+                subscription = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+                });
               }
             }
-            if (subscription) {
-              await fetch("/api/notifications/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(subscription),
-              });
-              pushSubscribed = true;
-            }
           }
-        } catch (err) {
-          console.warn("[Waqt] Push subscription failed:", err);
-        }
-        try {
-          if (reg) {
-            reg.showNotification("Waqt notifications are on", {
-              body: pushSubscribed
-                ? "You'll be notified at each prayer time and before reminders — even in the background."
-                : "You'll be notified at each prayer time and before reminders while the app is open.",
-              tag: "waqt-test",
-              data: { url: "/calendar/day" },
-              icon: "/icon.svg",
-              badge: "/icon.svg",
+          if (subscription) {
+            await fetch("/api/notifications/subscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(subscription),
             });
-          } else if ("Notification" in window) {
-            new Notification("Waqt notifications are on", {
-              body: "You'll be notified at each prayer time and before reminders while the app is open.",
-              tag: "waqt-test",
-              icon: "/icon.svg",
-            });
+            pushSubscribed = true;
           }
-        } catch (notifErr) {
-          console.warn("[Waqt] Test notification failed:", notifErr);
         }
-        setNotifMsg(pushSubscribed
-          ? "Notifications enabled with background push! You'll get alerts at each prayer time."
-          : "Notifications enabled! You'll get alerts at each prayer time while the app is open."
-        );
-        window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
-      } else if (perm === "denied") {
-        setNotifMsg("Notifications were blocked. Enable them in your browser settings to receive prayer alerts.");
-      } else {
-        setNotifMsg("Notification permission was dismissed. Tap the button again to enable.");
+      } catch (err) {
+        console.warn("[Waqt] Push subscription failed:", err);
       }
+
+      try {
+        if (reg) {
+          reg.showNotification("Waqt notifications are on", {
+            body: pushSubscribed
+              ? "You'll be notified at each prayer time and before reminders — even in the background."
+              : "You'll be notified at each prayer time and before reminders while the app is open.",
+            tag: "waqt-test",
+            data: { url: "/calendar/day" },
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            requireInteraction: false,
+            ...({ vibrate: [200, 100, 200], renotify: true } as NotificationOptions),
+          });
+        }
+      } catch (notifErr) {
+        console.warn("[Waqt] Test notification failed:", notifErr);
+      }
+
+      setNotifMsg(pushSubscribed
+        ? "Notifications enabled with background push! You'll get alerts at each prayer time."
+        : "Notifications enabled! You'll get alerts at each prayer time while the app is open."
+      );
+      window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
     } catch (err) {
       console.error("[Waqt] Enable notifications failed:", err);
       setNotifMsg("Could not request notification permission. Try again.");
@@ -756,7 +781,6 @@ export default function SettingsClient({
   async function handleTestNotification() {
     setNotifMsg(null);
     try {
-      // On native, use local notifications instead of SW showNotification
       if (isNativeApp()) {
         const { LocalNotifications } = await import("@capacitor/local-notifications");
         await LocalNotifications.schedule({
@@ -783,8 +807,10 @@ export default function SettingsClient({
           body: "If you can see this, notifications are working correctly.",
           tag: "waqt-test",
           data: { url: "/calendar/day" },
-          icon: "/icon.svg",
-          badge: "/icon.svg",
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
+          requireInteraction: false,
+          ...({ vibrate: [200, 100, 200], renotify: true } as NotificationOptions),
         });
         setNotifMsg("Test notification sent. Check your notifications.");
       } else {
@@ -802,11 +828,9 @@ export default function SettingsClient({
 
   async function handleLogout() {
     setLoggingOut(true);
-    // Clear local offline cache to prevent cross-user data leakage on shared devices
     try { await clearOfflineCache(); } catch { /* non-critical */ }
     try { clearCachedPrayerSettings(); } catch { /* non-critical */ }
     try { clearApiCache(); } catch { /* non-critical */ }
-    // Tell service worker to clear its outbox too
     try {
       if (navigator.serviceWorker?.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "CLEAR_OUTBOX" });
@@ -1065,7 +1089,7 @@ export default function SettingsClient({
             <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Prayer Settings</h2>
           </div>
 
-          {/* Location */}
+          {/* Location — compact display when saved, search bar only when editing/not set */}
           <div className="mb-4">
             <div className="mb-1.5 flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
@@ -1073,33 +1097,69 @@ export default function SettingsClient({
               </span>
               {needsLocation && <RedDot />}
             </div>
-            {prayerSettings?.latitude ? (
-              <p className="mb-2 text-xs tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
-                {prayerSettings.latitude}, {prayerSettings.longitude} · {prayerSettings.timezone}
-              </p>
+
+            {prayerSettings?.latitude && !editingLocation ? (
+              /* Compact display when location is saved */
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+                    {prayerSettings.timezone}
+                  </p>
+                  <p className="mt-0.5 text-[11px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                    {prayerSettings.latitude}, {prayerSettings.longitude}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setEditingLocation(true); setLocationResult(null); setLocationMsg(null); }}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-3)]"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+                >
+                  <Pencil className="h-3 w-3" />
+                  Change
+                </button>
+              </div>
             ) : (
-              <p className="mb-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-                No location set. Search for your city.
-              </p>
+              /* Search bar — only shown when no location or user clicked "Change" */
+              <>
+                {prayerSettings?.latitude && editingLocation && (
+                  <p className="mb-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                    Current: {prayerSettings.latitude}, {prayerSettings.longitude} · {prayerSettings.timezone}
+                  </p>
+                )}
+                {!prayerSettings?.latitude && (
+                  <p className="mb-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                    No location set. Search for your city.
+                  </p>
+                )}
+                <form onSubmit={handleCitySearch} className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    placeholder="Search for your city..."
+                    value={cityQuery}
+                    onChange={(e) => setCityQuery(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={searching}
+                    className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
+                    style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+                  >
+                    {searching ? "..." : "Search"}
+                  </button>
+                </form>
+                {editingLocation && prayerSettings?.latitude && (
+                  <button
+                    onClick={() => { setEditingLocation(false); setLocationResult(null); setLocationMsg(null); }}
+                    className="mt-2 text-xs font-medium"
+                    style={{ color: "var(--color-ink-muted)" }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </>
             )}
-            <form onSubmit={handleCitySearch} className="flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                placeholder="Search for your city..."
-                value={cityQuery}
-                onChange={(e) => setCityQuery(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
-              />
-              <button
-                type="submit"
-                disabled={searching}
-                className="shrink-0 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
-                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
-              >
-                {searching ? "..." : "Search"}
-              </button>
-            </form>
             {locationResult && (
               <div className="mt-2 rounded-lg border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
                 <p className="break-words text-sm font-medium" style={{ color: "var(--color-ink)" }}>
@@ -1126,37 +1186,32 @@ export default function SettingsClient({
             )}
           </div>
 
-          {/* Calculation Method */}
+          {/* Calculation Method — auto-save on change */}
           <div className="mb-4">
             <div className="mb-1.5 flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
                 Calculation Method
               </span>
               {needsMethod && <RedDot />}
+              {savingMethod && <RefreshCw className="h-3 w-3 animate-spin" style={{ color: "var(--color-ink-muted)" }} />}
             </div>
-            <p className="mb-2 text-[11px] leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-              Determines Fajr/Isha angles. ISNA (15°) is default for North America. MWL (18°) gives earlier Fajr.
-            </p>
             <select
               value={selectedMethod}
-              onChange={(e) => setSelectedMethod(parseInt(e.target.value, 10))}
-              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              onChange={(e) => {
+                const newMethod = parseInt(e.target.value, 10);
+                setSelectedMethod(newMethod);
+                if (prayerSettings && newMethod !== prayerSettings.calculationMethod) {
+                  savePrayerSettings("method", newMethod, undefined);
+                }
+              }}
+              disabled={savingMethod || !prayerSettings}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
               style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
             >
               {METHOD_OPTIONS.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
-            {prayerSettings && selectedMethod !== prayerSettings.calculationMethod && (
-              <button
-                onClick={handleSaveMethod}
-                disabled={savingMethod}
-                className="mt-2 w-full rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-40 sm:w-auto sm:self-start"
-                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 44 }}
-              >
-                {savingMethod ? "Saving..." : "Save method"}
-              </button>
-            )}
             {prayerSettings && (
               <p className="mt-1.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                 Current: {methodLabel(prayerSettings.calculationMethod)}
@@ -1170,36 +1225,31 @@ export default function SettingsClient({
             )}
           </div>
 
-          {/* Madhab */}
+          {/* Madhab — auto-save on change */}
           <div className="mb-4">
             <div className="mb-1.5 flex items-center gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
                 Madhab (School of Thought)
               </span>
               {needsMadhab && <RedDot />}
+              {savingMadhab && <RefreshCw className="h-3 w-3 animate-spin" style={{ color: "var(--color-ink-muted)" }} />}
             </div>
-            <p className="mb-2 text-[11px] leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-              Determines Asr time and which sunnahs are tracked. Hanafi uses a later Asr.
-            </p>
             <select
               value={selectedMadhab}
-              onChange={(e) => setSelectedMadhab(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              onChange={(e) => {
+                const newMadhab = e.target.value;
+                setSelectedMadhab(newMadhab);
+                if (prayerSettings && newMadhab !== prayerSettings.madhab) {
+                  savePrayerSettings("madhab", undefined, newMadhab);
+                }
+              }}
+              disabled={savingMadhab || !prayerSettings}
+              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
               style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
             >
               <option value="standard">Standard (Shafi&apos;i, Maliki, Hanbali)</option>
               <option value="hanafi">Hanafi</option>
             </select>
-            {prayerSettings && selectedMadhab !== prayerSettings.madhab && (
-              <button
-                onClick={handleSaveMadhab}
-                disabled={savingMadhab}
-                className="mt-2 w-full rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-40 sm:w-auto sm:self-start"
-                style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)", minHeight: 44 }}
-              >
-                {savingMadhab ? "Saving..." : "Save madhab"}
-              </button>
-            )}
             {madhabMsg && (
               <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: madhabMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
                 {madhabMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
@@ -1334,19 +1384,20 @@ export default function SettingsClient({
 
         <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
 
-        {/* ── Notifications ── */}
-        <div className="p-4 sm:p-6">
-          <div className="mb-4 flex items-center gap-2">
-            {notifPermission === "granted" ? (
+        {/* ── Notifications — collapsible ── */}
+        <CollapsibleSection
+          icon={
+            notifPermission === "granted" ? (
               <Bell className="h-4 w-4 shrink-0" style={{ color: "var(--color-success)" }} />
             ) : (
               <BellOff className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
-            )}
-            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Notifications</h2>
-            <span className="text-xs" style={{ color: notifPermission === "granted" ? "var(--color-success)" : notifPermission === "denied" ? "var(--color-warmth)" : "var(--color-ink-muted)" }}>
-              {notifPermission === "granted" ? "Enabled" : notifPermission === "denied" ? "Blocked" : "Not set up"}
-            </span>
-          </div>
+            )
+          }
+          title="Notifications"
+          badge={notifPermission === "granted" ? "Enabled" : notifPermission === "denied" ? "Blocked" : "Not set up"}
+          badgeColor={notifPermission === "granted" ? "var(--color-success)" : notifPermission === "denied" ? "var(--color-warmth)" : "var(--color-ink-muted)"}
+          defaultOpen={notifPermission !== "granted"}
+        >
           {notifPermission === "denied" && (
             <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
               Notifications are blocked. Enable them in your browser site settings.
@@ -1418,18 +1469,15 @@ export default function SettingsClient({
               </button>
             )}
           </div>
-        </div>
+        </CollapsibleSection>
 
-        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
-
-        {/* ── Trusted Devices ── */}
-        <div className="p-4 sm:p-6">
-          <div className="mb-3 flex items-center gap-2">
-            <Fingerprint className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-              Trusted devices
-            </h3>
-          </div>
+        {/* ── Trusted Devices — collapsible ── */}
+        <CollapsibleSection
+          icon={<Fingerprint className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />}
+          title="Trusted devices"
+          badge={trustedDevices.length > 0 ? `${trustedDevices.length}` : undefined}
+          defaultOpen={false}
+        >
           <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
             Devices you&apos;ve logged in from can sign in without a password.
             Revoke any you don&apos;t recognize.
@@ -1482,9 +1530,7 @@ export default function SettingsClient({
               })}
             </div>
           )}
-        </div>
-
-        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+        </CollapsibleSection>
 
         {/* ── Logout ── */}
         <div className="p-4 sm:p-6">
@@ -1499,11 +1545,14 @@ export default function SettingsClient({
           </button>
         </div>
 
-        {/* ── Delete Account (App Store requirement) ── */}
-        <div className="border-t p-4 sm:p-6" style={{ borderColor: "var(--color-paper-3)" }}>
-          <h3 className="mb-1 text-sm font-semibold" style={{ color: "var(--color-error)" }}>
-            Delete Account
-          </h3>
+        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+
+        {/* ── Delete Account — collapsible ── */}
+        <CollapsibleSection
+          icon={<Trash2 className="h-4 w-4 shrink-0" style={{ color: "var(--color-error)" }} />}
+          title="Delete Account"
+          defaultOpen={false}
+        >
           <p className="mb-3 text-xs" style={{ color: "var(--color-ink-muted)" }}>
             Permanently delete your account and remove all personal information.
             Your prayer logs and calendar events will be anonymized but retained
@@ -1543,7 +1592,7 @@ export default function SettingsClient({
               </div>
             </div>
           )}
-        </div>
+        </CollapsibleSection>
       </div>
     </div>
   );

@@ -1,9 +1,28 @@
-Show event count when applying changes to all events in a series
+Settings UX + push notification reliability fixes
 
-- Added GET /api/events/bulk?seriesId=... returning the event count
-- DayView fetches the count when opening the edit form for a recurring event
-- "Apply changes to all events" label now shows the exact count (e.g. "all 57 events")
-- "Delete entire series" button also shows the count (e.g. "Delete entire series (57 events)")
+Settings:
+- Hide location search bar when location is saved; show compact card with Change button
+- Calculation method and madhab dropdowns now auto-save on change (no separate Save button)
+- Fix madhab switching doing nothing — now saves + re-syncs prayer times immediately
+- Notifications, Trusted devices, and Delete account sections are now collapsible
+- Show device count badge on Trusted devices header
+
+Push notifications:
+- iOS: request Notification.requestPermission() synchronously before any await
+  (iOS Safari kills the prompt if an await consumes the user gesture)
+- iOS: detect non-standalone mode and prompt user to Add to Home Screen first
+- sw.js push handler now parses vibrate/renotify/silent/sound from payload
+  and avoids the silent+vibrate TypeError
+- sw.js: bump cache version to waqt-v24
+- notification-scheduler: add vibrate + renotify to showNotification
+- notification-scheduler: skip new Notification() on mobile (throws on iOS/Android)
+- notification-scheduler: await showNotification so errors surface
+- Server: add TTL (24h) + urgency: high + topic header to all webpush sends
+- Server: move setVapidDetails to module scope via lib/notifications/push.ts
+- Server: vapid-public-key route now uses env modules instead of process.env
+- Default VAPID subject changed to https://waqt.app (mailto:dummy causes iOS BadJwtToken)
+- Capacitor: add PushNotifications presentationOptions (badge/sound/alert/banner/list)
+- Capacitor: add LocalNotifications sound + smallIcon config
 
 Generated with [Devin](https://devin.ai)
 

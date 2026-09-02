@@ -39,6 +39,17 @@ const config: CapacitorConfig = {
       backgroundColor: "#1a1815",
       overlaysWebView: false,
     },
+    // Enable sound, alert, badge, and haptics for push notifications on iOS/Android.
+    // Without presentationOptions, iOS foreground pushes are silently dropped.
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert", "banner", "list"],
+    },
+    LocalNotifications: {
+      // Small icon resource name in res/drawable (Android)
+      smallIcon: "icon",
+      iconColor: "#1a1815",
+      sound: "adhan.caf",
+    },
   },
 };
 

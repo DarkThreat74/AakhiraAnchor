@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
-import webpush from "web-push";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { env } from "@/lib/env";
+import { sendPrayerPush } from "@/lib/notifications/push";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +18,6 @@ export async function POST(request: NextRequest) {
   if (!checkRateLimit("notif-test", ip, 5, 15 * 60 * 1000)) {
     return NextResponse.json({ error: "Too many test notifications. Please wait a few minutes." }, { status: 429 });
   }
-
-  // Configure web-push
-  webpush.setVapidDetails(
-    env.vapidSubject,
-    env.vapidPublicKey,
-    env.vapidPrivateKey,
-  );
 
   // Get all subscriptions for this user
   const subs = await db
@@ -45,27 +37,27 @@ export async function POST(request: NextRequest) {
     body: "Push notifications are working. You'll be reminded when it's time to pray.",
     tag: "waqt-test",
     data: { url: "/" },
+    vibrate: [200, 100, 200],
+    renotify: true,
   });
 
   const results = await Promise.allSettled(
     subs.map((sub) =>
-      webpush.sendNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth },
-        },
+      sendPrayerPush(
+        { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
         payload,
+        { topic: "waqt-test" },
       ),
     ),
   );
 
-  const succeeded = results.filter((r) => r.status === "fulfilled").length;
+  const succeeded = results.filter((r) => r.status === "fulfilled" && r.value.delivered).length;
   const failed = results.filter((r) => r.status === "rejected").length;
 
   // Clean up expired subscriptions in a single batched delete
   const expiredIds = results
     .map((r, i) => ({ r, id: subs[i].id }))
-    .filter(({ r }) => r.status === "rejected" && [404, 410].includes((r.reason as { statusCode?: number }).statusCode ?? 0))
+    .filter(({ r }) => r.status === "fulfilled" && r.value.expired)
     .map(({ id }) => id);
 
   if (expiredIds.length > 0) {

@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v23";
+const CACHE_VERSION = "waqt-v24";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -568,15 +568,32 @@ self.addEventListener("push", (event) => {
     }
   }
 
+  const silent = data.silent === true;
+  const tag = data.tag || "waqt-notification";
+
   const options = {
     body: data.body,
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
-    vibrate: [200, 100, 200],
-    data: data.data || {},
-    tag: data.tag || "waqt-notification",
-    requireInteraction: data.requireInteraction || false,
+    icon: data.icon || "/icon-192.png",
+    badge: data.badge || "/icon-192.png",
+    data: data.data || { url: "/" },
+    tag,
+    requireInteraction: data.requireInteraction === true,
+    renotify: data.renotify === true && !!tag,
   };
+
+  // vibrate and silent are mutually exclusive — silent wins
+  if (silent) {
+    options.silent = true;
+  } else if (data.vibrate) {
+    options.vibrate = data.vibrate;
+  } else {
+    // default prayer vibration pattern
+    options.vibrate = [200, 100, 200];
+  }
+
+  // `sound` is in the spec but unsupported by major browsers today;
+  // keep it harmless so future browsers can use it
+  if (data.sound) options.sound = data.sound;
 
   event.waitUntil(self.registration.showNotification(data.title, options));
 });

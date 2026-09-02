@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, inArray } from "drizzle-orm";
-import webpush from "web-push";
 import { db, schema } from "@/lib/db/client";
 import { verifyCronAuth } from "@/lib/cronAuth";
-import { env } from "@/lib/env";
 import { isWindowClosed, getPrayerWindow } from "@/lib/prayer/stateMachine";
+import { sendPrayerPush } from "@/lib/notifications/push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -34,12 +33,6 @@ export async function POST(request: NextRequest) {
   if (!verifyCronAuth(request.headers.get("authorization"), request.headers.get("x-vercel-cron") === "1")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  webpush.setVapidDetails(
-    env.vapidSubject,
-    env.vapidPublicKey,
-    env.vapidPrivateKey,
-  );
 
   let notificationsSent = 0;
   let assumedResolved = 0;
@@ -222,18 +215,20 @@ async function processUserBatch(
         body,
         tag: `prayer-times-${today}`,
         data: { url: "/calendar/day" },
+        vibrate: [200, 100, 200],
+        renotify: true,
       });
 
       for (const sub of subs) {
         try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          const result = await sendPrayerPush(
+            { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
             payload,
+            { topic: `prayer-times-${today}` },
           );
-          notificationsSent++;
-        } catch (err) {
-          const e = err as { statusCode?: number };
-          if (e.statusCode === 404 || e.statusCode === 410) {
+          if (result.delivered) {
+            notificationsSent++;
+          } else if (result.expired) {
             try {
               await db
                 .delete(schema.pushSubscriptions)
@@ -241,9 +236,10 @@ async function processUserBatch(
             } catch (deleteErr) {
               console.error("[cron:checkin-scheduler] failed to delete expired sub", sub.id, deleteErr);
             }
-          } else {
-            console.error("[cron:checkin-scheduler] push failed", sub.id, e.statusCode, err);
           }
+        } catch (err) {
+          const e = err as { statusCode?: number };
+          console.error("[cron:checkin-scheduler] push failed", sub.id, e.statusCode, err);
         }
       }
     } catch (userErr) {

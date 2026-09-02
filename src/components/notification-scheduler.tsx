@@ -74,15 +74,18 @@ export default function NotificationScheduler() {
       if (!("Notification" in window) || Notification.permission !== "granted") return;
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) {
-        reg.showNotification(title, {
+        await reg.showNotification(title, {
           body,
           tag,
           data: { url },
-          icon: "/icon.svg",
-          badge: "/icon.svg",
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
+          requireInteraction: false,
+          ...(/* vibrate + renotify are valid but not in DOM lib types */ { vibrate: [200, 100, 200], renotify: true } as NotificationOptions),
         });
-      } else {
-        new Notification(title, { body, tag, data: { url }, icon: "/icon.svg" });
+      } else if (!/iPad|iPhone|iPod|Android/i.test(navigator.userAgent)) {
+        // new Notification() only works reliably on desktop — mobile requires SW
+        new Notification(title, { body, tag, data: { url }, icon: "/icon-192.png" });
       }
     } catch (err) {
       console.warn("[Waqt] Notification failed:", err);

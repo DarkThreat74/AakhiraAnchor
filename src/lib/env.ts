@@ -52,7 +52,7 @@ export const env = {
   // Web Push
   vapidPublicKey: required('VAPID_PUBLIC_KEY'),
   vapidPrivateKey: required('VAPID_PRIVATE_KEY'),
-  vapidSubject: required('VAPID_SUBJECT', 'mailto:noreply@example.com'),
+  vapidSubject: required('VAPID_SUBJECT', 'https://waqt.app'),
 
   // LLM
   openRouterApiKey: required('OPENROUTER_API_KEY'),
