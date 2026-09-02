@@ -20,21 +20,33 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v24";
+const CACHE_VERSION = "waqt-v25";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
+const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
 // App shell — the minimal set of files for offline boot
-// NOTE: Public pages (/, /login, /signup) are NOT precached — the SW only
-// controls authenticated app pages. Caching auth pages causes stale login
-// forms and broken navigation.
 const PRECACHE_URLS = [
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
   "/icon.svg",
   "/offline.html",
+];
+
+// All authenticated app pages — prefetched and cached for offline use.
+// These are force-dynamic (server-rendered per user), but we cache the
+// HTML so the app shell loads instantly offline. The client components
+// then hydrate from IndexedDB cached data.
+const APP_PAGES = [
+  "/calendar/day",
+  "/calendar/month",
+  "/prayer",
+  "/goals",
+  "/settings",
+  "/learn",
+  "/onboarding",
 ];
 
 // ─── IndexedDB helpers for offline event outbox ───
@@ -151,6 +163,46 @@ async function syncOutbox() {
   }
 }
 
+// ─── Warm cache: prefetch all app pages so they're available offline ───
+// Called on install/activate and when the client sends WARM_CACHE.
+// Fetches each app page and caches the HTML. If a page fails, it's skipped
+// (will be cached on next visit). This is critical for offline-first:
+// without it, pages the user hasn't visited won't load offline.
+async function warmCache() {
+  const cache = await caches.open(PAGE_CACHE);
+  const results = await Promise.allSettled(
+    APP_PAGES.map(async (page) => {
+      // Don't re-fetch if already cached and fresh (within 1 hour)
+      const existing = await cache.match(page);
+      if (existing) {
+        const cachedAt = existing.headers.get("x-waqt-cached-at");
+        if (cachedAt && Date.now() - parseInt(cachedAt, 10) < 60 * 60 * 1000) {
+          return; // Still fresh
+        }
+      }
+      const res = await fetch(page, {
+        credentials: "include",
+        redirect: "manual", // Don't follow redirects to /login
+      });
+      // Only cache successful responses (not redirects to /login)
+      if (res.ok || res.status === 304) {
+        // Clone and add a custom header for cache freshness tracking
+        const body = await res.blob();
+        const headers = new Headers(res.headers);
+        headers.set("x-waqt-cached-at", String(Date.now()));
+        const cachedRes = new Response(body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers,
+        });
+        await cache.put(page, cachedRes);
+      }
+    })
+  );
+  const succeeded = results.filter((r) => r.status === "fulfilled").length;
+  return succeeded;
+}
+
 // ─── Install: precache app shell ───
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -161,6 +213,10 @@ self.addEventListener("install", (event) => {
         // If precache fails (e.g. offline), still install
       })
       .then(() => self.skipWaiting())
+      .then(() => {
+        // Warm cache in background — don't block install
+        warmCache().catch(() => {});
+      })
   );
 });
 
@@ -173,7 +229,7 @@ if ("navigationPreload" in self.registration) {
 
 // ─── Activate: clear old caches, claim clients ───
 self.addEventListener("activate", (event) => {
-  const validCaches = [STATIC_CACHE, RUNTIME_CACHE, API_CACHE];
+  const validCaches = [STATIC_CACHE, RUNTIME_CACHE, API_CACHE, PAGE_CACHE];
 
   event.waitUntil(
     caches
@@ -189,6 +245,10 @@ self.addEventListener("activate", (event) => {
       .then(() => {
         // Try to sync any pending offline events
         syncOutbox();
+      })
+      .then(() => {
+        // Warm cache in background so all app pages are available offline
+        warmCache().catch(() => {});
       })
       .then(() => {
         // Notify all clients that a new SW is active
@@ -349,28 +409,30 @@ self.addEventListener("fetch", (event) => {
   // Don't intercept cron API
   if (url.pathname.startsWith("/api/cron/")) return;
 
-  // ── Navigation requests: network-first ──
-  // Always try to get fresh HTML from the network. Only fall back to cache
-  // when offline. This ensures users always see the latest UI after a
-  // deployment — no stale cached HTML served on refresh.
+  // ── Navigation requests: stale-while-revalidate ──
+  // Serve cached HTML instantly (offline-first), then update in background.
+  // This is critical for offline: the app shell loads immediately from cache
+  // and client components hydrate from IndexedDB data.
   if (request.mode === "navigate") {
     const pathname = url.pathname;
 
     // When offline and navigating to "/", redirect to the cached calendar
-    // (the app shell). This makes the PWA open correctly offline.
     if (pathname === "/") {
       event.respondWith(
         (async () => {
+          // Try network first for "/" (landing page may have changed)
           try {
-            // Try network first — if online, serve the real landing page
             const response = await fetch(request);
             const responseClone = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
             return response;
           } catch {
-            // Offline — redirect to the calendar (cached app shell)
-            const calendarCached = await caches.match("/calendar/day");
+            // Offline — serve cached calendar (the app shell)
+            const pageCache = await caches.open(PAGE_CACHE);
+            const calendarCached = await pageCache.match("/calendar/day");
             if (calendarCached) return calendarCached;
+            const runtimeCached = await caches.match("/calendar/day");
+            if (runtimeCached) return runtimeCached;
             // Fallback to any cached page
             const anyCached = await caches.match(request);
             return anyCached || new Response(
@@ -398,30 +460,64 @@ self.addEventListener("fetch", (event) => {
       return; // Let the browser handle it directly — no SW interference
     }
 
+    // ── App pages: stale-while-revalidate ──
+    // 1. Serve from PAGE_CACHE instantly (offline-first)
+    // 2. If online, fetch fresh HTML in background and update cache
+    // 3. If no cache and offline, fall back to any cached app page
     event.respondWith(
       (async () => {
-        // Network-first: always try to get fresh HTML when online.
-        // Only fall back to cache when the network fails (offline).
-        // This prevents stale UI from appearing after a deployment.
+        const pageCache = await caches.open(PAGE_CACHE);
+        const cached = await pageCache.match(pathname) || await caches.match(request);
+
+        // Background revalidation (don't await — fire and forget)
+        if (navigator.onLine) {
+          fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                const body = response.blob();
+                body.then((blob) => {
+                  const headers = new Headers(response.headers);
+                  headers.set("x-waqt-cached-at", String(Date.now()));
+                  const cachedRes = new Response(blob, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers,
+                  });
+                  pageCache.put(pathname, cachedRes);
+                });
+              }
+            })
+            .catch(() => {});
+        }
+
+        if (cached) return cached;
+
+        // No cache — try network (might be online but cache miss)
         try {
           const response = await fetch(request);
           if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+            const body = await response.blob();
+            const headers = new Headers(response.headers);
+            headers.set("x-waqt-cached-at", String(Date.now()));
+            const cachedRes = new Response(body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers,
+            });
+            pageCache.put(pathname, cachedRes.clone());
+            return cachedRes;
           }
           return response;
         } catch {
-          // Network failed — try cache
-          const cached = await caches.match(request);
-          if (cached) return cached;
-
-          // No cache — try the calendar day page as app shell fallback
-          const dayCached = await caches.match("/calendar/day");
-          if (dayCached) return dayCached;
-
-          // Last resort — offline page
-          return new Response(
-            "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
+          // Offline and no cache — serve any cached app page as fallback
+          for (const fallbackPage of APP_PAGES) {
+            const fallback = await pageCache.match(fallbackPage);
+            if (fallback) return fallback;
+          }
+          // Last resort — serve the offline page from precache
+          const offlinePage = await caches.match("/offline.html");
+          return offlinePage || new Response(
+            "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#1a1815;color:#f5f0e8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}button{margin-top:20px;padding:10px 24px;background:#f5f0e8;color:#1a1815;border:none;border-radius:8px;font-size:14px;cursor:pointer}</style></head><body><div><h1>You're offline</h1><p>Your cached data will appear when you reopen the app. Try again in a moment.</p><button onclick='location.reload()'>Retry</button></div></body></html>",
             { status: 200, headers: { "Content-Type": "text/html" } }
           );
         }
@@ -432,20 +528,24 @@ self.addEventListener("fetch", (event) => {
 
   // ── Next.js RSC payload fetches (client-side navigation): stale-while-revalidate ──
   // These have the RSC header. Cache them so offline <Link> navigation works.
+  // This is critical: without cached RSC payloads, client-side navigation
+  // (clicking <Link>) fails offline even if the HTML shell is cached.
   if (request.headers.get("RSC") === "1") {
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);
         if (cached) {
           // Revalidate in background
-          fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                const responseClone = response.clone();
-                caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-              }
-            })
-            .catch(() => {});
+          if (navigator.onLine) {
+            fetch(request)
+              .then((response) => {
+                if (response.ok) {
+                  const responseClone = response.clone();
+                  caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+                }
+              })
+              .catch(() => {});
+          }
           return cached;
         }
         // No cache — try network
@@ -458,6 +558,7 @@ self.addEventListener("fetch", (event) => {
           return response;
         } catch {
           // No cache, no network — return empty RSC response
+          // The client will fall back to the cached HTML shell
           return new Response("", { status: 503 });
         }
       })()
@@ -535,6 +636,9 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SYNC_OUTBOX") {
     syncOutbox();
   }
+  if (event.data && event.data.type === "WARM_CACHE") {
+    warmCache().catch(() => {});
+  }
   if (event.data && event.data.type === "CLEAR_API_CACHE") {
     // Clear API cache to prevent cross-user data leakage
     caches.delete(API_CACHE).catch(() => {});
@@ -551,7 +655,7 @@ self.addEventListener("message", (event) => {
         // non-critical
       }
     })();
-    // Also clear all caches
+    // Also clear all caches (including page cache to prevent cross-user data leakage)
     caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n)))).catch(() => {});
   }
 });

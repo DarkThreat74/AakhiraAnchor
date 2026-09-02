@@ -1,28 +1,29 @@
-Settings UX + push notification reliability fixes
+Fix offline-first: cache all app pages, stale-while-revalidate navigation
 
-Settings:
-- Hide location search bar when location is saved; show compact card with Change button
-- Calculation method and madhab dropdowns now auto-save on change (no separate Save button)
-- Fix madhab switching doing nothing — now saves + re-syncs prayer times immediately
-- Notifications, Trusted devices, and Delete account sections are now collapsible
-- Show device count badge on Trusted devices header
+The app was showing "You're offline" instead of cached content because:
+1. Navigation was network-first — fetch failed offline, fell back to cache
+   that may not exist for pages the user hadn't visited
+2. force-dynamic pages are server-rendered per user, never precached
+3. The offline fallback was a dead-end page, not cached app content
 
-Push notifications:
-- iOS: request Notification.requestPermission() synchronously before any await
-  (iOS Safari kills the prompt if an await consumes the user gesture)
-- iOS: detect non-standalone mode and prompt user to Add to Home Screen first
-- sw.js push handler now parses vibrate/renotify/silent/sound from payload
-  and avoids the silent+vibrate TypeError
-- sw.js: bump cache version to waqt-v24
-- notification-scheduler: add vibrate + renotify to showNotification
-- notification-scheduler: skip new Notification() on mobile (throws on iOS/Android)
-- notification-scheduler: await showNotification so errors surface
-- Server: add TTL (24h) + urgency: high + topic header to all webpush sends
-- Server: move setVapidDetails to module scope via lib/notifications/push.ts
-- Server: vapid-public-key route now uses env modules instead of process.env
-- Default VAPID subject changed to https://waqt.app (mailto:dummy causes iOS BadJwtToken)
-- Capacitor: add PushNotifications presentationOptions (badge/sound/alert/banner/list)
-- Capacitor: add LocalNotifications sound + smallIcon config
+Fixes:
+- SW: change navigation strategy from network-first to stale-while-revalidate
+  for all authenticated app pages. Cached HTML is served instantly (offline-
+  first), then updated in background when online.
+- SW: add PAGE_CACHE for app page HTML, separate from runtime/API caches
+- SW: add warmCache() function that prefetches all 7 app routes
+  (/calendar/day, /calendar/month, /prayer, /goals, /settings, /learn,
+  /onboarding) and caches their HTML. Skips pages already fresh (<1hr old).
+- SW: warmCache() runs on install, activate, and when client sends WARM_CACHE
+- SW: add WARM_CACHE message handler
+- SW: improve offline fallback — instead of "You're offline" dead-end, serve
+  any cached app page. Only show offline.html as absolute last resort.
+- SW: only revalidate RSC payloads when navigator.onLine (avoid wasted fetches)
+- SW: bump cache version to waqt-v25
+- sw-register: send WARM_CACHE on initial load, on 'online' event, and on
+  visibility change when online — keeps all app pages cached for offline use
+- offline.html: auto-reload when back online, show "Reconnecting..." instead
+  of dead-end "You're offline" message
 
 Generated with [Devin](https://devin.ai)
 

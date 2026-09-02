@@ -89,9 +89,10 @@ export default function ServiceWorkerRegister() {
       });
     }, 5 * 60_000);
 
-    // ── On 'online' event, tell SW to sync outbox ──
+    // ── On 'online' event, tell SW to sync outbox and warm cache ──
     const handleOnline = () => {
       navigator.serviceWorker.controller?.postMessage({ type: "SYNC_OUTBOX" });
+      navigator.serviceWorker.controller?.postMessage({ type: "WARM_CACHE" });
     };
     window.addEventListener("online", handleOnline);
 
@@ -101,6 +102,7 @@ export default function ServiceWorkerRegister() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
         navigator.serviceWorker.controller?.postMessage({ type: "SYNC_OUTBOX" });
+        navigator.serviceWorker.controller?.postMessage({ type: "WARM_CACHE" });
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -109,6 +111,10 @@ export default function ServiceWorkerRegister() {
     // the app was reopened while online but SW didn't fire sync)
     if (navigator.onLine) {
       navigator.serviceWorker.controller?.postMessage({ type: "SYNC_OUTBOX" });
+      // Warm cache: prefetch all app pages so they're available offline.
+      // This runs on every load while online — the SW skips pages that
+      // are already cached and fresh (within 1 hour).
+      navigator.serviceWorker.controller?.postMessage({ type: "WARM_CACHE" });
     }
 
     return () => {

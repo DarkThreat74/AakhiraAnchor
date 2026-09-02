@@ -26,13 +26,20 @@
       border: none; border-radius: 8px; font-size: 0.95rem; font-family: Georgia, serif;
       cursor: pointer; -webkit-tap-highlight-color: transparent;
     }
+    .retry-btn:active { opacity: 0.8; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>You're Offline</h1>
-    <p>Waqt needs an internet connection to load. Please check your network and try again.</p>
-    <button class="retry-btn" onclick="location.reload()">Retry</button>
+    <h1>Reconnecting...</h1>
+    <p>Your prayer data is cached on this device. The app will load automatically when the connection returns.</p>
+    <button class="retry-btn" onclick="location.reload()">Retry now</button>
   </div>
+  <script>
+    // Auto-reload when back online
+    window.addEventListener('online', () => location.reload());
+    // Also try reloading after 3 seconds (in case the online event already fired)
+    setTimeout(() => { if (navigator.onLine) location.reload(); }, 3000);
+  </script>
 </body>
 </html>
