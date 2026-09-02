@@ -1,46 +1,10 @@
-Prayer-time accuracy, Learn content + search, mobile + offline fixes
+Prayer dashboard: time-left after prayed, fix week count, avg time line
 
-Prayer times:
-- Pass user IANA timezone to AlAdhan (timezonestring param)
-- Compute month/year from user timezone in sync + cron (not server UTC)
-- Notification scheduler uses prayer timezone for all date/time math
-- Auto-refresh prayer cache after settings change via after()
-- Validate coordinates before calling AlAdhan
-- Harden parseTime for HH:MM and HH:MM:SS formats
-
-Learn content:
-- Replace all 117 placeholder strings with researched Hanafi fiqh
-- Add detailed posture section (hand folding, finger placement, foot
-  position, gaze direction, ruku/sujud details)
-- Add Sajdah-e-Tilawah section (14 verses, method, rulings)
-- Expand voluntary prayers (Awwabin, Ishraq, Duha, Tahajjud)
-- Cover khilaf al-adab vs makruh vs invalidating distinctions
-- Surah order rules, latecomer ruku scenario, qada intention method
-- Qasr: 77km threshold, 15-day rule, city boundaries, no jam' haqiqi
-
-Learn UI:
-- Redesign with Search tab (OpenRouter AI) + Library tab (categorized)
-- Madhab-aware: Hanafi content shown, "coming soon" for other schools
-- 12 suggested query chips, auto-open first result
-- Client-side keyword matching fallback for offline search
-
-OpenRouter search API:
-- AI receives only section IDs/titles/keywords, cannot author rulings
-- Returns only valid section IDs from curated corpus
-- 10 searches/hour per user+IP rate limit
-- Keyword fallback if OpenRouter down or key missing
-
-Mobile:
-- Responsive padding (px-4 on mobile, sm:px-5 on wider)
-- Arabic hadith text: break-word, removed overflow-hidden clipping
-- overflow-wrap on all text blocks to prevent horizontal overflow
-
-Offline:
-- Exclude /api/learn/ from SW POST outbox (search is a read, not write)
-- SW cache version bumped to waqt-v23
-- Client-side keyword matching fallback when search API unreachable
-- Notification scheduler checkMissedPrayers + scheduleAll use
-  cached prayer timezone from localStorage
+- Show remaining time next to prayed prayers in neutral tone (was hidden)
+- Fix "This Week" count: use user's timezone + calendar week (Sunday start)
+  instead of rolling 7 days in server UTC
+- Redesign per-prayer "Window" column to "Avg Time" with percentage, time,
+  and an animated fill line that transitions smoothly when data changes
 
 Generated with [Devin](https://devin.ai)
 

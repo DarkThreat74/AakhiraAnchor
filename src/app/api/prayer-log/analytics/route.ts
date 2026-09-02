@@ -139,21 +139,37 @@ export async function GET(request: NextRequest) {
     });
 
     // ── Range-specific counts ──
+    // "This Week" = current calendar week (Sunday to today) in user's timezone.
+    // "This Month" = current calendar month in user's timezone.
     let thisWeekPrayed = 0;
     let thisMonthPrayed = 0;
     let lastPrayedDate: string | null = null;
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const weekAgoStr = sevenDaysAgo.toISOString().split("T")[0];
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const monthAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+    // Get current date parts in the user's timezone
+    const tzParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date());
+    const tzVals: Record<string, string> = {};
+    for (const p of tzParts) { if (p.type !== "literal") tzVals[p.type] = p.value; }
+    const tzYear = parseInt(tzVals.year);
+    const tzMonth = parseInt(tzVals.month);
+    const tzDay = parseInt(tzVals.day);
+
+    // Day of week (0=Sunday) — construct a UTC date from the tz date parts
+    const tzDateObj = new Date(Date.UTC(tzYear, tzMonth - 1, tzDay));
+    const dayOfWeek = tzDateObj.getUTCDay(); // 0=Sunday
+    // Start of week = today - dayOfWeek days (Sunday)
+    const weekStartDate = new Date(Date.UTC(tzYear, tzMonth - 1, tzDay - dayOfWeek));
+    const weekStartStr = weekStartDate.toISOString().split("T")[0];
+    // Start of month in user's timezone
+    const monthStartStr = `${tzYear}-${String(tzMonth).padStart(2, "0")}-01`;
 
     for (const log of allLogs) {
       if (log.status === "prayed" || log.status === "assumed_prayed") {
         const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-        if (dateStr >= weekAgoStr) thisWeekPrayed++;
-        if (dateStr >= monthAgoStr) thisMonthPrayed++;
+        if (dateStr >= weekStartStr && dateStr <= todayStr) thisWeekPrayed++;
+        if (dateStr >= monthStartStr && dateStr <= todayStr) thisMonthPrayed++;
         if (!lastPrayedDate || dateStr > lastPrayedDate) lastPrayedDate = dateStr;
       }
     }

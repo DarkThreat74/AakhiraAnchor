@@ -982,10 +982,10 @@ export default function PrayerDashboard() {
                               </span>
                               <span className="mx-1" style={{ color: "var(--color-paper-3)" }}>—</span>
                               <span>{windowEndLabel}</span>
-                              {inWindow && !prayed && (() => {
+                              {inWindow && (() => {
                                 const remaining = windowEndMinutes - effectiveCurrent;
                                 return (
-                                  <span className="ml-1.5" style={{ color: "var(--color-warmth)" }}>
+                                  <span className="ml-1.5" style={{ color: prayed ? "var(--color-ink-muted)" : "var(--color-warmth)" }}>
                                     {Math.floor(remaining / 60)}h {remaining % 60}m left
                                   </span>
                                 );
@@ -1292,14 +1292,21 @@ export default function PrayerDashboard() {
                             ~{equivTime}
                           </div>
                         )}
-                        <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Window</div>
+                        <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Avg Time</div>
                       </div>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
-                      <div
-                        className="h-full rounded-full transition-[width] duration-500"
-                        style={{ width: `${stat.consistencyPct}%`, backgroundColor: color }}
-                      />
+                    {/* Avg Time line — fills based on avgWindowPct, animates smoothly */}
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center justify-between text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                        <span>Avg time of prayer</span>
+                        <span>{stat.avgWindowPct !== null ? `${stat.avgWindowPct}%` : "—"}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
+                        <div
+                          className="h-full rounded-full transition-[width] duration-700 ease-out"
+                          style={{ width: `${stat.avgWindowPct ?? 0}%`, backgroundColor: color }}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
