@@ -29,6 +29,14 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Waqt",
   },
+  // Prevent iOS from auto-linking phone numbers, dates, emails, and addresses,
+  // which modifies the DOM and causes hydration mismatches.
+  formatDetection: {
+    telephone: false,
+    date: false,
+    email: false,
+    address: false,
+  },
   icons: {
     icon: [
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },

@@ -5,6 +5,7 @@ import { db, schema } from "@/lib/db/client";
 import { setSessionCookie } from "@/lib/auth/session";
 import { isValidEmail, isHoneypotTripped, isTimeTrapTripped, isValidFingerprintHash } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +28,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { email, password, fingerprintHash, website, company, renderedAt } = body as {
+  const { email, password, turnstileToken, fingerprintHash, website, company, renderedAt } = body as {
     email?: string;
     password?: string;
+    turnstileToken?: string;
     fingerprintHash?: string;
     website?: string;
     company?: string;
     renderedAt?: number;
   };
+
+  // ── Cloudflare Turnstile verification (server-side, authoritative) ──
+  const turnstileValid = await verifyTurnstileToken(turnstileToken, ip);
+  if (!turnstileValid) {
+    return NextResponse.json(
+      { error: "Security verification failed. Please try again." },
+      { status: 403 },
+    );
+  }
 
   // ── Honeypot check — if filled, reject as bot ──
   if (isHoneypotTripped({ website, company })) {

@@ -38,9 +38,15 @@ interface PrayerLogEntry {
   status: string;
 }
 
+interface HomeworkDot {
+  id: string;
+  classColor: string | null;
+}
+
 export default function MonthViewClient({ year, month }: { year: number; month: number }) {
   const [eventsByDate, setEventsByDate] = useState<Record<string, CalendarEvent[]>>({});
   const [prayerLogsByDate, setPrayerLogsByDate] = useState<Record<string, PrayerLogEntry[]>>({});
+  const [homeworkByDate, setHomeworkByDate] = useState<Record<string, HomeworkDot[]>>({});
   const [maxVisibleEvents, setMaxVisibleEvents] = useState(2);
 
   // Responsive event count — show more events on larger screens
@@ -126,9 +132,10 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
 
       // ── Step 2: Fetch from API in background ──
       try {
-        const [eventsRes, logRes] = await Promise.all([
+        const [eventsRes, logRes, hwRes] = await Promise.all([
           fetch(`/api/events?from=${fromStr}&to=${toStr}`),
           fetch(`/api/prayer-log/range?from=${fromStr}&to=${toStr}`).catch(() => null),
+          fetch(`/api/homework?from=${fromStr}&to=${toStr}`).catch(() => null),
         ]);
 
         if (eventsRes.ok && !cancelled) {
@@ -204,6 +211,37 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
               _cachedAt: Date.now(),
             })));
           } catch { /* non-critical */ }
+        }
+
+        // ── Fetch homework for calendar dots ──
+        if (hwRes?.ok && !cancelled) {
+          const hwData = await hwRes.json().catch(() => []);
+          if (Array.isArray(hwData)) {
+            // Fetch classes to get colors
+            const classColors: Record<string, string> = {};
+            try {
+              const clsRes = await fetch("/api/classes");
+              if (clsRes.ok) {
+                const clsData = await clsRes.json();
+                if (Array.isArray(clsData)) {
+                  for (const c of clsData) {
+                    classColors[c.id] = c.color;
+                  }
+                }
+              }
+            } catch { /* non-critical */ }
+
+            const grouped: Record<string, HomeworkDot[]> = {};
+            for (const hw of hwData) {
+              if (hw.status === "completed") continue;
+              if (!grouped[hw.dueDate]) grouped[hw.dueDate] = [];
+              grouped[hw.dueDate].push({
+                id: hw.id,
+                classColor: hw.classId ? classColors[hw.classId] || null : null,
+              });
+            }
+            if (!cancelled) setHomeworkByDate(grouped);
+          }
         }
       } catch {
         // ignore — cached data is already showing
@@ -414,6 +452,25 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                       {reminderEvents.length > maxVisibleEvents && (
                         <span className="text-[11px] sm:text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
                           +{reminderEvents.length - maxVisibleEvents} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Homework dots — class-colored dots for pending homework due this day */}
+                  {cell.dateStr && homeworkByDate[cell.dateStr] && homeworkByDate[cell.dateStr].length > 0 && (
+                    <div className="mt-0.5 flex flex-wrap items-center gap-0.5">
+                      {homeworkByDate[cell.dateStr].slice(0, 4).map((hw) => (
+                        <span
+                          key={hw.id}
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: hw.classColor || "var(--color-accent)" }}
+                          title="Homework due"
+                        />
+                      ))}
+                      {homeworkByDate[cell.dateStr].length > 4 && (
+                        <span className="text-[10px] font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                          +{homeworkByDate[cell.dateStr].length - 4}
                         </span>
                       )}
                     </div>

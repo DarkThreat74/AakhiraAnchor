@@ -189,7 +189,7 @@ export async function PATCH(request: NextRequest) {
     const [updated] = await db
       .update(schema.goals)
       .set(updates)
-      .where(eq(schema.goals.id, body.id))
+      .where(and(eq(schema.goals.id, body.id), eq(schema.goals.userId, session.userId)))
       .returning();
 
     return NextResponse.json({ goal: updated });
@@ -227,7 +227,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Goal not found" }, { status: 404 });
     }
 
-    await db.delete(schema.goals).where(eq(schema.goals.id, id));
+    await db.delete(schema.goals).where(and(eq(schema.goals.id, id), eq(schema.goals.userId, session.userId)));
 
     return NextResponse.json({ success: true });
   } catch (err) {

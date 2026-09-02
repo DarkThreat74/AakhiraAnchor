@@ -47,9 +47,15 @@ export default function ServiceWorkerRegister() {
       });
 
     // ── Handle controller change (new SW took control) ──
-    // Only reload — don't clear localStorage/sessionStorage (that wipes offline data)
+    // Only reload on actual updates, not first install.
+    // On first install, skipWaiting + clients.claim fires controllerchange,
+    // but the page was never controlled by an old SW, so no reload needed.
+    let wasControlled = !!navigator.serviceWorker.controller;
     const handleControllerChange = () => {
-      window.location.reload();
+      if (wasControlled) {
+        window.location.reload();
+      }
+      wasControlled = true;
     };
 
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
@@ -61,7 +67,8 @@ export default function ServiceWorkerRegister() {
 
       switch (data.type) {
         case "SW_UPDATED":
-          if (!navigator.serviceWorker.controller) {
+          // SW_UPDATED is sent from activate — only reload if we had a previous SW
+          if (navigator.serviceWorker.controller && wasControlled) {
             handleControllerChange();
           }
           break;

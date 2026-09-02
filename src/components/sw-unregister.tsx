@@ -31,10 +31,35 @@ export default function UnregisterServiceWorker() {
           registrations.map((r) => r.unregister().catch(() => {}))
         );
 
-        // Clear all caches
+        // Clear all Cache API caches
         if ("caches" in window) {
           const names = await caches.keys();
           await Promise.all(names.map((n) => caches.delete(n)));
+        }
+
+        // Clear IndexedDB databases (offline data + outbox)
+        // This prevents cross-user data leakage on shared devices
+        for (const dbName of ["waqt-offline-data", "waqt-offline"]) {
+          await new Promise<void>((resolve) => {
+            try {
+              const req = indexedDB.deleteDatabase(dbName);
+              req.onsuccess = () => resolve();
+              req.onerror = () => resolve();
+              req.onblocked = () => resolve();
+            } catch {
+              resolve();
+            }
+          });
+        }
+
+        // Clear all waqt-* localStorage keys
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("waqt")) localStorage.removeItem(key);
+          }
+        } catch {
+          // non-critical
         }
       } catch {
         // Ignore — SW cleanup is best-effort

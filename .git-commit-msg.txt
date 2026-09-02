@@ -1,29 +1,20 @@
-Fix offline-first: cache all app pages, stale-while-revalidate navigation
+Add unified Goals workspace with 8 tabs, Turnstile, homework, habits, notes
 
-The app was showing "You're offline" instead of cached content because:
-1. Navigation was network-first — fetch failed offline, fell back to cache
-   that may not exist for pages the user hadn't visited
-2. force-dynamic pages are server-rendered per user, never precached
-3. The offline fallback was a dead-end page, not cached app content
-
-Fixes:
-- SW: change navigation strategy from network-first to stale-while-revalidate
-  for all authenticated app pages. Cached HTML is served instantly (offline-
-  first), then updated in background when online.
-- SW: add PAGE_CACHE for app page HTML, separate from runtime/API caches
-- SW: add warmCache() function that prefetches all 7 app routes
-  (/calendar/day, /calendar/month, /prayer, /goals, /settings, /learn,
-  /onboarding) and caches their HTML. Skips pages already fresh (<1hr old).
-- SW: warmCache() runs on install, activate, and when client sends WARM_CACHE
-- SW: add WARM_CACHE message handler
-- SW: improve offline fallback — instead of "You're offline" dead-end, serve
-  any cached app page. Only show offline.html as absolute last resort.
-- SW: only revalidate RSC payloads when navigator.onLine (avoid wasted fetches)
-- SW: bump cache version to waqt-v25
-- sw-register: send WARM_CACHE on initial load, on 'online' event, and on
-  visibility change when online — keeps all app pages cached for offline use
-- offline.html: auto-reload when back online, show "Reconnecting..." instead
-  of dead-end "You're offline" message
+- Goals page rebuilt as a multi-tab workspace: Today, Long-term, Short-term,
+  Homework, Habits, Notes, Backlog, Done
+- Homework moved inside Goals as a tab; standalone /homework redirects to
+  /goals#homework
+- Mobile nav replaces Homework with Today (links to /goals)
+- New schema: goal_type column, habits, habit_logs, notes tables (migrations
+  0009, 0010) with indexes aligned to query paths
+- New API routes: classes, homework, habits, habit-logs, notes — all with
+  ownership checks, rate limiting, and force-dynamic
+- Offline-first: Dexie stores + cache writers for homework, classes, habits,
+  habit logs, notes; SW syncs on reconnect
+- Cloudflare Turnstile integration on signup (client widget + server
+  siteverify, fails closed in production)
+- Service worker cache versioning with old-cache eviction
+- Fixed habits/[id] route params for Next.js 16 (Promise params)
 
 Generated with [Devin](https://devin.ai)
 

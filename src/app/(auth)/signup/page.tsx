@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
-import { ClawCaptcha } from "playcaptcha";
-import "playcaptcha/clawcaptcha.css";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 import { getHashedFingerprint } from "@/lib/auth/fingerprint";
 
 type Step = "email" | "captcha" | "password";
@@ -14,9 +13,10 @@ export default function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 
   // ── Honeypot fields — hidden from humans, bots fill these ──
   const [honeypotWebsite, setHoneypotWebsite] = useState("");
@@ -54,8 +54,8 @@ export default function SignupForm() {
   }
 
   // ── Step 2: captcha verified → move to password ──
-  function handleCaptchaVerify() {
-    setCaptchaVerified(true);
+  function handleCaptchaVerify(token: string) {
+    setCaptchaToken(token);
     setTimeout(() => setStep("password"), 600);
   }
 
@@ -94,6 +94,7 @@ export default function SignupForm() {
         body: JSON.stringify({
           email,
           password,
+          turnstileToken: captchaToken || undefined,
           fingerprintHash: fingerprintHash || undefined,
           // Honeypots — server checks these too
           website: honeypotWebsite,
@@ -225,22 +226,27 @@ export default function SignupForm() {
         </form>
       )}
 
-      {/* ── Step 2: Captcha ── */}
+      {/* ── Step 2: Captcha (Cloudflare Turnstile) ── */}
       {step === "captcha" && (
         <div className="flex flex-col gap-4">
           <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
-            Prove you&apos;re human
+            Verify you&apos;re human
           </h1>
           <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            Grab the right toy with the claw. Use arrow keys or the joystick,
-            then hit the red button.
+            Quick security check to keep bots out. This usually happens automatically.
           </p>
 
-          <div className="clawcap-wrapper">
-            <ClawCaptcha onVerify={handleCaptchaVerify} />
+          <div className="flex justify-center">
+            <TurnstileWidget
+              ref={turnstileRef}
+              onVerify={handleCaptchaVerify}
+              onExpire={() => setCaptchaToken(null)}
+              onError={() => setCaptchaToken(null)}
+              action="signup"
+            />
           </div>
 
-          {captchaVerified && (
+          {captchaToken && (
             <p className="flex items-center justify-center gap-1.5 text-sm font-medium" style={{ color: "var(--color-success)" }}>
               <Check className="h-4 w-4" />
               Verified — continuing...

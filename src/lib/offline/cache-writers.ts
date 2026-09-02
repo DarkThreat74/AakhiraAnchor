@@ -265,3 +265,338 @@ export function deleteGoalFromCache(goalId: string): void {
     // non-critical
   }
 }
+
+// ─── Homework cache writers ───────────────────────────────────────────
+
+interface HomeworkLike {
+  id: string;
+  title: string;
+  description: string | null;
+  classId: string | null;
+  dueDate: string;
+  dueTime: string | null;
+  priority: string;
+  status: string;
+  kind: string;
+  completedAt: string | Date | null;
+  _pending?: boolean;
+}
+
+/**
+ * Sync the full homework list to IndexedDB. Replaces all homework.
+ * Also prunes completed homework older than 30 days to prevent bloat.
+ */
+export function syncHomeworkToCache(homework: HomeworkLike[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.homework.clear().then(() =>
+      db.homework.bulkPut(
+        homework.map((h) => ({
+          id: h.id,
+          title: h.title,
+          description: h.description,
+          classId: h.classId,
+          dueDate: h.dueDate,
+          dueTime: h.dueTime,
+          priority: h.priority,
+          status: h.status,
+          kind: h.kind,
+          completedAt: h.completedAt
+            ? typeof h.completedAt === "string"
+              ? h.completedAt
+              : h.completedAt.toISOString()
+            : null,
+          _pending: h._pending,
+          _cachedAt: Date.now(),
+        }))
+      )
+    ).catch(() => {});
+    // Prune old completed homework
+    import("./db").then(({ pruneOldHomeworkCache }) => pruneOldHomeworkCache()).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+/**
+ * Add or update a single homework item in the IndexedDB cache.
+ */
+export function upsertHomeworkToCache(hw: HomeworkLike): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.homework.put({
+      id: hw.id,
+      title: hw.title,
+      description: hw.description,
+      classId: hw.classId,
+      dueDate: hw.dueDate,
+      dueTime: hw.dueTime,
+      priority: hw.priority,
+      status: hw.status,
+      kind: hw.kind,
+      completedAt: hw.completedAt
+        ? typeof hw.completedAt === "string"
+          ? hw.completedAt
+          : hw.completedAt.toISOString()
+        : null,
+      _pending: hw._pending,
+      _cachedAt: Date.now(),
+    }).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+/**
+ * Delete a single homework item from the IndexedDB cache.
+ */
+export function deleteHomeworkFromCache(hwId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.homework.delete(hwId).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+// ─── Classes cache writers ────────────────────────────────────────────
+
+interface ClassLike {
+  id: string;
+  name: string;
+  color: string;
+  archived: boolean;
+  sortOrder: number;
+}
+
+/**
+ * Sync the full classes list to IndexedDB. Replaces all classes.
+ */
+export function syncClassesToCache(classes: ClassLike[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.classes.clear().then(() =>
+      db.classes.bulkPut(
+        classes.map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color,
+          archived: c.archived,
+          sortOrder: c.sortOrder,
+          _cachedAt: Date.now(),
+        }))
+      )
+    ).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+/**
+ * Add or update a single class in the IndexedDB cache.
+ */
+export function upsertClassToCache(cls: ClassLike): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.classes.put({
+      id: cls.id,
+      name: cls.name,
+      color: cls.color,
+      archived: cls.archived,
+      sortOrder: cls.sortOrder,
+      _cachedAt: Date.now(),
+    }).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+/**
+ * Delete a single class from the IndexedDB cache.
+ */
+export function deleteClassFromCache(classId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.classes.delete(classId).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+// ─── Habits cache writers ─────────────────────────────────────────────
+
+interface HabitLike {
+  id: string;
+  name: string;
+  description: string | null;
+  frequency: string;
+  color: string;
+  targetCount: number;
+  archived: boolean;
+  sortOrder: number;
+}
+
+export function syncHabitsToCache(habits: HabitLike[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.habits.clear().then(() =>
+      db.habits.bulkPut(
+        habits.map((h) => ({
+          id: h.id,
+          name: h.name,
+          description: h.description,
+          frequency: h.frequency,
+          color: h.color,
+          targetCount: h.targetCount,
+          archived: h.archived,
+          sortOrder: h.sortOrder,
+          _cachedAt: Date.now(),
+        }))
+      )
+    ).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+export function upsertHabitToCache(habit: HabitLike): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.habits.put({
+      id: habit.id,
+      name: habit.name,
+      description: habit.description,
+      frequency: habit.frequency,
+      color: habit.color,
+      targetCount: habit.targetCount,
+      archived: habit.archived,
+      sortOrder: habit.sortOrder,
+      _cachedAt: Date.now(),
+    }).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+export function deleteHabitFromCache(habitId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.habits.delete(habitId).catch(() => {});
+    // Also delete all habit logs for this habit
+    db.habitLogs.where("habitId").equals(habitId).delete().catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+// ─── Habit logs cache writers ─────────────────────────────────────────
+
+export function syncHabitLogsToCache(logs: { id: string; habitId: string; date: string; count: number }[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.habitLogs.clear().then(() =>
+      db.habitLogs.bulkPut(
+        logs.map((l) => ({
+          id: l.id,
+          habitId: l.habitId,
+          date: l.date,
+          count: l.count,
+          _cachedAt: Date.now(),
+        }))
+      )
+    ).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+export function toggleHabitLogInCache(habitId: string, date: string, completed: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    if (completed) {
+      db.habitLogs.put({
+        id: `${habitId}_${date}`,
+        habitId,
+        date,
+        count: 1,
+        _cachedAt: Date.now(),
+      }).catch(() => {});
+    } else {
+      db.habitLogs.delete(`${habitId}_${date}`).catch(() => {});
+    }
+  } catch {
+    // non-critical
+  }
+}
+
+// ─── Notes cache writers ──────────────────────────────────────────────
+
+interface NoteLike {
+  id: string;
+  title: string | null;
+  content: string;
+  pinned: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export function syncNotesToCache(notes: NoteLike[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.notes.clear().then(() =>
+      db.notes.bulkPut(
+        notes.map((n) => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          pinned: n.pinned,
+          createdAt: typeof n.createdAt === "string" ? n.createdAt : n.createdAt.toISOString(),
+          updatedAt: typeof n.updatedAt === "string" ? n.updatedAt : n.updatedAt.toISOString(),
+          _cachedAt: Date.now(),
+        }))
+      )
+    ).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+export function upsertNoteToCache(note: NoteLike): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.notes.put({
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      pinned: note.pinned,
+      createdAt: typeof note.createdAt === "string" ? note.createdAt : note.createdAt.toISOString(),
+      updatedAt: typeof note.updatedAt === "string" ? note.updatedAt : note.updatedAt.toISOString(),
+      _cachedAt: Date.now(),
+    }).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}
+
+export function deleteNoteFromCache(noteId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const db = getOfflineDB();
+    db.notes.delete(noteId).catch(() => {});
+  } catch {
+    // non-critical
+  }
+}

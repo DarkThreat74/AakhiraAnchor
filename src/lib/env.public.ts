@@ -8,4 +8,5 @@ export const publicEnv = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
   aladhanBaseUrl: process.env.NEXT_PUBLIC_ALADHAN_BASE_URL ?? 'https://api.aladhan.com/v1',
   vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '',
+  turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '',
 } as const;

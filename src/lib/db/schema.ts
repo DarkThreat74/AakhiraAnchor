@@ -420,7 +420,9 @@ export const goals = pgTable('goals', {
   parentId: uuid('parent_id'),
   title: text('title').notNull(),
   description: text('description'),
-  status: text('status').default('active').notNull(), // active | done | archived
+  status: text('status').default('active').notNull(), // active | done | archived | backlog
+  // Type: long-term (yearly/life goals) vs short-term (weekly/monthly milestones)
+  goalType: text('goal_type').default('short_term').notNull(), // long_term | short_term
   sortOrder: integer('sort_order').default(0).notNull(),
   color: text('color'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -434,6 +436,8 @@ export const goals = pgTable('goals', {
   // Composite index for list query: WHERE user_id = $1 ORDER BY sort_order, created_at
   // Eliminates the sort step
   userSortCreatedIdx: index('goals_user_sort_created_idx').on(table.userId, table.sortOrder, table.createdAt),
+  // Filter by type (long-term vs short-term tabs)
+  userIdxType: index('goals_user_type_idx').on(table.userId, table.goalType),
 }));
 
 export const goalShareTokens = pgTable('goal_share_tokens', {
@@ -444,6 +448,101 @@ export const goalShareTokens = pgTable('goal_share_tokens', {
 }, (table) => ({
   // Query: list/revoke share tokens by user
   userIdIdx: index('goal_share_tokens_user_id_idx').on(table.userId),
+}));
+
+// ─── Homework Tracker ─────────────────────────────────────────────────
+// Students can track homework assignments with due dates, categorize by class,
+// and see them as colored dots on the calendar.
+
+export const homeworkStatus = pgEnum('homework_status', ['pending', 'completed']);
+export const homeworkPriority = pgEnum('homework_priority', ['low', 'medium', 'high']);
+export const homeworkKind = pgEnum('homework_kind', ['homework', 'test', 'project', 'quiz', 'reading', 'other']);
+
+// Classes (subjects) — color-coded for calendar dots and list chips
+export const classes = pgTable('classes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: text('color').notNull(),
+  archived: boolean('archived').default(false).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('classes_user_id_idx').on(table.userId),
+}));
+
+// Homework assignments
+export const homeworks = pgTable('homeworks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  classId: uuid('class_id').references(() => classes.id, { onDelete: 'set null' }),
+  dueDate: date('due_date').notNull(),
+  dueTime: time('due_time'),
+  priority: homeworkPriority('priority').default('medium').notNull(),
+  status: homeworkStatus('status').default('pending').notNull(),
+  kind: homeworkKind('kind').default('homework').notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Hot path: list homework by user ordered by due date
+  userDueIdx: index('homeworks_user_due_idx').on(table.userId, table.dueDate),
+  // Filter by class
+  userClassIdx: index('homeworks_user_class_idx').on(table.userId, table.classId),
+  // Filter by status
+  userStatusIdx: index('homeworks_user_status_idx').on(table.userId, table.status),
+}));
+
+// ─── Habits (daily/weekly habit tracking with streaks) ───────────────
+
+export const habitFrequency = pgEnum('habit_frequency', ['daily', 'weekly']);
+
+export const habits = pgTable('habits', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  frequency: habitFrequency('frequency').default('daily').notNull(),
+  color: text('color').default('#c2410c').notNull(),
+  targetCount: integer('target_count').default(1).notNull(),
+  archived: boolean('archived').default(false).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('habits_user_id_idx').on(table.userId),
+}));
+
+// Habit completion logs — one row per habit per date
+export const habitLogs = pgTable('habit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  habitId: uuid('habit_id').notNull().references(() => habits.id, { onDelete: 'cascade' }),
+  date: date('date').notNull(), // YYYY-MM-DD
+  count: integer('count').default(1).notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  // Unique constraint: one log per habit per date
+  userHabitDateIdx: uniqueIndex('habit_logs_user_habit_date_idx').on(table.userId, table.habitId, table.date),
+  // Query all logs for a user on a date (Today tab)
+  userDateIdx: index('habit_logs_user_date_idx').on(table.userId, table.date),
+}));
+
+// ─── Notes (quick brain dump / journal) ──────────────────────────────
+
+export const notes = pgTable('notes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  content: text('content').notNull().default(''),
+  pinned: boolean('pinned').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('notes_user_id_idx').on(table.userId),
+  userUpdatedIdx: index('notes_user_updated_idx').on(table.userId, table.updatedAt),
 }));
 
 // ─── Type Exports (for use in app code) ───
@@ -474,3 +573,13 @@ export type TrustedDevice = typeof trustedDevices.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
 export type GoalShareToken = typeof goalShareTokens.$inferSelect;
+export type Class = typeof classes.$inferSelect;
+export type NewClass = typeof classes.$inferInsert;
+export type Homework = typeof homeworks.$inferSelect;
+export type NewHomework = typeof homeworks.$inferInsert;
+export type Habit = typeof habits.$inferSelect;
+export type NewHabit = typeof habits.$inferInsert;
+export type HabitLog = typeof habitLogs.$inferSelect;
+export type NewHabitLog = typeof habitLogs.$inferInsert;
+export type Note = typeof notes.$inferSelect;
+export type NewNote = typeof notes.$inferInsert;

@@ -66,8 +66,8 @@ export function escapeHtml(s: string): string {
  * @param fields - hidden honeypot field values from the form
  * @returns true if any honeypot field is filled (bot detected)
  */
-export function isHoneypotTripped(fields: Record<string, string | undefined | null>): boolean {
-  return Object.values(fields).some((v) => v && v.trim().length > 0);
+export function isHoneypotTripped(fields: Record<string, unknown>): boolean {
+  return Object.values(fields).some((v) => typeof v === "string" && v.trim().length > 0);
 }
 
 /**

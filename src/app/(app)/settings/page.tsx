@@ -35,8 +35,7 @@ export default async function SettingsPage() {
   } | null = null;
 
   if (prayerSettings) {
-    const userNow = new Date(new Date().toLocaleString("en-US", { timeZone: prayerSettings.timezone || "UTC" }));
-    const today = userNow.toISOString().split("T")[0];
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: prayerSettings.timezone || "UTC" });
 
     const [todayTimes] = await db
       .select()

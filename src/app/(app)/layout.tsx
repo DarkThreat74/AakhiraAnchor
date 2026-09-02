@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { Calendar, Settings, Flame, Target, BookOpen } from "lucide-react";
+import { Calendar, Settings, Flame, Target, BookOpen, Sun } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
 import BiometricGate from "@/components/biometric-gate";
@@ -63,7 +63,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const navItems = [
     { label: "Calendar", href: "/calendar/day", icon: Calendar, alert: false },
     { label: "Prayer", href: "/prayer", icon: Flame, alert: false },
-    { label: "Goals", href: "/goals", icon: Target, alert: false },
+    { label: "Today", href: "/goals", icon: Sun, alert: false },
+    { label: "Goals", href: "/goals#long-term", icon: Target, alert: false },
     { label: "Settings", href: "/settings", icon: Settings, alert: needsSettings },
   ];
 

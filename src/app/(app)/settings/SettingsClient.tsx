@@ -227,13 +227,34 @@ export default function SettingsClient({
   const [prayerSettings, setPrayerSettings] = useState<PrayerSettings | null>(initialSettings);
   const [todayPrayerTimes, setTodayPrayerTimes] = useState<PrayerTimes | null>(initialTimes);
 
-  // Theme state
-  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
-    if (typeof window === "undefined") return "system";
+  // Ref to always have the latest prayerSettings inside async closures
+  // (prevents stale-closure race conditions when location + method/madhab saves overlap)
+  const prayerSettingsRef = useRef<PrayerSettings | null>(initialSettings);
+  useEffect(() => {
+    prayerSettingsRef.current = prayerSettings;
+  }, [prayerSettings]);
+
+  // Auto-sync localStorage cache whenever prayerSettings changes
+  useEffect(() => {
+    if (!prayerSettings) return;
+    setCachedPrayerSettings({
+      timezone: prayerSettings.timezone,
+      calculationMethod: prayerSettings.calculationMethod,
+      madhab: prayerSettings.madhab ?? "standard",
+      latitude: String(prayerSettings.latitude),
+      longitude: String(prayerSettings.longitude),
+    });
+  }, [prayerSettings]);
+
+  // Theme state — initialize to "system" to avoid SSR hydration mismatch.
+  // The inline script in layout.tsx sets data-theme before paint, so colors
+  // are correct immediately; we just sync the selected-button state after mount.
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  useEffect(() => {
     const stored = localStorage.getItem("waqt:theme");
-    if (stored === "light" || stored === "dark") return stored;
-    return "system";
-  });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from localStorage after mount to avoid hydration mismatch
+    if (stored === "light" || stored === "dark") setTheme(stored);
+  }, []);
 
   function handleThemeChange(next: "light" | "dark" | "system") {
     setTheme(next);
@@ -425,7 +446,7 @@ export default function SettingsClient({
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityQuery)}&limit=1`,
-        { headers: { Accept: "application/json" } },
+        { headers: { Accept: "application/json", "User-Agent": "Waqt/1.0 (https://waqt.app)" } },
       );
       if (res.ok) {
         const results = await res.json().catch(() => []);
@@ -481,20 +502,14 @@ export default function SettingsClient({
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         clearApiCache();
-        setPrayerSettings({
+        // Use functional setState to avoid overwriting concurrent method/madhab updates
+        setPrayerSettings((prev) => ({
           latitude: locationResult.lat,
           longitude: locationResult.lng,
           timezone: locationResult.timezone,
-          calculationMethod: data.calculationMethod || selectedMethod,
-          madhab: data.madhab || selectedMadhab,
-        });
-        setCachedPrayerSettings({
-          timezone: locationResult.timezone,
-          calculationMethod: data.calculationMethod || selectedMethod,
-          madhab: data.madhab || selectedMadhab,
-          latitude: String(locationResult.lat),
-          longitude: String(locationResult.lng),
-        });
+          calculationMethod: data.calculationMethod || (prev?.calculationMethod ?? selectedMethod),
+          madhab: data.madhab || (prev?.madhab ?? selectedMadhab),
+        }));
         setLocationMsg({ ok: true, text: "Location saved. Syncing prayer times..." });
         setEditingLocation(false);
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
@@ -517,8 +532,11 @@ export default function SettingsClient({
   }
 
   // Unified save function for method + madhab — auto-called on dropdown change
+  // Uses prayerSettingsRef to avoid stale closure race conditions when
+  // location/method/madhab saves overlap.
   async function savePrayerSettings(field: "method" | "madhab", methodVal?: number, madhabVal?: string) {
-    if (!prayerSettings) return;
+    const current = prayerSettingsRef.current;
+    if (!current) return;
     const method = methodVal ?? selectedMethod;
     const madhab = madhabVal ?? selectedMadhab;
     const setSaving = field === "method" ? setSavingMethod : setSavingMadhab;
@@ -531,9 +549,9 @@ export default function SettingsClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          latitude: prayerSettings.latitude,
-          longitude: prayerSettings.longitude,
-          timezone: prayerSettings.timezone,
+          latitude: current.latitude,
+          longitude: current.longitude,
+          timezone: current.timezone,
           calculationMethod: method,
           madhab,
         }),
@@ -541,19 +559,14 @@ export default function SettingsClient({
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         clearApiCache();
-        const updated = {
-          ...prayerSettings,
-          calculationMethod: data.calculationMethod || method,
-          madhab: data.madhab || madhab,
-        };
-        setPrayerSettings(updated);
-        setCachedPrayerSettings({
-          timezone: prayerSettings.timezone,
-          calculationMethod: data.calculationMethod || method,
-          madhab: data.madhab || madhab,
-          latitude: prayerSettings.latitude,
-          longitude: prayerSettings.longitude,
-        });
+        // Use functional setState to avoid overwriting concurrent updates
+        setPrayerSettings((prev) =>
+          prev ? {
+            ...prev,
+            calculationMethod: data.calculationMethod || method,
+            madhab: data.madhab || madhab,
+          } : prev
+        );
         setMsg({ ok: true, text: "Saved. Re-syncing prayer times..." });
         const syncRes = await fetch("/api/prayer-times/sync", { method: "POST" });
         if (syncRes.ok) {
@@ -566,9 +579,15 @@ export default function SettingsClient({
       } else {
         const data = await res.json().catch(() => ({}));
         setMsg({ ok: false, text: data.error || "Failed to save." });
+        // Revert dropdown to the saved value on failure
+        if (field === "method") setSelectedMethod(current.calculationMethod);
+        else setSelectedMadhab(current.madhab || "standard");
       }
     } catch {
       setMsg({ ok: false, text: "Network error." });
+      // Revert dropdown to the saved value on failure
+      if (field === "method") setSelectedMethod(current.calculationMethod);
+      else setSelectedMadhab(current.madhab || "standard");
     } finally {
       setSaving(false);
       setTimeout(() => setMsg(null), 4000);
@@ -576,8 +595,11 @@ export default function SettingsClient({
   }
 
   async function refreshPrayerTimes() {
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    // Compute "today" in the user's prayer timezone, not browser local time
+    const tz = prayerSettingsRef.current?.timezone;
+    const today = tz
+      ? new Date().toLocaleDateString("en-CA", { timeZone: tz })
+      : new Date().toLocaleDateString("en-CA");
     try {
       const res = await fetch(`/api/prayer-times?date=${today}`);
       if (res.ok) {
@@ -795,12 +817,12 @@ export default function SettingsClient({
             }
           }
           if (subscription) {
-            await fetch("/api/notifications/subscribe", {
+            const subRes = await fetch("/api/notifications/subscribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(subscription),
             });
-            pushSubscribed = true;
+            pushSubscribed = subRes.ok;
           }
         }
       } catch (err) {
@@ -829,6 +851,7 @@ export default function SettingsClient({
         ? "Notifications enabled with background push! You'll get alerts at each prayer time."
         : "Notifications enabled! You'll get alerts at each prayer time while the app is open."
       );
+      setPushStatus(pushSubscribed ? "Subscribed to push" : "Not subscribed to push");
       window.dispatchEvent(new CustomEvent("waqt:notifications-enabled"));
     } catch (err) {
       console.error("[Waqt] Enable notifications failed:", err);
@@ -926,9 +949,37 @@ export default function SettingsClient({
 
   async function handleLogout() {
     setLoggingOut(true);
+    // Unsubscribe push before logout so the old user doesn't get stale notifications
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      const sub = await reg?.pushManager?.getSubscription();
+      if (sub) {
+        await fetch("/api/notifications/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        }).catch(() => {});
+        await sub.unsubscribe().catch(() => {});
+      }
+    } catch { /* non-critical */ }
     try { await clearOfflineCache(); } catch { /* non-critical */ }
     try { clearCachedPrayerSettings(); } catch { /* non-critical */ }
     try { clearApiCache(); } catch { /* non-critical */ }
+    // Clear all waqt-* localStorage keys (theme, prayer settings, etc.)
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("waqt")) localStorage.removeItem(key);
+      }
+    } catch { /* non-critical */ }
+    // Direct cache deletion fallback (in case SW controller is null)
+    try {
+      if ("caches" in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+    } catch { /* non-critical */ }
     try {
       if (navigator.serviceWorker?.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "CLEAR_OUTBOX" });

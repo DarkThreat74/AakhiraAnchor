@@ -56,4 +56,7 @@ export const env = {
 
   // LLM
   openRouterApiKey: required('OPENROUTER_API_KEY'),
+
+  // Cloudflare Turnstile (bot protection)
+  turnstileSecretKey: required('TURNSTILE_SECRET_KEY'),
 } as const;

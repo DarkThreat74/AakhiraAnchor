@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     })
     .from(schema.trustedDevices)
     .where(eq(schema.trustedDevices.userId, session.userId))
-    .orderBy(schema.trustedDevices.lastUsedAt);
+    .orderBy(desc(schema.trustedDevices.lastUsedAt));
 
   return NextResponse.json({ devices });
 }

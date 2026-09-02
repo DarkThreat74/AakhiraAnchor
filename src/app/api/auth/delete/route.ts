@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionFromRequest } from "@/lib/auth/session";
+import { getSessionFromRequest, clearSessionCookie } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +9,9 @@ export const dynamic = "force-dynamic";
 /**
  * Account deletion — required by Apple Guideline 5.1.2 and Google Play.
  *
- * Anonymizes PII (email, name, phone → [deleted]) and revokes the session.
- * The user's prayer logs, calendar events, and qadaa ledger are retained
- * in anonymized form for aggregate analytics (no PII attached).
+ * Deletes the user row entirely. ON DELETE CASCADE on all foreign keys
+ * cleans up prayer_settings, trusted_devices, push_subscriptions, events,
+ * goals, onboarding_responses, prayer_friends, prayer_log, etc.
  *
  * Requires authenticated session + body { confirm: "DELETE" } to prevent
  * accidental deletion.
@@ -44,25 +43,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Anonymize PII — keep the row so foreign keys don't break,
-    // but remove all identifiable information
-    await db
-      .update(schema.users)
-      .set({
-        email: `deleted-${session.userId.slice(0, 8)}@waqt.app`,
-        passwordHash: "deleted",
-        displayName: null,
-        firstName: null,
-        phone: null,
-        phoneVerified: false,
-        publicShareToken: null,
-        prayerCode: null,
-      })
-      .where(eq(schema.users.id, session.userId));
+    // Delete the user row — ON DELETE CASCADE cleans up ALL related PII:
+    // prayer_settings (lat/lng/timezone), trusted_devices (fingerprints),
+    // push_subscriptions, events (titles), goals (titles/descriptions),
+    // onboarding_responses, prayer_friends, prayer_log, sunnah_log,
+    // qadaa_ledger, qadaa_log_entries, huddle_completions, daily_lesson_views,
+    // goal_share_tokens, oath_ledger, oath_settings
+    await db.delete(schema.users).where(eq(schema.users.id, session.userId));
 
     // Clear the session cookie
-    const cookieStore = await cookies();
-    cookieStore.delete("waqt-session");
+    await clearSessionCookie();
 
     return NextResponse.json({ success: true });
   } catch {

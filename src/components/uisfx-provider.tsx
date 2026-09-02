@@ -15,18 +15,20 @@ const UISFXContext = createContext<UISFXContextValue | null>(null);
 
 export function UISFXProvider({ children }: { children: ReactNode }) {
   const playerRef = useRef<UISFXPlayer | null>(null);
-  // Read persisted sound preference synchronously so we don't need setState in useEffect
-  const [isEnabled, setIsEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
+  // Start with a stable default to avoid hydration mismatch.
+  // The stored preference is applied in useEffect after mount.
+  const [isEnabled, setIsEnabled] = useState(true);
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem("waqt:sound");
       if (stored) {
         const parsed = JSON.parse(stored);
-        return parsed.enabled !== false;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate localStorage hydration after mount
+        setIsEnabled(parsed.enabled !== false);
       }
     } catch { /* ignore */ }
-    return true;
-  });
+  }, []);
 
   useEffect(() => {
     const player = createUISFX({

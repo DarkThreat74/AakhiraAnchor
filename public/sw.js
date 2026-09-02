@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v26";
+const CACHE_VERSION = "waqt-v28";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -43,6 +43,7 @@ const APP_PAGES = [
   "/calendar/day",
   "/calendar/month",
   "/prayer",
+  "/homework",
   "/goals",
   "/settings",
   "/learn",
@@ -102,64 +103,73 @@ async function removeFromOutbox(id) {
 }
 
 // ─── Sync offline outbox ───
+// Concurrency guard: prevent duplicate syncs from overlapping triggers
+let isSyncing = false;
+
 async function syncOutbox() {
-  const outbox = await getOutbox();
-  if (outbox.length === 0) return;
+  if (isSyncing) return; // Already syncing — don't duplicate
+  isSyncing = true;
+  try {
+    const outbox = await getOutbox();
+    if (outbox.length === 0) return;
 
-  let syncedCount = 0;
+    let syncedCount = 0;
 
-  for (const item of outbox) {
-    try {
-      // Add _offlineTimestamp to the body so the server can check windows
-      // against when the action was originally performed, not sync time
-      const bodyToSend = item.body
-        ? JSON.stringify({ ...item.body, _offlineTimestamp: item.timestamp })
-        : undefined;
+    for (const item of outbox) {
+      try {
+        // Add _offlineTimestamp to the body so the server can check windows
+        // against when the action was originally performed, not sync time
+        const bodyToSend = item.body
+          ? JSON.stringify({ ...item.body, _offlineTimestamp: item.timestamp })
+          : undefined;
 
-      const res = await fetch(item.url, {
-        method: item.method,
-        headers: item.headers || { "Content-Type": "application/json" },
-        body: bodyToSend,
-        credentials: "include",
-      });
+        const res = await fetch(item.url, {
+          method: item.method,
+          headers: item.headers || { "Content-Type": "application/json" },
+          body: bodyToSend,
+          credentials: "include",
+        });
 
-      if (res.ok) {
-        await removeFromOutbox(item.id);
-        syncedCount++;
-      } else if (res.status === 401 || res.status === 403) {
-        // Session expired — keep the item in the outbox so it can retry
-        // after the user re-authenticates. Don't drop queued writes.
-        // Notify client so it can prompt re-login.
-        const clients = await self.clients.matchAll({ type: "window" });
-        clients.forEach((c) => c.postMessage({
-          type: "EVENT_SYNC_FAILED",
-          operation: item,
-          status: res.status,
-        }));
-        // Stop syncing — remaining items will also fail with 401
-        break;
-      } else {
-        // Server rejected it (e.g. validation error) — remove from outbox
-        // to avoid retrying forever, but notify client
-        await removeFromOutbox(item.id);
-        const clients = await self.clients.matchAll({ type: "window" });
-        clients.forEach((c) => c.postMessage({
-          type: "EVENT_SYNC_FAILED",
-          operation: item,
-          status: res.status,
-        }));
+        if (res.ok) {
+          await removeFromOutbox(item.id);
+          syncedCount++;
+        } else if (res.status === 401 || res.status === 403) {
+          // Session expired — keep the item in the outbox so it can retry
+          // after the user re-authenticates. Don't drop queued writes.
+          const clients = await self.clients.matchAll({ type: "window" });
+          clients.forEach((c) => c.postMessage({
+            type: "EVENT_SYNC_FAILED",
+            operation: item,
+            status: res.status,
+          }));
+          break; // Stop — remaining items will also fail with 401
+        } else if (res.status >= 500) {
+          // Server error — leave in outbox for retry, don't delete
+          continue;
+        } else {
+          // 4xx (validation error, conflict) — remove from outbox to avoid
+          // retrying forever, but notify client so UI can surface the failure
+          await removeFromOutbox(item.id);
+          const clients = await self.clients.matchAll({ type: "window" });
+          clients.forEach((c) => c.postMessage({
+            type: "EVENT_SYNC_FAILED",
+            operation: item,
+            status: res.status,
+          }));
+        }
+      } catch {
+        // Network error on this item — leave it in the outbox for next sync
+        continue;
       }
-    } catch {
-      // Network error on this item — leave it in the outbox for next sync
-      // and continue trying the remaining items (one failure doesn't mean all will fail)
-      continue;
     }
-  }
 
-  // Notify client that sync is complete so it can refetch fresh data
-  if (syncedCount > 0) {
-    const clients = await self.clients.matchAll({ type: "window" });
-    clients.forEach((c) => c.postMessage({ type: "EVENT_SYNCED", count: syncedCount }));
+    // Notify client that sync is complete so it can refetch fresh data
+    if (syncedCount > 0) {
+      const clients = await self.clients.matchAll({ type: "window" });
+      clients.forEach((c) => c.postMessage({ type: "EVENT_SYNCED", count: syncedCount }));
+    }
+  } finally {
+    isSyncing = false;
   }
 }
 
@@ -213,10 +223,10 @@ self.addEventListener("install", (event) => {
         // If precache fails (e.g. offline), still install
       })
       .then(() => self.skipWaiting())
-      .then(() => {
-        // Warm cache in background — don't block install
-        warmCache().catch(() => {});
-      })
+  );
+  // Warm cache in background — keep SW alive until it finishes
+  event.waitUntil(
+    warmCache().catch(() => {})
   );
 });
 
@@ -242,14 +252,8 @@ self.addEventListener("activate", (event) => {
         )
       )
       .then(() => self.clients.claim())
-      .then(() => {
-        // Try to sync any pending offline events
-        syncOutbox();
-      })
-      .then(() => {
-        // Warm cache in background so all app pages are available offline
-        warmCache().catch(() => {});
-      })
+      .then(() => syncOutbox())          // Replay pending offline writes
+      .then(() => warmCache().catch(() => {}))  // Warm all app pages for offline
       .then(() => {
         // Notify all clients that a new SW is active
         return self.clients.matchAll({ type: "window" }).then((clients) => {
@@ -279,19 +283,25 @@ self.addEventListener("fetch", (event) => {
   // Use CacheFirst — these files are content-hashed and never change.
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(
-      caches.match(request).then((cached) => {
+      (async () => {
+        const cached = await caches.match(request);
         if (cached) return cached;
-        return fetch(request).then((response) => {
+        try {
+          const response = await fetch(request);
           if (response.ok) {
             const responseClone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
+            const cache = await caches.open(STATIC_CACHE);
+            await cache.put(request, responseClone);
           }
           return response;
-        }).catch(() => {
-          // Offline and no cache — return empty JS to avoid crash
-          return new Response("", { status: 200, headers: { "Content-Type": "application/javascript" } });
-        });
-      })
+        } catch {
+          // Offline and no cache — return 503, not empty JS (empty JS breaks hydration)
+          return new Response("/* offline */", {
+            status: 503,
+            headers: { "Content-Type": "application/javascript" },
+          });
+        }
+      })()
     );
     return;
   }
@@ -386,6 +396,27 @@ self.addEventListener("fetch", (event) => {
                 completedAt: null,
                 _pending: true,
               };
+            } else if (url.pathname.startsWith("/api/homework")) {
+              // For homework POST, echo back a synthetic homework object
+              responseData.id = tempId;
+              responseData.title = body.title || "Untitled";
+              responseData.description = body.description || null;
+              responseData.classId = body.classId || null;
+              responseData.dueDate = body.dueDate;
+              responseData.dueTime = body.dueTime || null;
+              responseData.priority = body.priority || "medium";
+              responseData.status = "pending";
+              responseData.kind = body.kind || "homework";
+              responseData.completedAt = null;
+              responseData._pending = true;
+            } else if (url.pathname.startsWith("/api/classes")) {
+              // For classes POST, echo back a synthetic class object
+              responseData.id = tempId;
+              responseData.name = body.name || "Untitled";
+              responseData.color = body.color || "#c2410c";
+              responseData.archived = false;
+              responseData.sortOrder = 0;
+              responseData._pending = true;
             } else {
               // For other API POSTs (prayer log, qadaa, etc.), echo back the body
               Object.assign(responseData, body);
@@ -488,27 +519,27 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         const pageCache = await caches.open(PAGE_CACHE);
-        const cached = await pageCache.match(pathname) || await caches.match(request);
+        const cached = await pageCache.match(pathname);
 
-        // Background revalidation (don't await — fire and forget)
+        // Background revalidation — keep SW alive during cache write
         if (navigator.onLine) {
-          fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                const body = response.blob();
-                body.then((blob) => {
+          event.waitUntil(
+            fetch(request)
+              .then(async (response) => {
+                if (response.ok) {
+                  const body = await response.blob();
                   const headers = new Headers(response.headers);
                   headers.set("x-waqt-cached-at", String(Date.now()));
-                  const cachedRes = new Response(blob, {
+                  const cachedRes = new Response(body, {
                     status: response.status,
                     statusText: response.statusText,
                     headers,
                   });
-                  pageCache.put(pathname, cachedRes);
-                });
-              }
-            })
-            .catch(() => {});
+                  await pageCache.put(pathname, cachedRes);
+                }
+              })
+              .catch(() => {})
+          );
         }
 
         if (cached) return cached;
@@ -525,7 +556,7 @@ self.addEventListener("fetch", (event) => {
               statusText: response.statusText,
               headers,
             });
-            pageCache.put(pathname, cachedRes.clone());
+            await pageCache.put(pathname, cachedRes.clone());
             return cachedRes;
           }
           return response;
@@ -567,21 +598,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── API GET requests (events, prayer-times): stale-while-revalidate ──
+  // ── API GET requests (events, prayer-times, homework): stale-while-revalidate ──
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);
         if (cached) {
-          // Revalidate in background
-          fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                const responseClone = response.clone();
-                caches.open(API_CACHE).then((cache) => cache.put(request, responseClone));
-              }
-            })
-            .catch(() => {});
+          // Revalidate in background — keep SW alive during cache write
+          event.waitUntil(
+            fetch(request)
+              .then(async (response) => {
+                if (response.ok) {
+                  const responseClone = response.clone();
+                  const cache = await caches.open(API_CACHE);
+                  await cache.put(request, responseClone);
+                }
+              })
+              .catch(() => {})
+          );
           return cached;
         }
         // No cache — try network
@@ -589,7 +623,8 @@ self.addEventListener("fetch", (event) => {
           const response = await fetch(request);
           if (response.ok) {
             const responseClone = response.clone();
-            caches.open(API_CACHE).then((cache) => cache.put(request, responseClone));
+            const cache = await caches.open(API_CACHE);
+            await cache.put(request, responseClone);
           }
           return response;
         } catch {
@@ -610,16 +645,21 @@ self.addEventListener("fetch", (event) => {
     url.pathname.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|woff2?)$/)
   ) {
     event.respondWith(
-      caches.match(request).then((cached) => {
+      (async () => {
+        const cached = await caches.match(request);
         if (cached) return cached;
-        return fetch(request).then((response) => {
+        try {
+          const response = await fetch(request);
           if (response.ok) {
             const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+            const cache = await caches.open(RUNTIME_CACHE);
+            await cache.put(request, responseClone);
           }
           return response;
-        });
-      })
+        } catch {
+          return new Response("", { status: 503 });
+        }
+      })()
     );
     return;
   }
@@ -635,29 +675,32 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
   if (event.data && event.data.type === "SYNC_OUTBOX") {
-    syncOutbox();
+    event.waitUntil(syncOutbox());
   }
   if (event.data && event.data.type === "WARM_CACHE") {
-    warmCache().catch(() => {});
+    event.waitUntil(warmCache().catch(() => {}));
   }
   if (event.data && event.data.type === "CLEAR_API_CACHE") {
     // Clear API cache to prevent cross-user data leakage
-    caches.delete(API_CACHE).catch(() => {});
+    event.waitUntil(caches.delete(API_CACHE).catch(() => {}));
   }
   if (event.data && event.data.type === "CLEAR_OUTBOX") {
-    // Clear the offline outbox to prevent queued writes from syncing to a different user
-    (async () => {
-      try {
-        const db = await openDB();
-        const tx = db.transaction(OUTBOX_STORE, "readwrite");
-        tx.objectStore(OUTBOX_STORE).clear();
-        await tx.done;
-      } catch {
-        // non-critical
-      }
-    })();
-    // Also clear all caches (including page cache to prevent cross-user data leakage)
-    caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n)))).catch(() => {});
+    // Clear the offline outbox + all caches to prevent cross-user data leakage
+    event.waitUntil(
+      (async () => {
+        try {
+          const db = await openDB();
+          const tx = db.transaction(OUTBOX_STORE, "readwrite");
+          tx.objectStore(OUTBOX_STORE).clear();
+          await tx.done;
+        } catch {
+          // non-critical
+        }
+        // Also clear all caches (page cache may contain user-specific HTML)
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      })()
+    );
   }
 });
 
@@ -714,9 +757,10 @@ self.addEventListener("notificationclick", (event) => {
       // Focus any existing app window and navigate it
       for (const client of clientList) {
         if ("focus" in client) {
-          client.focus();
-          if ("navigate" in client) client.navigate(targetUrl);
-          return;
+          return client.focus().then((c) => {
+            if ("navigate" in c) return c.navigate(targetUrl);
+            return c;
+          });
         }
       }
       // Open new window if none exist

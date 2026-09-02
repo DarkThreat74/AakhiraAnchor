@@ -80,6 +80,60 @@ export interface CachedGoal {
   _cachedAt: number;
 }
 
+export interface CachedHomework {
+  id: string;
+  title: string;
+  description: string | null;
+  classId: string | null;
+  dueDate: string; // YYYY-MM-DD — indexed for fast date-range lookups
+  dueTime: string | null;
+  priority: string;
+  status: string;
+  kind: string;
+  completedAt: string | null;
+  _pending?: boolean;
+  _cachedAt: number;
+}
+
+export interface CachedClass {
+  id: string;
+  name: string;
+  color: string;
+  archived: boolean;
+  sortOrder: number;
+  _cachedAt: number;
+}
+
+export interface CachedHabit {
+  id: string;
+  name: string;
+  description: string | null;
+  frequency: string;
+  color: string;
+  targetCount: number;
+  archived: boolean;
+  sortOrder: number;
+  _cachedAt: number;
+}
+
+export interface CachedHabitLog {
+  id: string;
+  habitId: string;
+  date: string; // YYYY-MM-DD
+  count: number;
+  _cachedAt: number;
+}
+
+export interface CachedNote {
+  id: string;
+  title: string | null;
+  content: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _cachedAt: number;
+}
+
 class WaqtOfflineDB extends Dexie {
   events!: Table<CachedEvent, string>;
   prayerLogs!: Table<CachedPrayerLog, string>;
@@ -89,6 +143,11 @@ class WaqtOfflineDB extends Dexie {
   qadaa!: Table<CachedQadaa, string>;
   sunnahLogs!: Table<CachedSunnahLog, string>;
   goals!: Table<CachedGoal, string>;
+  homework!: Table<CachedHomework, string>;
+  classes!: Table<CachedClass, string>;
+  habits!: Table<CachedHabit, string>;
+  habitLogs!: Table<CachedHabitLog, string>;
+  notes!: Table<CachedNote, string>;
 
   constructor() {
     super("waqt-offline-data");
@@ -107,6 +166,37 @@ class WaqtOfflineDB extends Dexie {
       sunnahLogs: "id, date",
       // Index parentId for tree building
       goals: "id, parentId, userId",
+    });
+    // v2: add homework + classes stores for offline homework tracking
+    this.version(2).stores({
+      events: "id, _dateKey, userId",
+      prayerLogs: "id, date, userId, prayerName",
+      prayerTimes: "date",
+      analytics: "id",
+      friends: "id",
+      qadaa: "id",
+      sunnahLogs: "id, date",
+      goals: "id, parentId, userId",
+      // Index dueDate for fast date-range lookups, status for filtering pending/completed
+      homework: "id, dueDate, status, classId",
+      classes: "id, sortOrder",
+    });
+    // v3: add habits, habitLogs, notes stores for the unified Goals page
+    this.version(3).stores({
+      events: "id, _dateKey, userId",
+      prayerLogs: "id, date, userId, prayerName",
+      prayerTimes: "date",
+      analytics: "id",
+      friends: "id",
+      qadaa: "id",
+      sunnahLogs: "id, date",
+      goals: "id, parentId, userId",
+      homework: "id, dueDate, status, classId",
+      classes: "id, sortOrder",
+      // Index date for habit log lookups, habitId for filtering
+      habits: "id, sortOrder, archived",
+      habitLogs: "id, habitId, date, [habitId+date]",
+      notes: "id, updatedAt, pinned",
     });
   }
 }
@@ -137,7 +227,31 @@ export async function clearOfflineCache(): Promise<void> {
       db.qadaa.clear(),
       db.sunnahLogs.clear(),
       db.goals.clear(),
+      db.homework.clear(),
+      db.classes.clear(),
+      db.habits.clear(),
+      db.habitLogs.clear(),
+      db.notes.clear(),
     ]);
+  } catch {
+    // non-critical
+  }
+}
+
+// ─── Prune old completed homework to prevent unbounded growth ───
+// Completed homework older than 30 days is deleted from the cache.
+export async function pruneOldHomeworkCache(): Promise<void> {
+  try {
+    const db = getOfflineDB();
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString();
+    // Delete completed homework older than 30 days
+    await db.homework
+      .where("status")
+      .equals("completed")
+      .and((hw) => hw.completedAt != null && hw.completedAt < cutoffStr)
+      .delete();
   } catch {
     // non-critical
   }
