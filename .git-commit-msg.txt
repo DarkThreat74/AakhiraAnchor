@@ -1,20 +1,7 @@
-Add unified Goals workspace with 8 tabs, Turnstile, homework, habits, notes
+Remove Goals tab from bottom navigation
 
-- Goals page rebuilt as a multi-tab workspace: Today, Long-term, Short-term,
-  Homework, Habits, Notes, Backlog, Done
-- Homework moved inside Goals as a tab; standalone /homework redirects to
-  /goals#homework
-- Mobile nav replaces Homework with Today (links to /goals)
-- New schema: goal_type column, habits, habit_logs, notes tables (migrations
-  0009, 0010) with indexes aligned to query paths
-- New API routes: classes, homework, habits, habit-logs, notes — all with
-  ownership checks, rate limiting, and force-dynamic
-- Offline-first: Dexie stores + cache writers for homework, classes, habits,
-  habit logs, notes; SW syncs on reconnect
-- Cloudflare Turnstile integration on signup (client widget + server
-  siteverify, fails closed in production)
-- Service worker cache versioning with old-cache eviction
-- Fixed habits/[id] route params for Next.js 16 (Promise params)
+Today is the primary entry point; Goals tabs are accessible from within
+the unified Goals workspace.
 
 Generated with [Devin](https://devin.ai)
 
