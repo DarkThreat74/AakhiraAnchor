@@ -260,12 +260,16 @@ export default function SettingsClient({
     fetch("/api/share/generate")
       .then((r) => r.json())
       .then((data) => {
-        setShareEnabled(data.enabled);
-        if (data.url) {
-          setShareUrl(`${window.location.origin}${data.url}`);
+        if (data.error) {
+          setShareError(data.error);
+        } else {
+          setShareEnabled(data.enabled);
+          if (data.url) {
+            setShareUrl(`${window.location.origin}${data.url}`);
+          }
         }
       })
-      .catch(() => {})
+      .catch(() => setShareError("Failed to load share status."))
       .finally(() => setShareLoading(false));
 
     fetch("/api/prayer-friends/my-code")
@@ -1032,7 +1036,7 @@ export default function SettingsClient({
             </div>
             <div className="flex items-center gap-2">
               <div
-                className="flex-1 rounded-lg border px-3 py-2 text-center text-base font-bold tracking-[0.3em]"
+                className="min-w-0 flex-1 overflow-hidden rounded-lg border px-3 py-2 text-center text-base font-bold tracking-[0.3em]"
                 style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)" }}
               >
                 {prayerCode || "------"}
@@ -1519,12 +1523,12 @@ export default function SettingsClient({
               <span className="text-sm font-medium" style={{ color: "var(--color-error)" }}>
                 Are you sure? This is permanent.
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setDeleteConfirm(false)}
                   disabled={deleting}
                   className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
-                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
                 >
                   Cancel
                 </button>
@@ -1532,7 +1536,7 @@ export default function SettingsClient({
                   onClick={handleDeleteAccount}
                   disabled={deleting}
                   className="rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)" }}
+                  style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
                 >
                   {deleting ? "Deleting..." : "Yes, delete forever"}
                 </button>

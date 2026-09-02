@@ -34,18 +34,33 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  // Compute current month/year in the user's timezone, not server UTC.
+  // This prevents wrong-month fetches at timezone boundaries.
+  const tz = settings.timezone || "UTC";
+  const nowInTz = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+  const [yearStr, monthStr] = nowInTz.split("-");
+  const month = parseInt(monthStr);
+  const year = parseInt(yearStr);
+
+  // Validate coordinates before calling AlAdhan
+  const latNum = parseFloat(settings.latitude);
+  const lngNum = parseFloat(settings.longitude);
+  if (isNaN(latNum) || isNaN(lngNum) || latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) {
+    return NextResponse.json(
+      { error: "Invalid coordinates. Please update your location in settings." },
+      { status: 400 },
+    );
+  }
 
   try {
     const days = await fetchMonthPrayerTimes(
-      parseFloat(settings.latitude),
-      parseFloat(settings.longitude),
+      latNum,
+      lngNum,
       month,
       year,
       settings.calculationMethod,
       settings.madhab === "hanafi" ? 1 : 0,
+      tz,
     );
 
     // Batch upsert — single query instead of N+1 select+insert per day

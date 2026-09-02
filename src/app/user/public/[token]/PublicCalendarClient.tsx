@@ -121,7 +121,7 @@ export default function PublicCalendarClient({ token, displayName }: { token: st
         className="border-b"
         style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
       >
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-md"
@@ -133,7 +133,7 @@ export default function PublicCalendarClient({ token, displayName }: { token: st
               <p className="text-sm font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
                 {displayName ? `${displayName}'s calendar` : "Shared calendar"}
               </p>
-              <p className="text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+              <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
                 Read-only · Current + 3 months
               </p>
             </div>
@@ -146,24 +146,26 @@ export default function PublicCalendarClient({ token, displayName }: { token: st
           >
             <button
               onClick={() => setView("day")}
-              className="flex items-center gap-1.5 rounded-l-md px-3 py-1.5 text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 rounded-l-md px-3 py-2 text-xs font-medium transition-colors"
               style={{
+                minHeight: 40,
                 backgroundColor: view === "day" ? "var(--color-ink)" : "transparent",
                 color: view === "day" ? "var(--color-paper)" : "var(--color-ink-muted)",
               }}
             >
-              <Calendar className="h-3 w-3" />
+              <Calendar className="h-4 w-4" />
               Day
             </button>
             <button
               onClick={() => setView("month")}
-              className="flex items-center gap-1.5 rounded-r-md px-3 py-1.5 text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 rounded-r-md px-3 py-2 text-xs font-medium transition-colors"
               style={{
+                minHeight: 40,
                 backgroundColor: view === "month" ? "var(--color-ink)" : "transparent",
                 color: view === "month" ? "var(--color-paper)" : "var(--color-ink-muted)",
               }}
             >
-              <Calendar className="h-3 w-3" />
+              <Calendar className="h-4 w-4" />
               Month
             </button>
           </div>
@@ -341,12 +343,12 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
   });
 
   return (
-    <div className="mx-auto max-w-4xl px-2 sm:px-6">
+    <div className="mx-auto w-full max-w-4xl px-2 sm:px-6">
       {/* Date navigation */}
       <div className="mb-4 flex items-center justify-between sm:mb-6">
         <button
           onClick={() => onDateChange(prevDateStr)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
+          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
           style={{ color: "var(--color-ink-soft)" }}
           aria-label="Previous day"
         >
@@ -366,7 +368,7 @@ function PublicDayView({ token, date, onNavigateToMonth, onDateChange }: {
         </div>
         <button
           onClick={() => onDateChange(nextDateStr)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
+          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)]"
           style={{ color: "var(--color-ink-soft)" }}
           aria-label="Next day"
         >
@@ -642,7 +644,9 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
           if (!Array.isArray(events)) return;
           const grouped: Record<string, CalendarEvent[]> = {};
           for (const event of events) {
-            const eventDate = event.startAt.split("T")[0];
+            // Use the viewer's local date, not the UTC date from the ISO string
+            const d = new Date(event.startAt);
+            const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             if (!grouped[eventDate]) grouped[eventDate] = [];
             grouped[eventDate].push(event);
           }
@@ -691,13 +695,13 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-3 sm:px-6">
+    <div className="mx-auto w-full max-w-4xl px-3 sm:px-6">
       {/* Month navigation */}
       <div className="mb-4 flex items-center justify-between sm:mb-6">
         <button
           onClick={onPrevMonth}
           disabled={!canGoPrev}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)] disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)] disabled:opacity-30 disabled:hover:bg-transparent"
           style={{ color: "var(--color-ink-soft)" }}
           aria-label="Previous month"
         >
@@ -709,7 +713,7 @@ function PublicMonthView({ token, year, month, onNavigateToDay, onPrevMonth, onN
         <button
           onClick={onNextMonth}
           disabled={!canGoNext}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)] disabled:opacity-30 disabled:hover:bg-transparent"
+          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper)] disabled:opacity-30 disabled:hover:bg-transparent"
           style={{ color: "var(--color-ink-soft)" }}
           aria-label="Next month"
         >

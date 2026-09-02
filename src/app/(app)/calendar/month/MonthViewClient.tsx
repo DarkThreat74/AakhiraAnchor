@@ -12,6 +12,8 @@ interface CalendarEvent {
   endAt: string;
   type: "block" | "task" | "reminder";
   color?: string | null;
+  recurrenceRule?: string | null;
+  seriesId?: string | null;
 }
 
 // Color palette for reminders — must match DayViewClient
@@ -164,7 +166,8 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                 endAt: e.endAt,
                 type: e.type,
                 color: e.color || null,
-                recurrenceRule: null,
+                recurrenceRule: e.recurrenceRule || null,
+                seriesId: e.seriesId || null,
                 _dateKey: eventDate,
                 _cachedAt: Date.now(),
               };
@@ -260,7 +263,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
     <div>
       {/* Month header with day/month toggle */}
       <div className="border-b" style={{ borderColor: "var(--color-paper-3)" }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 overflow-x-hidden px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 overflow-x-hidden px-4 py-3 sm:px-6 sm:py-4">
           <Link
             href={`/calendar/month?year=${prevYear}&month=${prevMonth}`}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
@@ -307,7 +310,7 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
+      <div className="mx-auto w-full max-w-5xl overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
         {/* Day headers */}
         <div className="mb-1 grid grid-cols-7 gap-0.5 sm:gap-1">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (

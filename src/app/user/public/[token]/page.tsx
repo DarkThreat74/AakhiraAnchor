@@ -13,8 +13,9 @@ export default async function LegacyPublicCalendarPage({
 }) {
   const { token } = await params;
 
-  // Token may be an old 32-char hex string or a new 5-digit code
-  if (!token || !(/^([a-f0-9]{32}|\d{5})$/.test(token))) {
+  // Token is a 128-bit hex string (32 chars). Legacy 5-digit codes are no
+  // longer accepted — they were enumerable and allowed IDOR access.
+  if (!token || !/^[a-f0-9]{32}$/.test(token)) {
     notFound();
   }
 

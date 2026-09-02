@@ -9,6 +9,7 @@ export interface CachedEvent {
   type: string;
   color: string | null;
   recurrenceRule?: string | null;
+  seriesId?: string | null;
   notifiedAt?: string | null;
   _dateKey: string; // YYYY-MM-DD for quick lookup by day
   _cachedAt: number; // timestamp when cached

@@ -13,14 +13,23 @@ interface PerPrayerStats {
   totalPrayed: number;
   masjidCount: number;
   masjidPct: number;
-  avgTimeMinutes: number | null;
-  avgTimeStr: string | null;
-  makruhPct: number;
+  avgWindowPct: number | null;
   consistencyPct: number;
+}
+
+interface TodayPrayerTimes {
+  fajr: number;
+  sunrise: number;
+  dhuhr: number;
+  asr: number;
+  maghrib: number;
+  isha: number;
 }
 
 interface Analytics {
   streak: number;
+  range: string;
+  rangeStart: string;
   totalCompleteDays: number;
   totalPrayed: number;
   totalMasjid: number;
@@ -31,6 +40,7 @@ interface Analytics {
   thisWeekPrayed: number;
   thisMonthPrayed: number;
   lastPrayedDate: string | null;
+  todayPrayerTimes: TodayPrayerTimes | null;
 }
 
 interface Friend {
@@ -100,7 +110,63 @@ function format12h(time: string | undefined): string {
   return `${hour}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+// Format minutes-from-midnight to 12-hour AM/PM string
+function formatMinutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = Math.round(minutes % 60);
+  const hour = h % 12 || 12;
+  const period = h < 12 ? "AM" : "PM";
+  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+// Given a prayer name, an average window percentage, and today's prayer times
+// (in minutes from midnight), compute the equivalent clock time for today.
+// E.g., if avgWindowPct=67% and today's Fajr window is 5:15→6:45 (90 min),
+// the equivalent time is 5:15 + 0.67*90 = 5:15 + 60min = 6:15 AM.
+function computeEquivTime(
+  prayer: string,
+  avgWindowPct: number | null,
+  todayTimes: { fajr: number; sunrise: number; dhuhr: number; asr: number; maghrib: number; isha: number } | null,
+): string | null {
+  if (avgWindowPct === null || !todayTimes) return null;
+
+  const prayerStart = todayTimes[prayer as keyof typeof todayTimes];
+  if (prayerStart === undefined || prayerStart < 0) return null;
+
+  // Determine today's window end for this prayer
+  let windowEnd: number;
+  switch (prayer) {
+    case "fajr":
+      windowEnd = todayTimes.sunrise >= 0 ? todayTimes.sunrise : prayerStart + 120;
+      break;
+    case "dhuhr":
+      windowEnd = todayTimes.asr >= 0 ? todayTimes.asr : prayerStart + 300;
+      break;
+    case "asr":
+      windowEnd = todayTimes.maghrib >= 0 ? todayTimes.maghrib : prayerStart + 240;
+      break;
+    case "maghrib":
+      windowEnd = todayTimes.isha >= 0 ? todayTimes.isha : prayerStart + 90;
+      break;
+    case "isha":
+      windowEnd = 24 * 60;
+      break;
+    default:
+      return null;
+  }
+
+  // The API uses a 15-min grace before start, so match that
+  const windowStart = prayerStart - 15;
+  const windowDuration = windowEnd - windowStart;
+  if (windowDuration <= 0) return null;
+
+  const equivMinutes = windowStart + (avgWindowPct / 100) * windowDuration;
+  return formatMinutesToTime(equivMinutes);
+}
+
 type Tab = "comparison" | "stats" | "qadaa" | "friends";
+
+type StatsRange = "weekly" | "monthly" | "yearly" | "all-time";
 
 export default function PrayerDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("comparison");
@@ -109,6 +175,7 @@ export default function PrayerDashboard() {
   const [prayerCode, setPrayerCode] = useState<string | null>(null);
   const [qadaa, setQadaa] = useState<QadaaInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [statsRange, setStatsRange] = useState<StatsRange>("weekly");
   const [addFriendCode, setAddFriendCode] = useState("");
   const [friendError, setFriendError] = useState<string | null>(null);
   const [friendSuccess, setFriendSuccess] = useState<string | null>(null);
@@ -252,7 +319,7 @@ export default function PrayerDashboard() {
       // ── Step 2: Fetch from API in background ──
       try {
         const [analyticsRes, friendsRes, codeRes, qadaaRes, logsRes, sunnahRes, timesRes] = await Promise.all([
-          fetch("/api/prayer-log/analytics").catch(() => null),
+          fetch(`/api/prayer-log/analytics?range=${statsRange}`).catch(() => null),
           fetch("/api/prayer-friends").catch(() => null),
           fetch("/api/prayer-friends/my-code").catch(() => null),
           fetch("/api/qadaa").catch(() => null),
@@ -361,7 +428,7 @@ export default function PrayerDashboard() {
       }
     })();
     return () => { cancelled = true; };
-  }, [todayStr]);
+  }, [todayStr, statsRange]);
 
   // Update current time every minute for the progress bar
   useEffect(() => {
@@ -369,12 +436,15 @@ export default function PrayerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Note: statsRange is in the main data-load effect's deps, so changing
+  // the range triggers a refetch of analytics with the new range automatically.
+
   useEffect(() => {
     const handleSynced = () => {
       (async () => {
         try {
           const [analyticsRes, friendsRes, qadaaRes] = await Promise.all([
-            fetch("/api/prayer-log/analytics").catch(() => null),
+            fetch(`/api/prayer-log/analytics?range=${statsRange}`).catch(() => null),
             fetch("/api/prayer-friends").catch(() => null),
             fetch("/api/qadaa").catch(() => null),
           ]);
@@ -398,7 +468,7 @@ export default function PrayerDashboard() {
     };
     window.addEventListener("waqt:events-synced", handleSynced);
     return () => window.removeEventListener("waqt:events-synced", handleSynced);
-  }, [fetchTodayData]);
+  }, [fetchTodayData, statsRange]);
 
   async function handleCopyCode() {
     if (!prayerCode) return;
@@ -629,7 +699,7 @@ export default function PrayerDashboard() {
   const sunnahDefinitions = getSunnahsForMadhab(madhab);
 
   return (
-    <div className="mx-auto max-w-4xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto w-full max-w-4xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="mb-4 text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--color-ink)" }}>
         Prayer
       </h1>
@@ -1166,13 +1236,41 @@ export default function PrayerDashboard() {
 
           {/* Per-prayer breakdown */}
           <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-            <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
-              <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Per-Prayer Breakdown</h2>
-              <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>Last 90 days of data</p>
+            <div className="flex items-center justify-between gap-2 border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Per-Prayer Breakdown</h2>
+                <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                  {statsRange === "weekly" && "This week (from Sunday)"}
+                  {statsRange === "monthly" && "This month"}
+                  {statsRange === "yearly" && "This year"}
+                  {statsRange === "all-time" && "All time"}
+                </p>
+              </div>
+              <div className="relative shrink-0">
+                <select
+                  value={statsRange}
+                  onChange={(e) => setStatsRange(e.target.value as StatsRange)}
+                  disabled={loading}
+                  className="cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-medium outline-none transition-colors disabled:opacity-50"
+                  style={{
+                    borderColor: "var(--color-paper-3)",
+                    backgroundColor: "var(--color-paper-2)",
+                    color: "var(--color-ink)",
+                    minHeight: 36,
+                  }}
+                  aria-label="Stats time range"
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="all-time">All-time</option>
+                </select>
+              </div>
             </div>
             <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
               {(analytics?.perPrayer || []).map((stat) => {
                 const color = PRAYER_COLORS[stat.prayer] || "var(--color-accent)";
+                const equivTime = computeEquivTime(stat.prayer, stat.avgWindowPct, analytics?.todayPrayerTimes || null);
                 return (
                   <div key={stat.prayer} className="px-4 py-3 sm:px-5">
                     <div className="mb-2 flex items-center gap-2">
@@ -1185,7 +1283,17 @@ export default function PrayerDashboard() {
                       <Metric label="Prayed" value={`${stat.totalPrayed}`} />
                       <Metric label="Consistency" value={`${stat.consistencyPct}%`} />
                       <Metric label="Masjid" value={`${stat.masjidPct}%`} />
-                      <Metric label="Avg time" value={stat.avgTimeStr || "—"} />
+                      <div>
+                        <div className="text-sm font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>
+                          {stat.avgWindowPct !== null ? `${stat.avgWindowPct}%` : "—"}
+                        </div>
+                        {equivTime && (
+                          <div className="text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                            ~{equivTime}
+                          </div>
+                        )}
+                        <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Window</div>
+                      </div>
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
                       <div

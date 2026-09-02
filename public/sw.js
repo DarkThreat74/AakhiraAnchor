@@ -3,7 +3,7 @@
  * 
  * Strategy:
  * - Precache the app shell on install
- * - Network-first for navigation requests (always get fresh HTML)
+ * - Network-first for navigation requests (always get fresh HTML when online, cache only when offline)
  * - Cache-first for static assets (_next/static, images, fonts)
  * - Stale-while-revalidate for API GET requests (events, prayer times)
  * - Offline event writes: store in IndexedDB, sync when back online
@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v20";
+const CACHE_VERSION = "waqt-v23";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -229,7 +229,8 @@ self.addEventListener("fetch", (event) => {
     !url.pathname.startsWith("/api/notifications/") &&
     !url.pathname.startsWith("/api/cron/") &&
     !url.pathname.startsWith("/api/goals/share") &&
-    !url.pathname.startsWith("/api/goals/shared")
+    !url.pathname.startsWith("/api/goals/shared") &&
+    !url.pathname.startsWith("/api/learn/")
   ) {
     // Clone the request body before consuming it
     const bodyPromise = request.clone().json().catch(() => null);
@@ -336,13 +337,22 @@ self.addEventListener("fetch", (event) => {
   // Don't intercept share management API
   if (url.pathname.startsWith("/api/share/")) return;
 
+  // Don't intercept prayer-friends API — always need fresh (user-specific, auto-generates codes)
+  if (url.pathname.startsWith("/api/prayer-friends/")) return;
+
+  // Don't intercept onboarding API — always need fresh
+  if (url.pathname.startsWith("/api/onboarding/")) return;
+
+  // Don't intercept settings API — always need fresh
+  if (url.pathname.startsWith("/api/settings/")) return;
+
   // Don't intercept cron API
   if (url.pathname.startsWith("/api/cron/")) return;
 
-  // ── Navigation requests: stale-while-revalidate ──
-  // Serve cached HTML instantly (if available), then fetch fresh HTML in the
-  // background and update the cache. This makes tab switches instant.
-  // Offline: serve cached page, then fallback to app shell.
+  // ── Navigation requests: network-first ──
+  // Always try to get fresh HTML from the network. Only fall back to cache
+  // when offline. This ensures users always see the latest UI after a
+  // deployment — no stale cached HTML served on refresh.
   if (request.mode === "navigate") {
     const pathname = url.pathname;
 
@@ -390,34 +400,31 @@ self.addEventListener("fetch", (event) => {
 
     event.respondWith(
       (async () => {
-        const cached = await caches.match(request);
-
-        // Fetch fresh version in background to update cache
-        const fetchPromise = fetch(request)
-          .then((response) => {
+        // Network-first: always try to get fresh HTML when online.
+        // Only fall back to cache when the network fails (offline).
+        // This prevents stale UI from appearing after a deployment.
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
             const responseClone = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-            return response;
-          })
-          .catch(() => null); // Network failed — will fall back to cache
+          }
+          return response;
+        } catch {
+          // Network failed — try cache
+          const cached = await caches.match(request);
+          if (cached) return cached;
 
-        // Return cached immediately if available, otherwise wait for network
-        if (cached) {
-          return cached;
+          // No cache — try the calendar day page as app shell fallback
+          const dayCached = await caches.match("/calendar/day");
+          if (dayCached) return dayCached;
+
+          // Last resort — offline page
+          return new Response(
+            "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
+            { status: 200, headers: { "Content-Type": "text/html" } }
+          );
         }
-
-        const networkResponse = await fetchPromise;
-        if (networkResponse) return networkResponse;
-
-        // No cache, no network — try the calendar day page as app shell fallback
-        const dayCached = await caches.match("/calendar/day");
-        if (dayCached) return dayCached;
-
-        // Last resort — offline page
-        return new Response(
-          "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Waqt — Offline</title><style>body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#1a1815;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{font-size:14px;opacity:0.7}</style></head><body><div><h1>You're offline</h1><p>Your calendar will load from cache once the app reconnects. Try reopening the app.</p></div></body></html>",
-          { status: 200, headers: { "Content-Type": "text/html" } }
-        );
       })()
     );
     return;

@@ -283,6 +283,11 @@ export const events = pgTable('events', {
   notify: boolean('notify').default(true).notNull(),
   // iCal RRULE string, null = one-off
   recurrenceRule: text('recurrence_rule'),
+  // Unique identifier for a recurring series. All events in the same series
+  // share this UUID. Null for one-off events. Used for bulk update/delete.
+  // This is NOT the same as recurrenceRule — two independent series can
+  // have the same rule string but different seriesId values.
+  seriesId: uuid('series_id'),
   createdVia: eventCreatedVia('created_via').default('manual').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   // When a push notification was sent for this event (null = not notified yet)
@@ -296,6 +301,8 @@ export const events = pgTable('events', {
   startAtBrinIdx: index('events_start_at_brin_idx').using('brin', table.startAt),
   // Notification cleanup: find events by user + notification status
   userNotifiedIdx: index('events_user_notified_idx').on(table.userId, table.notifiedAt),
+  // Bulk update/delete by series — find all events in a recurring series
+  seriesIdIdx: index('events_series_id_idx').on(table.userId, table.seriesId),
 }));
 
 // ─── Daily Huddle ───

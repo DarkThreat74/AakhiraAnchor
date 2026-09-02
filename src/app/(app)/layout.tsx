@@ -68,7 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
 
   return (
-    <div className="flex min-h-dvh" style={{ backgroundColor: "var(--color-paper)" }}>
+    <div className="flex min-h-dvh w-full overflow-x-hidden" style={{ backgroundColor: "var(--color-paper)" }}>
       {/* ── Skip link for keyboard users (WCAG 2.4.1) ── */}
       <a href="#main-content" className="skip-link">
         Skip to main content
@@ -107,10 +107,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* ── Main content area ── */}
-      <div className="flex flex-1 flex-col lg:pl-56">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-56">
         {/* Mobile top bar */}
         <header
-          className="sticky top-0 z-40 flex items-center justify-between border-b px-5 py-3 lg:hidden backdrop-blur-md"
+          className="sticky top-0 z-40 flex items-center justify-between border-b px-4 py-3 lg:hidden backdrop-blur-md"
           style={{
             borderColor: "var(--color-paper-3)",
             backgroundColor: "color-mix(in oklab, var(--color-paper) 90%, transparent)",
@@ -132,7 +132,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page content */}
-        <main id="main-content" className="flex-1 overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main id="main-content" className="min-w-0 flex-1 overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
           <BiometricGate>{children}</BiometricGate>
         </main>
       </div>

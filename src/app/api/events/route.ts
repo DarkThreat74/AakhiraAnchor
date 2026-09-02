@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gte, lte } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
@@ -59,10 +60,10 @@ export async function GET(request: NextRequest) {
   }
 
   // Compute day boundaries in UTC with a wide buffer to handle any timezone offset.
-  // start: earliest possible local midnight (UTC-12) = 2026-08-21T00:00:00-12:00 = 2026-08-21T12:00:00Z
-  // end: latest possible local end (UTC-12) = 2026-08-21T23:59:59.999-12:00 = 2026-08-22T11:59:59Z
+  // start: earliest local midnight (UTC+14, Kiribati) = dateStr - 1 day T10:00:00 UTC
+  // end:   latest local end (UTC-12, Baker Island) = dateStr + 1 day T11:59:59 UTC
   // The client filters by local time when rendering, so extra events are harmless.
-  const startOfDayUtc = new Date(dateStr + "T00:00:00-12:00");
+  const startOfDayUtc = new Date(dateStr + "T00:00:00+14:00");
   const endWithBuffer = new Date(dateStr + "T23:59:59.999-12:00");
   if (isNaN(startOfDayUtc.getTime()) || isNaN(endWithBuffer.getTime())) {
     return NextResponse.json({ error: "Invalid date." }, { status: 400 });
@@ -248,6 +249,11 @@ export async function POST(request: NextRequest) {
     // Cap at 365 occurrences to prevent abuse
     const capped = occurrences.slice(0, 365);
 
+    // Generate a single seriesId for all events in this recurring series.
+    // This is the unique identifier used for bulk update/delete — NOT
+    // recurrenceRule, which can be shared by unrelated series.
+    const seriesId = randomUUID();
+
     // Insert all occurrences
     const inserted = await db
       .insert(schema.events)
@@ -261,6 +267,7 @@ export async function POST(request: NextRequest) {
           color: validColor,
           notify: validNotify,
           recurrenceRule: `WEEKLY_${daysToRepeat.join(",")}_UNTIL_${recurrenceEndDate}`,
+          seriesId,
           createdVia: "manual" as const,
         })),
       )
@@ -281,6 +288,7 @@ export async function POST(request: NextRequest) {
       color: validColor,
       notify: validNotify,
       recurrenceRule: null,
+      seriesId: null,
       createdVia: "manual",
     })
     .returning();

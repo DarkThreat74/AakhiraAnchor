@@ -50,6 +50,20 @@
       "when": 1787650000000,
       "tag": "0006_index_optimization",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787750000000,
+      "tag": "0007_event_series_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787850000000,
+      "tag": "0008_user_names_prayer_code",
+      "breakpoints": true
     }
   ]
 }

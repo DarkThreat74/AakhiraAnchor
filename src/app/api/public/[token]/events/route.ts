@@ -86,8 +86,12 @@ export async function GET(
     return NextResponse.json({ error: "Missing date parameter." }, { status: 400 });
   }
 
-  const startOfDayUtc = new Date(dateStr + "T00:00:00-12:00"); // earliest possible local midnight
-  const endWithBuffer = new Date(dateStr + "T23:59:59.999-12:00"); // latest possible local end
+  // Use the widest possible window to catch events on the owner's local calendar day
+  // regardless of their timezone. The client filters by its own local date when rendering.
+  // start: earliest local midnight (UTC+14, Kiribati) = dateStr - 1 day T10:00:00 UTC
+  // end:   latest local end (UTC-12, Baker Island) = dateStr + 1 day T11:59:59 UTC
+  const startOfDayUtc = new Date(dateStr + "T00:00:00+14:00");
+  const endWithBuffer = new Date(dateStr + "T23:59:59.999-12:00");
   if (isNaN(startOfDayUtc.getTime()) || isNaN(endWithBuffer.getTime())) {
     return NextResponse.json({ error: "Invalid date." }, { status: 400 });
   }

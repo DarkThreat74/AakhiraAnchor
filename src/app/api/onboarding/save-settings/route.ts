@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse, after } from "next/server";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,63 @@ export async function POST(request: NextRequest) {
       madhab: madhabVal,
     });
   }
+
+  // Re-fetch prayer times from AlAdhan immediately after settings change,
+  // so the user sees correct times without waiting for the next cron run.
+  after(async () => {
+    try {
+      const tz = timezone || "UTC";
+      const nowInTz = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+      const [yearStr, monthStr] = nowInTz.split("-");
+      const month = parseInt(monthStr);
+      const year = parseInt(yearStr);
+
+      const days = await fetchMonthPrayerTimes(
+        latNum,
+        lngNum,
+        month,
+        year,
+        method,
+        madhabVal === "hanafi" ? 1 : 0,
+        tz,
+      );
+
+      const values = days.map((day) => {
+        const dateStr = day.date.gregorian.date;
+        const [dayNum, monthNum, yearNum] = dateStr.split("-").map(Number);
+        const isoDate = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+        const timings = day.timings;
+        return {
+          userId: session.userId,
+          date: isoDate,
+          fajr: parseTime(timings.Fajr),
+          sunrise: parseTime(timings.Sunrise),
+          dhuhr: parseTime(timings.Dhuhr),
+          asr: parseTime(timings.Asr),
+          maghrib: parseTime(timings.Maghrib),
+          isha: parseTime(timings.Isha),
+        };
+      });
+
+      await db
+        .insert(schema.prayerTimesCache)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [schema.prayerTimesCache.userId, schema.prayerTimesCache.date],
+          set: {
+            fajr: sql.raw("excluded.fajr"),
+            sunrise: sql.raw("excluded.sunrise"),
+            dhuhr: sql.raw("excluded.dhuhr"),
+            asr: sql.raw("excluded.asr"),
+            maghrib: sql.raw("excluded.maghrib"),
+            isha: sql.raw("excluded.isha"),
+            fetchedAt: new Date(),
+          },
+        });
+    } catch (err) {
+      logError(err, { route: "onboarding/save-settings:resync" });
+    }
+  });
 
   return NextResponse.json({ ok: true, calculationMethod: method, madhab: madhabVal });
 }

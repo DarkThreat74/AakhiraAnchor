@@ -388,7 +388,7 @@ export default function GoalsClient({ initialGoals }: { initialGoals: Goal[] }) 
   };
 
   return (
-    <div className="mx-auto max-w-4xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8" style={{ minHeight: "100dvh" }}>
+    <div className="mx-auto w-full max-w-4xl overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8" style={{ minHeight: "100dvh" }}>
       {/* ── Header ── */}
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -773,7 +773,7 @@ function ListRow({ node, ...props }: ViewProps & { node: GoalNode }) {
   const isDone = node.status === "done";
   const hasChildren = node.children.length > 0;
   const hasDescription = !!node.description;
-  const indent = Math.min(node.depth, 4) * 16;
+  const indent = Math.min(node.depth, 4) * 12;
 
   const handleAddChild = () => {
     if (childTitle.trim()) {
@@ -1040,7 +1040,7 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
   const hasChildren = node.children.length > 0;
   const hasDescription = !!node.description;
   const depth = node.depth;
-  const indent = Math.min(depth, 6) * 20;
+  const indent = Math.min(depth, 6) * 12;
 
   const childProgress = hasChildren ? countTreeDone(node) : null;
   const allChildrenDone =
@@ -1063,7 +1063,7 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
     <div>
       {/* ── Row ── */}
       <div
-        className="group relative flex items-center gap-2 rounded-lg py-2 pr-2 transition-colors"
+        className="group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pr-2 transition-colors"
         style={{ paddingLeft: `${indent + 8}px` }}
       >
         {/* Chevron (if has children) */}
@@ -1136,8 +1136,8 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
               />
             </div>
           ) : (
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
                 <button
                   onClick={() => props.onEditStart(node)}
                   className="block min-w-0 flex-1 truncate text-left text-sm font-medium"
@@ -1184,8 +1184,8 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
         <div className="flex shrink-0 items-center gap-0.5">
           <button
             onClick={() => setAddingChild(true)}
-            className="rounded p-1.5 transition-colors"
-            style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
+            className="rounded p-1.5 transition-colors sm:p-2"
+            style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
             aria-label="Add sub-goal"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -1194,8 +1194,8 @@ function TreeBranch({ node, ...props }: ViewProps & { node: GoalNode }) {
             onClick={() => {
               if (confirm("Delete this goal and all its branches?")) props.onDelete(node.id);
             }}
-            className="rounded p-1.5 transition-colors"
-            style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
+            className="rounded p-1.5 transition-colors sm:p-2"
+            style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
             aria-label="Delete goal"
           >
             <Trash2 className="h-3.5 w-3.5" />

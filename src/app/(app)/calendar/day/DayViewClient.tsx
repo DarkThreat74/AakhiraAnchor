@@ -20,6 +20,7 @@ interface CalendarEvent {
   color?: string | null;
   notify?: boolean;
   recurrenceRule?: string | null;
+  seriesId?: string | null;
   _pending?: boolean;
 }
 
@@ -174,6 +175,7 @@ export default function DayViewClient({ date }: { date: string }) {
             type: e.type as "block" | "task" | "reminder",
             color: e.color,
             recurrenceRule: e.recurrenceRule,
+            seriesId: e.seriesId,
           })));
         }
 
@@ -239,6 +241,7 @@ export default function DayViewClient({ date }: { date: string }) {
               type: e.type,
               color: e.color || null,
               recurrenceRule: e.recurrenceRule || null,
+              seriesId: e.seriesId || null,
               _dateKey: date,
               _cachedAt: Date.now(),
             })));
@@ -667,13 +670,13 @@ export default function DayViewClient({ date }: { date: string }) {
       : new Date(`${date}T${newEnd}:00`).toISOString();
 
     // Bulk update — update all events in the recurring series
-    if (editAllInSeries && editingEvent.recurrenceRule) {
+    if (editAllInSeries && editingEvent.seriesId) {
       try {
         const res = await fetch("/api/events/bulk", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            recurrenceRule: editingEvent.recurrenceRule,
+            seriesId: editingEvent.seriesId,
             title: newTitle,
             type: newType,
             color: newColor,
@@ -816,7 +819,7 @@ export default function DayViewClient({ date }: { date: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl overflow-x-hidden px-3 py-3 sm:px-6 sm:py-6">
+    <div className="mx-auto w-full max-w-5xl overflow-x-hidden px-3 py-3 sm:px-6 sm:py-6">
       {/* Offline banner — only show after mount to avoid hydration mismatch */}
       {mounted && !isOnline && (
         <div
@@ -834,7 +837,7 @@ export default function DayViewClient({ date }: { date: string }) {
 
       {/* Prayer times bar */}
       {prayerTimes && (
-        <div className="mb-3 flex gap-1 sm:mb-4">
+        <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4">
           {PRAYER_NAMES.map((prayer) => {
             const rawTime = prayerTimes[prayer.key];
             if (!rawTime) return null;
@@ -847,19 +850,20 @@ export default function DayViewClient({ date }: { date: string }) {
               <button
                 key={prayer.key}
                 onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
-                className="flex min-w-0 flex-1 flex-col items-center gap-0 rounded-lg border px-1 py-1 transition-colors sm:flex-none sm:px-3 sm:py-1.5"
+                className="flex min-w-0 flex-1 flex-col items-center gap-0 rounded-lg border px-2 py-2 transition-colors sm:flex-none sm:px-3 sm:py-1.5"
                 style={{
+                  minHeight: 44,
                   borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
                   backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
                   cursor: isClickable ? "pointer" : "default",
                 }}
                 disabled={!isClickable}
               >
-                <span className="flex items-center gap-0.5 text-[11px] font-medium leading-tight sm:text-xs" style={{ color: prayer.color }}>
+                <span className="flex items-center gap-0.5 text-xs font-medium leading-tight" style={{ color: prayer.color }}>
                   {prayer.label}
-                  {isPrayed && <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" style={{ color: "var(--color-success)" }} />}
+                  {isPrayed && <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />}
                 </span>
-                <span className="text-[11px] tabular-nums leading-tight sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                <span className="text-xs tabular-nums leading-tight" style={{ color: "var(--color-ink-muted)" }}>
                   {formatTime(time)}
                 </span>
               </button>
@@ -1180,10 +1184,10 @@ export default function DayViewClient({ date }: { date: string }) {
               <button
                 type="button"
                 onClick={closeForm}
-                className="rounded-full p-1 transition-colors hover:bg-[var(--color-paper-2)]"
+                className="flex -mr-1 -mt-1 h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
                 aria-label="Close"
               >
-                <X className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+                <X className="h-5 w-5" style={{ color: "var(--color-ink-muted)" }} />
               </button>
             </div>
             <div className="flex flex-col gap-3">
@@ -1341,7 +1345,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     <div className="mt-2.5 flex flex-col gap-2.5">
                       {/* Day-of-week picker */}
                       <div>
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-1.5 justify-center">
                           {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => {
                             const isSelected = recurrenceDays.includes(idx);
                             return (
@@ -1355,7 +1359,7 @@ export default function DayViewClient({ date }: { date: string }) {
                                     setRecurrenceDays([...recurrenceDays, idx].sort((a, b) => a - b));
                                   }
                                 }}
-                                className="flex h-11 w-11 items-center justify-center rounded-full text-[11px] font-medium transition-colors sm:h-9 sm:w-9"
+                                className="flex h-11 w-11 items-center justify-center rounded-full text-xs font-medium transition-colors"
                                 style={{
                                   backgroundColor: isSelected ? "var(--color-ink)" : "var(--color-paper)",
                                   color: isSelected ? "var(--color-paper)" : "var(--color-ink-muted)",
@@ -1402,7 +1406,7 @@ export default function DayViewClient({ date }: { date: string }) {
               )}
 
               {/* Edit-all-in-series toggle for recurring events */}
-              {editingEvent && editingEvent.recurrenceRule && (
+              {editingEvent && editingEvent.seriesId && (
                 <label
                   className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-xs"
                   style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
@@ -1480,14 +1484,14 @@ export default function DayViewClient({ date }: { date: string }) {
               >
                 Delete this one
               </button>
-              {deleteConfirm.recurrenceRule && (
+              {deleteConfirm.seriesId && (
                 <button
                   onClick={async () => {
                     try {
                       const res = await fetch("/api/events/bulk", {
                         method: "DELETE",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ recurrenceRule: deleteConfirm.recurrenceRule }),
+                        body: JSON.stringify({ seriesId: deleteConfirm.seriesId }),
                       });
                       if (res.ok) {
                         const data = await res.json().catch(() => ({}));

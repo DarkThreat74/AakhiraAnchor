@@ -43,6 +43,9 @@ export interface AlAdhanDayResponse {
  * Fetch a full month of prayer times from AlAdhan.
  * Returns array of daily timings.
  * @param school 0 = Shafi'i (standard), 1 = Hanafi — affects Asr calculation
+ * @param timezone IANA timezone string (e.g. "America/Chicago") — passed to AlAdhan
+ *   as the `timezonestring` query param so DST and timezone offsets are correct.
+ *   If omitted, AlAdhan guesses from lat/lng (less reliable near timezone borders).
  */
 export async function fetchMonthPrayerTimes(
   latitude: number,
@@ -51,8 +54,10 @@ export async function fetchMonthPrayerTimes(
   year: number,
   method = 2, // 2 = ISNA
   school: 0 | 1 = 0, // 0 = Shafi'i, 1 = Hanafi
+  timezone?: string,
 ): Promise<AlAdhanDayResponse["data"]> {
-  const url = `${env.aladhanBaseUrl}/calendar/${year}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school}`;
+  const tzParam = timezone ? `&timezonestring=${encodeURIComponent(timezone)}` : "";
+  const url = `${env.aladhanBaseUrl}/calendar/${year}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school}${tzParam}`;
 
   // Retry with timeout — a single hanging AlAdhan call should not exhaust the
   // cron's 300s budget. Three attempts with 15s timeout each + backoff.
@@ -93,8 +98,16 @@ export async function fetchMonthPrayerTimes(
 }
 
 /**
- * Parse AlAdhan time string "05:23 (EST)" → "05:23"
+ * Parse AlAdhan time string "05:23 (EST)" → "05:23".
+ * Also handles "05:23:00" (no timezone label) and "05:23:00 (EST)".
+ * Always returns "HH:MM".
  */
 export function parseTime(timeStr: string): string {
-  return timeStr.split(" ")[0].trim();
+  const cleaned = timeStr.split(" ")[0].trim();
+  // Strip seconds if present: "05:23:00" → "05:23"
+  const parts = cleaned.split(":");
+  if (parts.length >= 2) {
+    return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+  }
+  return cleaned;
 }

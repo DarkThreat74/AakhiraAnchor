@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql, eq, gte, and, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { verifyCronAuth } from "@/lib/cronAuth";
 import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
@@ -17,30 +17,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const monthStartStr = `${year}-${String(month).padStart(2, "0")}-01`;
-
-  // Only sync users whose prayer times haven't been fetched this month.
-  // This avoids re-fetching for users who already have current data.
-  const staleSettings = await db
+  // Fetch all prayer settings — we need per-user timezone to compute the
+  // correct month/year for each user.
+  const allSettings = await db
     .select({
       userId: schema.prayerSettings.userId,
       latitude: schema.prayerSettings.latitude,
       longitude: schema.prayerSettings.longitude,
       calculationMethod: schema.prayerSettings.calculationMethod,
       madhab: schema.prayerSettings.madhab,
+      timezone: schema.prayerSettings.timezone,
     })
-    .from(schema.prayerSettings)
-    .leftJoin(
-      schema.prayerTimesCache,
-      and(
-        eq(schema.prayerTimesCache.userId, schema.prayerSettings.userId),
-        gte(schema.prayerTimesCache.date, monthStartStr),
-      ),
-    )
-    .where(isNull(schema.prayerTimesCache.userId));
+    .from(schema.prayerSettings);
+
+  // Server UTC month for the stale-check query (conservative: fetches any user
+  // who doesn't have data for the earliest possible current month globally)
+  const nowUtc = new Date();
+  const utcMonthStartStr = `${nowUtc.getFullYear()}-${String(nowUtc.getMonth() + 1).padStart(2, "0")}-01`;
+
+  // Filter to users who are stale (no cache rows for their current month)
+  const staleSettings = allSettings.filter((s) => {
+    const tz = s.timezone || "UTC";
+    const nowInTz = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+    const [yearStr, monthStr] = nowInTz.split("-");
+    const userMonthStart = `${yearStr}-${monthStr}-01`;
+    // Stale if user's month start is >= UTC month start (covers the case where
+    // the user is already in a new month while server UTC is behind)
+    return userMonthStart >= utcMonthStartStr;
+  });
 
   let successCount = 0;
   let failCount = 0;
@@ -55,13 +59,24 @@ export async function POST(request: NextRequest) {
       const chunk = batch.slice(i, i + CONCURRENCY);
       const results = await Promise.allSettled(
         chunk.map(async (settings) => {
+          const tz = settings.timezone || "UTC";
+          const nowInTz = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+          const [yearStr, monthStr] = nowInTz.split("-");
+          const userMonth = parseInt(monthStr);
+          const userYear = parseInt(yearStr);
+
+          const latNum = parseFloat(settings.latitude);
+          const lngNum = parseFloat(settings.longitude);
+          if (isNaN(latNum) || isNaN(lngNum)) return; // skip invalid coordinates
+
           const days = await fetchMonthPrayerTimes(
-            parseFloat(settings.latitude),
-            parseFloat(settings.longitude),
-            month,
-            year,
+            latNum,
+            lngNum,
+            userMonth,
+            userYear,
             settings.calculationMethod,
             settings.madhab === "hanafi" ? 1 : 0,
+            tz,
           );
 
           const values = days.map((day) => {

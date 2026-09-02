@@ -12,6 +12,7 @@ interface EventLike {
   type: string;
   color?: string | null;
   recurrenceRule?: string | null;
+  seriesId?: string | null;
   notify?: boolean;
   _pending?: boolean;
 }
@@ -35,6 +36,7 @@ export function syncEventsToCache(date: string, events: EventLike[]): void {
           type: e.type,
           color: e.color ?? null,
           recurrenceRule: e.recurrenceRule ?? null,
+          seriesId: e.seriesId ?? null,
           _dateKey: date,
           _cachedAt: Date.now(),
         }))
@@ -61,6 +63,7 @@ export function addEventToCache(date: string, event: EventLike): void {
       type: event.type,
       color: event.color ?? null,
       recurrenceRule: event.recurrenceRule ?? null,
+      seriesId: event.seriesId ?? null,
       _dateKey: date,
       _cachedAt: Date.now(),
     }).catch(() => {});
@@ -88,6 +91,7 @@ export function updateEventInCache(event: EventLike): void {
       type: event.type,
       color: event.color ?? null,
       recurrenceRule: event.recurrenceRule ?? null,
+      seriesId: event.seriesId ?? null,
       _dateKey: dateKey,
       _cachedAt: Date.now(),
     }).catch(() => {});

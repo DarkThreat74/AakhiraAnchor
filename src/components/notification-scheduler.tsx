@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { isNativeApp, requestPushPermission, getPushToken, getPlatform } from "@/lib/native-bridge";
 import { getOfflineDB } from "@/lib/offline/db";
+import { getCachedPrayerSettings } from "@/lib/offline/settings-cache";
 
 /**
  * Client-side notification scheduler.
@@ -139,7 +140,7 @@ export default function NotificationScheduler() {
       }
 
       if (!data) return;
-      // The API returns { ...cached, madhab } — extract just the prayer times
+      // The API returns { ...cached, madhab, timezone } — extract prayer times + tz
       const times: PrayerTimes = {
         fajr: data.fajr,
         sunrise: data.sunrise,
@@ -148,6 +149,7 @@ export default function NotificationScheduler() {
         maghrib: data.maghrib,
         isha: data.isha,
       };
+      const prayerTimezone = (data as PrayerTimes & { timezone?: string | null }).timezone;
       if (!times || !times.fajr) return;
 
       const now = new Date();
@@ -158,7 +160,42 @@ export default function NotificationScheduler() {
 
         const { hours, minutes } = parseTimeParts(rawTime);
         const timeStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-        const prayerDate = new Date(`${date}T${timeStr}:00`);
+
+        // Convert prayer time (wall-clock in user's prayer timezone) to an
+        // absolute UTC instant. If we have the timezone, use it; otherwise fall
+        // back to browser local time (original behavior).
+        let prayerDate: Date;
+        if (prayerTimezone) {
+          // Parse the date as if it's in the prayer timezone, then get its UTC instant
+          // by formatting it and reading back. This handles DST correctly.
+          const dateTimeStr = `${date}T${timeStr}:00`;
+          // Use Intl to get the offset for that date in the prayer timezone
+          const dtf = new Intl.DateTimeFormat("en-US", {
+            timeZone: prayerTimezone,
+            year: "numeric", month: "2-digit", day: "2-digit",
+            hour: "2-digit", minute: "2-digit", second: "2-digit",
+            hour12: false,
+          });
+          // Get the parts for "now" in the prayer timezone to find the offset
+          const nowParts = dtf.formatToParts(now);
+          const nowInTz: Record<string, string> = {};
+          for (const p of nowParts) { if (p.type !== "literal") nowInTz[p.type] = p.value; }
+          const nowUtcMs = now.getTime();
+          const nowTzDate = new Date(
+            parseInt(nowInTz.year),
+            parseInt(nowInTz.month) - 1,
+            parseInt(nowInTz.day),
+            parseInt(nowInTz.hour === "24" ? "00" : nowInTz.hour),
+            parseInt(nowInTz.minute),
+            parseInt(nowInTz.second),
+          ).getTime();
+          const offsetMs = nowTzDate - nowUtcMs;
+          // Now compute the prayer time as a local date and subtract the offset
+          prayerDate = new Date(new Date(`${dateTimeStr}`).getTime() - offsetMs);
+        } else {
+          prayerDate = new Date(`${date}T${timeStr}:00`);
+        }
+
         const diffMs = prayerDate.getTime() - now.getTime();
 
         // Only schedule if it's in the future (within next 48 hours to cover tomorrow too)
@@ -193,7 +230,16 @@ export default function NotificationScheduler() {
    */
   const checkMissedPrayers = useCallback(async () => {
     try {
-      const today = new Date().toLocaleDateString("en-CA");
+      // Get the user's prayer timezone from the cached settings (localStorage)
+      // so we compute "today" and "now" in the prayer timezone, not browser-local.
+      const cachedSettings = getCachedPrayerSettings();
+      const prayerTimezone = cachedSettings?.timezone || null;
+
+      // Compute "today" in the prayer timezone (or browser-local as fallback)
+      const now = new Date();
+      const today = prayerTimezone
+        ? now.toLocaleDateString("en-CA", { timeZone: prayerTimezone })
+        : now.toLocaleDateString("en-CA");
 
       // ── Read from IndexedDB first (works offline) ──
       let data: PrayerTimes | null = null;
@@ -232,8 +278,21 @@ export default function NotificationScheduler() {
       };
       if (!times || !times.fajr) return;
 
-      const now = new Date();
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      // Compute "now" in minutes, in the prayer timezone (not browser-local)
+      let nowMinutes: number;
+      if (prayerTimezone) {
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: prayerTimezone,
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(now);
+        const h = parts.find((p) => p.type === "hour")?.value || "0";
+        const m = parts.find((p) => p.type === "minute")?.value || "0";
+        nowMinutes = parseInt(h === "24" ? "0" : h) * 60 + parseInt(m);
+      } else {
+        nowMinutes = now.getHours() * 60 + now.getMinutes();
+      }
 
       for (const prayer of PRAYER_NOTIFICATIONS) {
         const { hours, minutes } = parseTimeParts(times[prayer.key]);
@@ -373,8 +432,17 @@ export default function NotificationScheduler() {
 
   const scheduleAll = useCallback(async () => {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
-    const today = new Date().toLocaleDateString("en-CA");
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString("en-CA");
+    // Compute today/tomorrow in the user's prayer timezone, not browser-local.
+    // Prayer times are cached for dates in the prayer timezone.
+    const cachedSettings = getCachedPrayerSettings();
+    const prayerTimezone = cachedSettings?.timezone || null;
+    const now = new Date();
+    const today = prayerTimezone
+      ? now.toLocaleDateString("en-CA", { timeZone: prayerTimezone })
+      : now.toLocaleDateString("en-CA");
+    const tomorrow = prayerTimezone
+      ? new Date(now.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: prayerTimezone })
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString("en-CA");
     try {
       await Promise.all([
         schedulePrayerNotifications(today),

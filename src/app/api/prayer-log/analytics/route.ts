@@ -3,275 +3,319 @@ import { eq, and, gte } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { calculateStreak } from "@/lib/prayer/checkin";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/prayer-log/analytics — get prayer analytics for the current user
-//
-// ─── Optimization ───
-// Previously this route made 3 separate queries (90-day logs, all logs, prayer times).
-// Now it makes 2 queries: one for all logs (selecting only needed columns) and
-// one for prayer times. The 90-day filter is applied in-memory since we need
-// all logs for streak calculation anyway. Selecting only needed columns reduces
-// data transfer from the DB.
+type Range = "weekly" | "monthly" | "yearly" | "all-time";
+
+function getRangeStart(range: Range, timezone: string): string {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: timezone });
+
+  if (range === "all-time") {
+    return "1970-01-01";
+  }
+
+  if (range === "weekly") {
+    // Find the most recent Sunday in the user's timezone
+    const parts = todayStr.split("-").map(Number);
+    const localMidnight = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dayOfWeek = localMidnight.getDay(); // 0 = Sunday
+    const sunday = new Date(localMidnight);
+    sunday.setDate(sunday.getDate() - dayOfWeek);
+    return sunday.toISOString().split("T")[0];
+  }
+
+  if (range === "monthly") {
+    // First day of current month
+    const parts = todayStr.split("-").map(Number);
+    return `${parts[0]}-${String(parts[1]).padStart(2, "0")}-01`;
+  }
+
+  // yearly
+  const parts = todayStr.split("-").map(Number);
+  return `${parts[0]}-01-01`;
+}
+
+// GET /api/prayer-log/analytics?range=weekly|monthly|yearly|all-time
+// Default range is "weekly" (current week starting Sunday).
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get user's prayer settings for timezone + madhab
-  const [settings] = await db
-    .select({ timezone: schema.prayerSettings.timezone, madhab: schema.prayerSettings.madhab })
-    .from(schema.prayerSettings)
-    .where(eq(schema.prayerSettings.userId, session.userId))
-    .limit(1);
+  try {
+    // Get user's prayer settings for timezone + madhab
+    const [settings] = await db
+      .select({ timezone: schema.prayerSettings.timezone, madhab: schema.prayerSettings.madhab })
+      .from(schema.prayerSettings)
+      .where(eq(schema.prayerSettings.userId, session.userId))
+      .limit(1);
 
-  const timezone = settings?.timezone || "America/Chicago";
+    const timezone = settings?.timezone || "America/Chicago";
 
-  // 90-day lookback window — push the filter into the DB so we don't transfer
-  // the user's entire lifetime of prayer logs. The 90-day window is sufficient
-  // for both streak calculation (recent streak) and per-prayer analytics.
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const fromDate = ninetyDaysAgo.toISOString().split("T")[0];
+    // Parse range param
+    const { searchParams } = new URL(request.url);
+    const rawRange = searchParams.get("range") || "weekly";
+    const range: Range = (["weekly", "monthly", "yearly", "all-time"].includes(rawRange)
+      ? rawRange
+      : "weekly") as Range;
 
-  // Single query for prayer logs in the 90-day window — select only needed columns.
-  const allLogs = await db
-    .select({
-      id: schema.prayerLog.id,
-      date: schema.prayerLog.date,
-      prayerName: schema.prayerLog.prayerName,
-      status: schema.prayerLog.status,
-      wentToMasjid: schema.prayerLog.wentToMasjid,
-      markedAt: schema.prayerLog.markedAt,
-    })
-    .from(schema.prayerLog)
-    .where(
-      and(
-        eq(schema.prayerLog.userId, session.userId),
-        gte(schema.prayerLog.date, fromDate),
-      ),
-    );
+    const rangeStart = getRangeStart(range, timezone);
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 
-  // The 90-day subset IS the full set now.
-  const logs = allLogs;
+    // ── Fetch logs ──
+    // For streak calculation we always need 90 days of data regardless of range.
+    // For per-prayer analytics we filter to the selected range.
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const streakFromDate = ninetyDaysAgo.toISOString().split("T")[0];
 
-  // Fetch cached prayer times for the last 90 days so we can validate
-  // that markedAt falls within the prayer window. Without this, a user
-  // who logs Fajr at 10 PM (because they forgot) would skew the average.
-  const prayerTimesRows = await db
-    .select()
-    .from(schema.prayerTimesCache)
-    .where(
-      and(
-        eq(schema.prayerTimesCache.userId, session.userId),
-        gte(schema.prayerTimesCache.date, fromDate),
-      ),
-    );
+    // Use the earlier of (rangeStart, streakFromDate) for the DB query
+    const dbFromDate = rangeStart < streakFromDate ? rangeStart : streakFromDate;
 
-  // Build a map: date -> { fajr, sunrise, dhuhr, asr, maghrib, isha } in minutes-from-midnight (UTC)
-  const prayerTimesByDate = new Map<string, Record<string, number>>();
-  for (const row of prayerTimesRows) {
-    const dateStr = typeof row.date === "string" ? row.date : String(row.date);
-    const parseTime = (t: string | Date): number => {
-      const s = typeof t === "string" ? t : t.toISOString();
-      // time column returns "HH:MM:SS" — extract hours and minutes
-      const match = s.match(/(\d+):(\d+)/);
-      return match ? parseInt(match[1]) * 60 + parseInt(match[2]) : -1;
-    };
-    prayerTimesByDate.set(dateStr, {
-      fajr: parseTime(row.fajr),
-      sunrise: parseTime(row.sunrise),
-      dhuhr: parseTime(row.dhuhr),
-      asr: parseTime(row.asr),
-      maghrib: parseTime(row.maghrib),
-      isha: parseTime(row.isha),
+    const allLogs = await db
+      .select({
+        id: schema.prayerLog.id,
+        date: schema.prayerLog.date,
+        prayerName: schema.prayerLog.prayerName,
+        status: schema.prayerLog.status,
+        wentToMasjid: schema.prayerLog.wentToMasjid,
+        markedAt: schema.prayerLog.markedAt,
+      })
+      .from(schema.prayerLog)
+      .where(
+        and(
+          eq(schema.prayerLog.userId, session.userId),
+          gte(schema.prayerLog.date, dbFromDate),
+        ),
+      );
+
+    // Fetch cached prayer times covering the full DB range
+    const prayerTimesRows = await db
+      .select()
+      .from(schema.prayerTimesCache)
+      .where(
+        and(
+          eq(schema.prayerTimesCache.userId, session.userId),
+          gte(schema.prayerTimesCache.date, dbFromDate),
+        ),
+      );
+
+    // Build a map: date -> { fajr, sunrise, dhuhr, asr, maghrib, isha } in minutes-from-midnight
+    const prayerTimesByDate = new Map<string, Record<string, number>>();
+    for (const row of prayerTimesRows) {
+      const dateStr = typeof row.date === "string" ? row.date : String(row.date);
+      const parseTime = (t: string | Date): number => {
+        const s = typeof t === "string" ? t : t.toISOString();
+        const match = s.match(/(\d+):(\d+)/);
+        return match ? parseInt(match[1]) * 60 + parseInt(match[2]) : -1;
+      };
+      prayerTimesByDate.set(dateStr, {
+        fajr: parseTime(row.fajr),
+        sunrise: parseTime(row.sunrise),
+        dhuhr: parseTime(row.dhuhr),
+        asr: parseTime(row.asr),
+        maghrib: parseTime(row.maghrib),
+        isha: parseTime(row.isha),
+      });
+    }
+
+    // ── Streak (always uses 90-day window) ──
+    const logsByDate = new Map<string, Array<{ status: string }>>();
+    for (const log of allLogs) {
+      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+      if (!logsByDate.has(dateStr)) logsByDate.set(dateStr, []);
+      logsByDate.get(dateStr)!.push({ status: log.status });
+    }
+    const streak = calculateStreak(logsByDate, todayStr);
+
+    // ── Filter logs to the selected range for analytics ──
+    const rangeLogs = allLogs.filter((l) => {
+      const dateStr = typeof l.date === "string" ? l.date : String(l.date);
+      return dateStr >= rangeStart && dateStr <= todayStr;
     });
-  }
 
-  // Build prayer logs by date map for streak
-  const logsByDate = new Map<string, Array<{ status: string }>>();
-  for (const log of allLogs) {
-    const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-    if (!logsByDate.has(dateStr)) logsByDate.set(dateStr, []);
-    logsByDate.get(dateStr)!.push({ status: log.status });
-  }
+    // ── Range-specific counts ──
+    let thisWeekPrayed = 0;
+    let thisMonthPrayed = 0;
+    let lastPrayedDate: string | null = null;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const weekAgoStr = sevenDaysAgo.toISOString().split("T")[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const monthAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
-  const streak = calculateStreak(logsByDate, todayStr);
-
-  // Last 7 days and last 30 days prayed counts
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const weekAgoStr = sevenDaysAgo.toISOString().split("T")[0];
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const monthAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
-
-  let thisWeekPrayed = 0;
-  let thisMonthPrayed = 0;
-  let lastPrayedDate: string | null = null;
-  for (const log of allLogs) {
-    if (log.status === "prayed" || log.status === "assumed_prayed") {
-      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-      if (dateStr >= weekAgoStr) thisWeekPrayed++;
-      if (dateStr >= monthAgoStr) thisMonthPrayed++;
-      if (!lastPrayedDate || dateStr > lastPrayedDate) lastPrayedDate = dateStr;
-    }
-  }
-
-  // Compute the number of days the user has been active (from first log to today, capped at 90)
-  // This is the correct denominator for consistency percentage
-  let activeDays = 90;
-  if (allLogs.length > 0) {
-    const sortedDates = allLogs
-      .map((l) => (typeof l.date === "string" ? l.date : String(l.date)))
-      .sort();
-    const firstDateStr = sortedDates[0];
-    const firstDate = new Date(firstDateStr + "T00:00:00");
-    const todayDate = new Date(todayStr + "T00:00:00");
-    const diffMs = todayDate.getTime() - firstDate.getTime();
-    activeDays = Math.min(90, Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)) + 1));
-  }
-
-  // Per-prayer analytics
-  const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"] as const;
-  const perPrayer = prayers.map((prayer) => {
-    const prayerLogs = logs.filter((l) => l.prayerName === prayer);
-    const prayedLogs = prayerLogs.filter((l) => l.status === "prayed" || l.status === "assumed_prayed");
-    const totalDays = prayedLogs.length;
-    const masjidCount = prayedLogs.filter((l) => l.wentToMasjid === true).length;
-
-    // Calculate average prayer time from markedAt — but ONLY include
-    // check-ins where markedAt falls within the prayer's valid window.
-    // This prevents late check-ins (e.g., logging Fajr at 10 PM) from
-    // skewing the average.
-    const markedTimes: number[] = [];
-    for (const log of prayedLogs) {
-      if (!log.markedAt) continue;
-      const marked = new Date(log.markedAt);
-      const localStr = marked.toLocaleString("en-US", { timeZone: timezone, hour12: false });
-      const match = localStr.match(/(\d+):(\d+)/);
-      if (!match) continue;
-      const markedMinutes = parseInt(match[1]) * 60 + parseInt(match[2]);
-
-      // Look up prayer times for this log's date
-      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-      const times = prayerTimesByDate.get(dateStr);
-      if (!times) continue; // No cached prayer times for this date — skip
-
-      const prayerStart = times[prayer];
-      if (prayerStart < 0) continue;
-
-      // Define the prayer window end:
-      // - Fajr: ends at sunrise
-      // - Dhuhr: ends at Asr
-      // - Asr: ends at Maghrib
-      // - Maghrib: ends at Isha
-      // - Isha: ends at midnight (1200 minutes = 20:00 UTC-ish, but use 24*60)
-      let windowEnd: number;
-      switch (prayer) {
-        case "fajr":
-          windowEnd = times.sunrise >= 0 ? times.sunrise : prayerStart + 120;
-          break;
-        case "dhuhr":
-          windowEnd = times.asr >= 0 ? times.asr : prayerStart + 300;
-          break;
-        case "asr":
-          windowEnd = times.maghrib >= 0 ? times.maghrib : prayerStart + 240;
-          break;
-        case "maghrib":
-          windowEnd = times.isha >= 0 ? times.isha : prayerStart + 90;
-          break;
-        case "isha":
-          // Isha can be prayed until Fajr of the next day, but for averaging
-          // purposes, cap at midnight to avoid including extreme late-night
-          // check-ins. Also allow a small grace period (30 min) before the
-          // prayer start for those who pray slightly early.
-          windowEnd = 24 * 60; // midnight
-          break;
-        default:
-          windowEnd = prayerStart + 120;
-      }
-
-      // Allow a 15-minute grace period before the prayer start (some users
-      // pray slightly early, especially for Dhuhr on Fridays)
-      const windowStart = prayerStart - 15;
-
-      // Handle wrap-around: if windowEnd < windowStart (e.g., Isha spans midnight),
-      // check if markedMinutes >= windowStart OR markedMinutes <= windowEnd
-      const inWindow =
-        windowEnd < windowStart
-          ? markedMinutes >= windowStart || markedMinutes <= windowEnd
-          : markedMinutes >= windowStart && markedMinutes <= windowEnd;
-
-      if (inWindow) {
-        markedTimes.push(markedMinutes);
-      }
-      // If not in window, skip — don't include in average
-    }
-
-    const avgTime = markedTimes.length > 0
-      ? Math.round(markedTimes.reduce((a, b) => a + b, 0) / markedTimes.length)
-      : null;
-
-    // Calculate % prayed in makruh time (simplified: prayed in last 10 min of window)
-    // We'd need prayer times for each day to be precise, but we can estimate
-    // For now, count prayers marked very late (within 10 min before next prayer)
-    // This is a rough heuristic without per-day prayer times
-    const makruhCount = 0; // TODO: calculate with prayer times per day
-    const makruhPct = totalDays > 0 ? Math.round((makruhCount / totalDays) * 100) : 0;
-
-    return {
-      prayer,
-      totalPrayed: totalDays,
-      masjidCount,
-      masjidPct: totalDays > 0 ? Math.round((masjidCount / totalDays) * 100) : 0,
-      avgTimeMinutes: avgTime,
-      avgTimeStr: avgTime !== null ? formatMinutesToTime(avgTime) : null,
-      makruhPct,
-      consistencyPct: activeDays > 0 ? Math.round((totalDays / activeDays) * 100) : 0,
-    };
-  });
-
-  // Overall stats
-  const totalPrayed = logs.filter((l) => l.status === "prayed" || l.status === "assumed_prayed").length;
-  const totalMasjid = logs.filter((l) => l.wentToMasjid === true).length;
-
-  // Days with all 5 prayers
-  const completeDays = new Set<string>();
-  const prayedByDate = new Map<string, Set<string>>();
-  for (const log of allLogs) {
-    if (log.status === "prayed" || log.status === "assumed_prayed") {
-      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-      if (!prayedByDate.has(dateStr)) prayedByDate.set(dateStr, new Set());
-      prayedByDate.get(dateStr)!.add(log.prayerName);
-      if (prayedByDate.get(dateStr)!.size === 5) {
-        completeDays.add(dateStr);
+    for (const log of allLogs) {
+      if (log.status === "prayed" || log.status === "assumed_prayed") {
+        const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+        if (dateStr >= weekAgoStr) thisWeekPrayed++;
+        if (dateStr >= monthAgoStr) thisMonthPrayed++;
+        if (!lastPrayedDate || dateStr > lastPrayedDate) lastPrayedDate = dateStr;
       }
     }
+
+    // ── Active days (denominator for consistency) ──
+    let activeDays: number;
+    if (range === "all-time") {
+      // Use days from first log to today
+      if (rangeLogs.length === 0) {
+        activeDays = 1;
+      } else {
+        const sortedDates = rangeLogs
+          .map((l) => (typeof l.date === "string" ? l.date : String(l.date)))
+          .sort();
+        const firstDate = new Date(sortedDates[0] + "T00:00:00");
+        const todayDate = new Date(todayStr + "T00:00:00");
+        activeDays = Math.max(1, Math.round((todayDate.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+      }
+    } else {
+      // Days from rangeStart to today
+      const start = new Date(rangeStart + "T00:00:00");
+      const today = new Date(todayStr + "T00:00:00");
+      activeDays = Math.max(1, Math.round((today.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+    }
+
+    // ── Per-prayer analytics ──
+    const prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"] as const;
+
+    const perPrayer = prayers.map((prayer) => {
+      const prayerLogs = rangeLogs.filter((l) => l.prayerName === prayer);
+      const prayedLogs = prayerLogs.filter((l) => l.status === "prayed" || l.status === "assumed_prayed");
+      const totalDays = prayedLogs.length;
+      const masjidCount = prayedLogs.filter((l) => l.wentToMasjid === true).length;
+
+      // Calculate window-percentage for each check-in.
+      // windowPct = (markedMinutes - prayerStart) / (windowEnd - prayerStart) * 100
+      // This is season-independent: 0% = prayed right at start, 100% = prayed at last moment.
+      const windowPcts: number[] = [];
+      for (const log of prayedLogs) {
+        if (!log.markedAt) continue;
+        const marked = new Date(log.markedAt);
+        const localStr = marked.toLocaleString("en-US", { timeZone: timezone, hour12: false });
+        const match = localStr.match(/(\d+):(\d+)/);
+        if (!match) continue;
+        const markedMinutes = parseInt(match[1]) * 60 + parseInt(match[2]);
+
+        const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+        const times = prayerTimesByDate.get(dateStr);
+        if (!times) continue;
+
+        const prayerStart = times[prayer];
+        if (prayerStart < 0) continue;
+
+        // Window end per prayer
+        let windowEnd: number;
+        switch (prayer) {
+          case "fajr":
+            windowEnd = times.sunrise >= 0 ? times.sunrise : prayerStart + 120;
+            break;
+          case "dhuhr":
+            windowEnd = times.asr >= 0 ? times.asr : prayerStart + 300;
+            break;
+          case "asr":
+            windowEnd = times.maghrib >= 0 ? times.maghrib : prayerStart + 240;
+            break;
+          case "maghrib":
+            windowEnd = times.isha >= 0 ? times.isha : prayerStart + 90;
+            break;
+          case "isha":
+            windowEnd = 24 * 60; // midnight
+            break;
+          default:
+            windowEnd = prayerStart + 120;
+        }
+
+        // Allow 15-min grace before start
+        const windowStart = prayerStart - 15;
+        const windowDuration = windowEnd - windowStart;
+        if (windowDuration <= 0) continue;
+
+        // Check in-window (handle wrap for Isha)
+        const inWindow =
+          windowEnd < windowStart
+            ? markedMinutes >= windowStart || markedMinutes <= windowEnd
+            : markedMinutes >= windowStart && markedMinutes <= windowEnd;
+
+        if (!inWindow) continue;
+
+        // Calculate percentage within the window
+        let elapsed: number;
+        if (markedMinutes >= windowStart) {
+          elapsed = markedMinutes - windowStart;
+        } else {
+          // Wrap-around case (Isha past midnight)
+          elapsed = (1440 - windowStart) + markedMinutes;
+        }
+        const pct = (elapsed / windowDuration) * 100;
+        windowPcts.push(Math.max(0, Math.min(100, pct)));
+      }
+
+      const avgWindowPct = windowPcts.length > 0
+        ? Math.round(windowPcts.reduce((a, b) => a + b, 0) / windowPcts.length)
+        : null;
+
+      return {
+        prayer,
+        totalPrayed: totalDays,
+        masjidCount,
+        masjidPct: totalDays > 0 ? Math.round((masjidCount / totalDays) * 100) : 0,
+        avgWindowPct,
+        consistencyPct: activeDays > 0 ? Math.round((totalDays / activeDays) * 100) : 0,
+      };
+    });
+
+    // ── Overall stats (range-scoped) ──
+    const totalPrayed = rangeLogs.filter((l) => l.status === "prayed" || l.status === "assumed_prayed").length;
+    const totalMasjid = rangeLogs.filter((l) => l.wentToMasjid === true).length;
+
+    // Days with all 5 prayers (range-scoped)
+    const completeDays = new Set<string>();
+    const prayedByDate = new Map<string, Set<string>>();
+    for (const log of rangeLogs) {
+      if (log.status === "prayed" || log.status === "assumed_prayed") {
+        const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+        if (!prayedByDate.has(dateStr)) prayedByDate.set(dateStr, new Set());
+        prayedByDate.get(dateStr)!.add(log.prayerName);
+        if (prayedByDate.get(dateStr)!.size === 5) {
+          completeDays.add(dateStr);
+        }
+      }
+    }
+
+    // ── Today's prayer times for equivalent-time display ──
+    const todayTimes = prayerTimesByDate.get(todayStr) || null;
+
+    return NextResponse.json({
+      streak,
+      range,
+      rangeStart,
+      totalCompleteDays: completeDays.size,
+      totalPrayed,
+      totalMasjid,
+      masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
+      perPrayer,
+      timezone,
+      madhab: settings?.madhab || "standard",
+      thisWeekPrayed,
+      thisMonthPrayed,
+      lastPrayedDate,
+      todayPrayerTimes: todayTimes
+        ? {
+            fajr: todayTimes.fajr,
+            sunrise: todayTimes.sunrise,
+            dhuhr: todayTimes.dhuhr,
+            asr: todayTimes.asr,
+            maghrib: todayTimes.maghrib,
+            isha: todayTimes.isha,
+          }
+        : null,
+    });
+  } catch (err) {
+    logError(err, { route: "prayer-log/analytics" });
+    return NextResponse.json({ error: "Failed to load analytics." }, { status: 500 });
   }
-
-  return NextResponse.json({
-    streak,
-    totalCompleteDays: completeDays.size,
-    totalPrayed,
-    totalMasjid,
-    masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
-    perPrayer,
-    timezone,
-    madhab: settings?.madhab || "standard",
-    thisWeekPrayed,
-    thisMonthPrayed,
-    lastPrayedDate,
-  });
-}
-
-function formatMinutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
-  const period = h < 12 ? "AM" : "PM";
-  const displayH = h % 12 || 12;
-  return `${displayH}:${String(m).padStart(2, "0")} ${period}`;
 }

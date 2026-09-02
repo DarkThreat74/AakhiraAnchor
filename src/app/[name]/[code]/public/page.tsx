@@ -66,8 +66,9 @@ export default async function PublicCalendarPage({
 }) {
   const { name, code } = await params;
 
-  // Code is a 5-digit numeric string
-  if (!code || !/^\d{5}$/.test(code)) {
+  // Code is a 128-bit hex string (32 chars). Legacy 5-digit codes are no
+  // longer accepted — they were enumerable and allowed IDOR access.
+  if (!code || !/^[a-f0-9]{32}$/.test(code)) {
     notFound();
   }
 

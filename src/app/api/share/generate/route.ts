@@ -5,6 +5,7 @@ import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { slugifyName } from "@/lib/slugify";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -81,24 +82,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [user] = await db
-    .select({
-      publicShareToken: schema.users.publicShareToken,
-      displayName: schema.users.displayName,
-    })
-    .from(schema.users)
-    .where(eq(schema.users.id, session.userId))
-    .limit(1);
+  try {
+    const [user] = await db
+      .select({
+        publicShareToken: schema.users.publicShareToken,
+        displayName: schema.users.displayName,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
 
-  if (!user) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    if (!user) {
+      return NextResponse.json({ error: "User not found." }, { status: 404 });
+    }
+
+    const nameSlug = slugifyName(user.displayName || "shared");
+
+    return NextResponse.json({
+      enabled: !!user.publicShareToken,
+      token: user.publicShareToken,
+      url: user.publicShareToken ? `/${nameSlug}/${user.publicShareToken}/public` : null,
+    });
+  } catch (err) {
+    logError(err, { route: "share/generate GET" });
+    return NextResponse.json({ error: "Failed to load share status." }, { status: 500 });
   }
-
-  const nameSlug = slugifyName(user.displayName || "shared");
-
-  return NextResponse.json({
-    enabled: !!user.publicShareToken,
-    token: user.publicShareToken,
-    url: user.publicShareToken ? `/${nameSlug}/${user.publicShareToken}/public` : null,
-  });
 }

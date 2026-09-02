@@ -3,11 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { isValidUUID } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
 // PATCH /api/events/bulk — update all events in a recurring series
-// Body: { recurrenceRule: string, title?, type?, color?, notify? }
+// Body: { seriesId: string, title?, type?, color?, notify? }
 // Only updates fields that are present in the body. Does NOT change startAt/endAt
 // since each occurrence has its own timestamp.
 export async function PATCH(request: NextRequest) {
@@ -28,16 +29,16 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { recurrenceRule, title, type, color, notify } = body as {
-    recurrenceRule?: string;
+  const { seriesId, title, type, color, notify } = body as {
+    seriesId?: string;
     title?: string;
     type?: string;
     color?: string | null;
     notify?: boolean;
   };
 
-  if (!recurrenceRule || typeof recurrenceRule !== "string" || !recurrenceRule.trim()) {
-    return NextResponse.json({ error: "recurrenceRule is required." }, { status: 400 });
+  if (!seriesId || !isValidUUID(seriesId)) {
+    return NextResponse.json({ error: "Valid seriesId is required." }, { status: 400 });
   }
 
   // Build update object — only update provided fields
@@ -80,7 +81,7 @@ export async function PATCH(request: NextRequest) {
     .where(
       and(
         eq(schema.events.userId, session.userId),
-        eq(schema.events.recurrenceRule, recurrenceRule.trim()),
+        eq(schema.events.seriesId, seriesId),
       ),
     )
     .returning({ id: schema.events.id });
@@ -93,7 +94,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 // DELETE /api/events/bulk — delete all events in a recurring series
-// Body: { recurrenceRule: string }
+// Body: { seriesId: string }
 export async function DELETE(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -112,10 +113,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { recurrenceRule } = body as { recurrenceRule?: string };
+  const { seriesId } = body as { seriesId?: string };
 
-  if (!recurrenceRule || typeof recurrenceRule !== "string" || !recurrenceRule.trim()) {
-    return NextResponse.json({ error: "recurrenceRule is required." }, { status: 400 });
+  if (!seriesId || !isValidUUID(seriesId)) {
+    return NextResponse.json({ error: "Valid seriesId is required." }, { status: 400 });
   }
 
   const deleted = await db
@@ -123,7 +124,7 @@ export async function DELETE(request: NextRequest) {
     .where(
       and(
         eq(schema.events.userId, session.userId),
-        eq(schema.events.recurrenceRule, recurrenceRule.trim()),
+        eq(schema.events.seriesId, seriesId),
       ),
     )
     .returning({ id: schema.events.id });
