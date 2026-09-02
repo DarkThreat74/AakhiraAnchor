@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v25";
+const CACHE_VERSION = "waqt-v26";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -274,9 +274,30 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // ── NEVER intercept Next.js internal requests ──
-  // These are RSC payload fetches, chunk loads, etc. Intercepting them
-  // adds overhead to every client-side navigation (the #1 cause of slow tabs).
+  // ── Cache _next/static JS/CSS chunks (immutable, hashed filenames) ──
+  // These are critical for offline: without them, cached HTML can't hydrate.
+  // Use CacheFirst — these files are content-hashed and never change.
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
+          }
+          return response;
+        }).catch(() => {
+          // Offline and no cache — return empty JS to avoid crash
+          return new Response("", { status: 200, headers: { "Content-Type": "application/javascript" } });
+        });
+      })
+    );
+    return;
+  }
+
+  // ── Skip other _next/ requests (HMR, RSC payloads, etc.) ──
+  // These are dev-only or client-navigation internals — don't intercept.
   if (url.pathname.startsWith("/_next/")) return;
 
   // ── Handle ALL API writes (POST/PATCH/PUT/DELETE) ──
@@ -526,40 +547,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Next.js RSC payload fetches (client-side navigation): stale-while-revalidate ──
-  // These have the RSC header. Cache them so offline <Link> navigation works.
-  // This is critical: without cached RSC payloads, client-side navigation
-  // (clicking <Link>) fails offline even if the HTML shell is cached.
-  if (request.headers.get("RSC") === "1") {
+  // ── Next.js RSC payload fetches (client-side navigation) ──
+  // RSC/Flight payloads are tied to the build ID and session — caching them
+  // manually causes stale/mismatched data and infinite loading on soft
+  // navigations. Use NetworkOnly; when offline, return 503 so the client
+  // falls back to the cached HTML shell + IndexedDB data.
+  if (request.headers.get("RSC") === "1" || url.searchParams.has("_rsc")) {
     event.respondWith(
       (async () => {
-        const cached = await caches.match(request);
-        if (cached) {
-          // Revalidate in background
-          if (navigator.onLine) {
-            fetch(request)
-              .then((response) => {
-                if (response.ok) {
-                  const responseClone = response.clone();
-                  caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-                }
-              })
-              .catch(() => {});
-          }
-          return cached;
-        }
-        // No cache — try network
         try {
           const response = await fetch(request);
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
-          }
           return response;
         } catch {
-          // No cache, no network — return empty RSC response
-          // The client will fall back to the cached HTML shell
-          return new Response("", { status: 503 });
+          // Offline — return 503 so the client uses cached HTML + IndexedDB
+          return new Response("", { status: 503, headers: { "Content-Type": "text/x-component" } });
         }
       })()
     );

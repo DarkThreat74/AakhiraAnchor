@@ -1,10 +1,9 @@
 import { getSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import DayViewClient from "./DayViewClient";
+import DayDateHeader from "./DayDateHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Calendar · Waqt" };
@@ -28,82 +27,10 @@ export default async function DayPage({ searchParams }: { searchParams: Promise<
   const params = await searchParams;
   const date = params.date || today;
 
-  // Calculate prev/next days using date strings (avoid timezone issues)
-  const [y, m, d] = date.split("-").map(Number);
-  const prevDate = new Date(y, m - 1, d - 1);
-  const nextDate = new Date(y, m - 1, d + 1);
-  const prevStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-${String(prevDate.getDate()).padStart(2, "0")}`;
-  const nextStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
-
-  // Format the date — no timeZone conversion needed since dateObj is already
-  // constructed from the user's local date components (y, m, d)
-  const dateObj = new Date(y, m - 1, d);
-  const formattedDate = dateObj.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-
   return (
     <div className="overflow-x-hidden">
-      {/* Date header with day/month toggle */}
-      <div className="overflow-x-hidden border-b" style={{ borderColor: "var(--color-paper-3)" }}>
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4">
-          {/* Prev day */}
-          <Link
-            href={`/calendar/day?date=${prevStr}`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
-            style={{ color: "var(--color-ink-soft)" }}
-            aria-label="Previous day"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Link>
-
-          {/* Date + view toggle */}
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-1 sm:flex-row sm:justify-center sm:gap-4">
-            <div className="text-center">
-              <h1 className="truncate text-sm font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
-                {formattedDate}
-              </h1>
-              {date === today && (
-                <p className="text-xs" style={{ color: "var(--color-accent)" }}>Today</p>
-              )}
-            </div>
-
-            {/* Day/Month toggle */}
-            <div
-              className="flex shrink-0 rounded-lg border"
-              style={{ borderColor: "var(--color-paper-3)" }}
-            >
-              <Link
-                href={`/calendar/day?date=${date}`}
-                className="rounded-l-lg px-3 py-1.5 text-xs font-medium"
-                style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
-              >
-                Day
-              </Link>
-              <Link
-                href={`/calendar/month?year=${dateObj.getFullYear()}&month=${dateObj.getMonth() + 1}`}
-                className="rounded-r-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-                style={{ color: "var(--color-ink-soft)" }}
-              >
-                Month
-              </Link>
-            </div>
-          </div>
-
-          {/* Next day */}
-          <Link
-            href={`/calendar/day?date=${nextStr}`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
-            style={{ color: "var(--color-ink-soft)" }}
-            aria-label="Next day"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Link>
-        </div>
-      </div>
-
+      {/* Date header is client-side so the cached shell works across days offline */}
+      <DayDateHeader date={date} />
       <DayViewClient date={date} />
     </div>
   );

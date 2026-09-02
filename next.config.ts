@@ -19,12 +19,28 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Static assets are content-hashed and immutable — cache aggressively
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      {
+        // Public API endpoints — edge cacheable
         source: "/api/public/:token*",
         headers: [
           { key: "Cache-Control", value: "public, s-maxage=60, stale-while-revalidate=300" },
         ],
       },
       {
+        // Authenticated API routes — never cached by edge/CDN (private user data)
+        source: "/api/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, must-revalidate" },
+        ],
+      },
+      {
+        // SW must always be fetched fresh from the network
         source: "/sw.js",
         headers: [
           { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },

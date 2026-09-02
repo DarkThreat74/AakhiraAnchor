@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "Waqt — Prayer-centered life tracker",
   "short_name": "Waqt",
   "description": "A calendar and accountability system where the five daily prayers are the fixed anchor everything else is scheduled around.",
   "start_url": "/calendar/day",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f5f0e8",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
@@ -114,6 +114,104 @@ function CollapsibleSection({
       </div>
       <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
     </>
+  );
+}
+
+// ── Custom Dropdown ──
+// Replaces native <select> with a styled, touch-friendly dropdown that
+// matches Waqt's design tokens. Closes on outside click or escape.
+function SettingsDropdown<T extends string | number>({
+  value,
+  options,
+  onChange,
+  disabled,
+  ariaLabel,
+}: {
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (val: T) => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selectedLabel = options.find((o) => o.value === value)?.label || String(value);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-sm transition-colors disabled:opacity-50"
+        style={{
+          borderColor: open ? "var(--color-accent)" : "var(--color-paper-3)",
+          backgroundColor: "var(--color-paper)",
+          color: "var(--color-ink)",
+          minHeight: 46,
+        }}
+      >
+        <span className="truncate text-left font-medium" style={{ color: "var(--color-ink)" }}>
+          {selectedLabel}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          style={{ color: "var(--color-ink-muted)" }}
+        />
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border py-1.5 shadow-lg"
+          style={{
+            borderColor: "var(--color-paper-3)",
+            backgroundColor: "var(--color-paper)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+          }}
+        >
+          {options.map((opt) => {
+            const isSelected = opt.value === value;
+            return (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{
+                  color: isSelected ? "var(--color-accent)" : "var(--color-ink)",
+                  fontWeight: isSelected ? 600 : 400,
+                  minHeight: 44,
+                }}
+              >
+                <span className="truncate">{opt.label}</span>
+                {isSelected && <Check className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-accent)" }} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1195,23 +1293,20 @@ export default function SettingsClient({
               {needsMethod && <RedDot />}
               {savingMethod && <RefreshCw className="h-3 w-3 animate-spin" style={{ color: "var(--color-ink-muted)" }} />}
             </div>
-            <select
+            <SettingsDropdown
               value={selectedMethod}
-              onChange={(e) => {
-                const newMethod = parseInt(e.target.value, 10);
+              options={METHOD_OPTIONS}
+              onChange={(newMethod) => {
                 setSelectedMethod(newMethod);
-                if (prayerSettings && newMethod !== prayerSettings.calculationMethod) {
+                // Always save on change — don't rely on comparison with prayerSettings
+                // which may be null or stale
+                if (prayerSettings) {
                   savePrayerSettings("method", newMethod, undefined);
                 }
               }}
               disabled={savingMethod || !prayerSettings}
-              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
-              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
-            >
-              {METHOD_OPTIONS.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+              ariaLabel="Calculation method"
+            />
             {prayerSettings && (
               <p className="mt-1.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                 Current: {methodLabel(prayerSettings.calculationMethod)}
@@ -1234,22 +1329,23 @@ export default function SettingsClient({
               {needsMadhab && <RedDot />}
               {savingMadhab && <RefreshCw className="h-3 w-3 animate-spin" style={{ color: "var(--color-ink-muted)" }} />}
             </div>
-            <select
+            <SettingsDropdown
               value={selectedMadhab}
-              onChange={(e) => {
-                const newMadhab = e.target.value;
+              options={[
+                { value: "standard", label: "Standard (Shafi'i, Maliki, Hanbali)" },
+                { value: "hanafi", label: "Hanafi" },
+              ]}
+              onChange={(newMadhab) => {
                 setSelectedMadhab(newMadhab);
-                if (prayerSettings && newMadhab !== prayerSettings.madhab) {
+                // Always save on change — the old comparison (newMadhab !== prayerSettings.madhab)
+                // failed when prayerSettings.madhab was null in the DB, preventing saves
+                if (prayerSettings) {
                   savePrayerSettings("madhab", undefined, newMadhab);
                 }
               }}
               disabled={savingMadhab || !prayerSettings}
-              className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)] disabled:opacity-60"
-              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
-            >
-              <option value="standard">Standard (Shafi&apos;i, Maliki, Hanbali)</option>
-              <option value="hanafi">Hanafi</option>
-            </select>
+              ariaLabel="Madhab"
+            />
             {madhabMsg && (
               <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: madhabMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
                 {madhabMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
@@ -1396,7 +1492,7 @@ export default function SettingsClient({
           title="Notifications"
           badge={notifPermission === "granted" ? "Enabled" : notifPermission === "denied" ? "Blocked" : "Not set up"}
           badgeColor={notifPermission === "granted" ? "var(--color-success)" : notifPermission === "denied" ? "var(--color-warmth)" : "var(--color-ink-muted)"}
-          defaultOpen={notifPermission !== "granted"}
+          defaultOpen={false}
         >
           {notifPermission === "denied" && (
             <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>

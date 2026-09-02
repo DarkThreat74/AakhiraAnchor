@@ -20,8 +20,10 @@ export default function ServiceWorkerRegister() {
     if (!("serviceWorker" in navigator)) return;
 
     // Register the service worker
+    // updateViaCache: 'none' ensures the browser always fetches a fresh sw.js
+    // from the network, never from the HTTP cache — critical for SW updates.
     navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
+      .register("/sw.js", { scope: "/", updateViaCache: "none" })
       .then((registration) => {
         // Listen for new SW updates
         registration.addEventListener("updatefound", () => {
