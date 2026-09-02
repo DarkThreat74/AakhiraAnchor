@@ -1,10 +1,9 @@
-Prayer dashboard: time-left after prayed, fix week count, avg time line
+Show event count when applying changes to all events in a series
 
-- Show remaining time next to prayed prayers in neutral tone (was hidden)
-- Fix "This Week" count: use user's timezone + calendar week (Sunday start)
-  instead of rolling 7 days in server UTC
-- Redesign per-prayer "Window" column to "Avg Time" with percentage, time,
-  and an animated fill line that transitions smoothly when data changes
+- Added GET /api/events/bulk?seriesId=... returning the event count
+- DayView fetches the count when opening the edit form for a recurring event
+- "Apply changes to all events" label now shows the exact count (e.g. "all 57 events")
+- "Delete entire series" button also shows the count (e.g. "Delete entire series (57 events)")
 
 Generated with [Devin](https://devin.ai)
 

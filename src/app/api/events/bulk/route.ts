@@ -1,11 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { isValidUUID } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+
+// GET /api/events/bulk?seriesId=... — returns the number of events in a series
+export async function GET(request: NextRequest) {
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const seriesId = request.nextUrl.searchParams.get("seriesId");
+  if (!seriesId || !isValidUUID(seriesId)) {
+    return NextResponse.json({ error: "Valid seriesId is required." }, { status: 400 });
+  }
+
+  const result = await db
+    .select({ count: count() })
+    .from(schema.events)
+    .where(
+      and(
+        eq(schema.events.userId, session.userId),
+        eq(schema.events.seriesId, seriesId),
+      ),
+    );
+
+  return NextResponse.json({ count: result[0]?.count ?? 0 });
+}
 
 // PATCH /api/events/bulk — update all events in a recurring series
 // Body: { seriesId: string, title?, type?, color?, notify? }

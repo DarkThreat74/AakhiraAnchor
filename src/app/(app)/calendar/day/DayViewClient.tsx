@@ -128,6 +128,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [newNotify, setNewNotify] = useState(true);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [editAllInSeries, setEditAllInSeries] = useState(false);
+  const [seriesCount, setSeriesCount] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -801,8 +802,19 @@ export default function DayViewClient({ date }: { date: string }) {
     setRecurrenceEndDate("");
     setRecurrenceDays([]);
     setEditAllInSeries(false);
+    setSeriesCount(null);
     setError(null);
     setShowAddForm(false);
+
+    // Fetch the count of events in this series for the "apply to all" label
+    if (event.seriesId) {
+      fetch(`/api/events/bulk?seriesId=${event.seriesId}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.count != null) setSeriesCount(data.count);
+        })
+        .catch(() => { /* non-critical */ });
+    }
   }
 
   function closeForm() {
@@ -1419,7 +1431,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     style={{ accentColor: "var(--color-ink)" }}
                   />
                   <span style={{ color: "var(--color-ink-soft)" }}>
-                    Apply changes to <strong style={{ color: "var(--color-ink)" }}>all events</strong> in this series
+                    Apply changes to <strong style={{ color: "var(--color-ink)" }}>all {seriesCount != null ? `${seriesCount} ` : ""}events</strong> in this series
                   </span>
                 </label>
               )}
@@ -1524,7 +1536,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium"
                   style={{ borderColor: "var(--color-error)", color: "var(--color-error)", minHeight: 44 }}
                 >
-                  Delete entire series
+                  Delete entire series{seriesCount != null ? ` (${seriesCount} events)` : ""}
                 </button>
               )}
               <button
