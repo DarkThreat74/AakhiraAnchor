@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff, BookOpen } from "lucide-react";
+import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff, BookOpen, Trash2 } from "lucide-react";
 import Link from "next/link";
 import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
 import { useUISFX } from "@/components/uisfx-provider";
@@ -150,6 +150,9 @@ export default function DayViewClient({ date }: { date: string }) {
   const [editAllInSeries, setEditAllInSeries] = useState(false);
   const [seriesCount, setSeriesCount] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<CalendarEvent | null>(null);
+  const [showSeriesList, setShowSeriesList] = useState(false);
+  const [seriesEvents, setSeriesEvents] = useState<CalendarEvent[]>([]);
+  const [loadingSeries, setLoadingSeries] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [prayerLogs, setPrayerLogs] = useState<Array<{ prayerName: string; status: string; wentToMasjid: boolean | null }>>([]);
@@ -882,6 +885,65 @@ export default function DayViewClient({ date }: { date: string }) {
     setRecurrenceEndDate("");
     setRecurrenceDays([]);
     setEditAllInSeries(false);
+    setShowSeriesList(false);
+    setSeriesEvents([]);
+  }
+
+  // Fetch all events in a series for the series list view
+  async function fetchSeriesEvents(seriesId: string) {
+    setLoadingSeries(true);
+    try {
+      // Fetch a wide date range to get all events in the series
+      const res = await fetch(`/api/events?from=2000-01-01&to=2100-01-01`);
+      if (res.ok) {
+        const all = await res.json();
+        if (Array.isArray(all)) {
+          const series = all.filter((e: CalendarEvent) => e.seriesId === seriesId);
+          series.sort((a: CalendarEvent, b: CalendarEvent) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+          setSeriesEvents(series);
+        }
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setLoadingSeries(false);
+    }
+  }
+
+  // Delete a single event from the series list
+  async function deleteSingleEvent(eventId: string, eventDate: string) {
+    try {
+      const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+      if (res.ok) {
+        clearApiCache();
+        if ("caches" in window) {
+          await caches.keys().then((names) => Promise.all(names.filter((n) => n.includes("-api")).map((n) => caches.delete(n))));
+        }
+        // Remove from series list
+        setSeriesEvents((prev) => prev.filter((e) => e.id !== eventId));
+        // Update series count
+        if (editingEvent?.seriesId) {
+          setSeriesCount((prev) => (prev != null ? prev - 1 : prev));
+        }
+        // Refresh day events if we're viewing that date
+        if (eventDate === date) {
+          const refetch = await fetch(`/api/events?date=${date}`);
+          if (refetch.ok) {
+            const refreshed = await refetch.json();
+            const filtered = refreshed.filter((ev: { startAt: string }) => {
+              const d = new Date(ev.startAt);
+              const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return localDateStr === date;
+            });
+            setEvents(filtered);
+            syncEventsToCache(date, filtered);
+          }
+        }
+        play("delete");
+      }
+    } catch {
+      setError("Network error.");
+    }
   }
 
   return (
@@ -1562,21 +1624,113 @@ export default function DayViewClient({ date }: { date: string }) {
 
               {/* Edit-all-in-series toggle for recurring events */}
               {editingEvent && editingEvent.seriesId && (
-                <label
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-xs"
-                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editAllInSeries}
-                    onChange={(e) => setEditAllInSeries(e.target.checked)}
-                    className="h-4 w-4"
-                    style={{ accentColor: "var(--color-ink)" }}
-                  />
-                  <span style={{ color: "var(--color-ink-soft)" }}>
-                    Apply changes to <strong style={{ color: "var(--color-ink)" }}>all {seriesCount != null ? `${seriesCount} ` : ""}events</strong> in this series
-                  </span>
-                </label>
+                <>
+                  <label
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-xs"
+                    style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={editAllInSeries}
+                      onChange={(e) => setEditAllInSeries(e.target.checked)}
+                      className="h-4 w-4"
+                      style={{ accentColor: "var(--color-ink)" }}
+                    />
+                    <span style={{ color: "var(--color-ink-soft)" }}>
+                      Apply changes to <strong style={{ color: "var(--color-ink)" }}>all {seriesCount != null ? `${seriesCount} ` : ""}events</strong> in this series
+                    </span>
+                    {/* Clickable link to view all events in series */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!showSeriesList) {
+                          fetchSeriesEvents(editingEvent.seriesId!);
+                        }
+                        setShowSeriesList(!showSeriesList);
+                      }}
+                      className="ml-auto shrink-0 text-[11px] font-medium underline underline-offset-2"
+                      style={{ color: "var(--color-accent)" }}
+                    >
+                      {showSeriesList ? "Hide list" : "View all"}
+                    </button>
+                  </label>
+
+                  {/* Series events list — expandable list of all occurrences */}
+                  {showSeriesList && (
+                    <div
+                      className="rounded-lg border p-3"
+                      style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+                    >
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                        All events in this series
+                      </p>
+                      {loadingSeries ? (
+                        <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Loading...</p>
+                      ) : seriesEvents.length === 0 ? (
+                        <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>No events found.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                          {seriesEvents.map((ev) => {
+                            const evDate = new Date(ev.startAt);
+                            const evDateStr = `${evDate.getFullYear()}-${String(evDate.getMonth() + 1).padStart(2, "0")}-${String(evDate.getDate()).padStart(2, "0")}`;
+                            const isCurrent = ev.id === editingEvent.id;
+                            const evEnd = new Date(ev.endAt);
+                            const timeFmt = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+                            return (
+                              <div
+                                key={ev.id}
+                                className="flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs"
+                                style={{
+                                  borderColor: isCurrent ? "var(--color-accent)" : "var(--color-paper-3)",
+                                  backgroundColor: isCurrent ? "color-mix(in oklab, var(--color-accent) 6%, var(--color-paper))" : "var(--color-paper)",
+                                }}
+                              >
+                                <span className="min-w-0 flex-1 truncate" style={{ color: "var(--color-ink)" }}>
+                                  {evDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                                  <span className="ml-1.5 tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                                    {timeFmt(evDate)}
+                                    {ev.endAt !== ev.startAt && ` - ${timeFmt(evEnd)}`}
+                                  </span>
+                                  {isCurrent && (
+                                    <span className="ml-1.5 text-[10px] font-semibold" style={{ color: "var(--color-accent)" }}>
+                                      (editing)
+                                    </span>
+                                  )}
+                                </span>
+                                {/* Edit this specific occurrence */}
+                                {!isCurrent && (
+                                  <Link
+                                    href={`/calendar/day?date=${evDateStr}`}
+                                    className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+                                    style={{ color: "var(--color-accent)" }}
+                                    onClick={() => closeForm()}
+                                  >
+                                    Open
+                                  </Link>
+                                )}
+                                {/* Delete this specific occurrence */}
+                                <button
+                                  type="button"
+                                  onClick={() => deleteSingleEvent(ev.id, evDateStr)}
+                                  className="shrink-0 rounded-md p-1 transition-colors hover:bg-[var(--color-paper-2)]"
+                                  style={{ color: "var(--color-error)" }}
+                                  aria-label="Delete this event"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p className="mt-2 text-[10px]" style={{ color: "var(--color-ink-muted)" }}>
+                        Tap &ldquo;Open&rdquo; to edit a single occurrence without affecting others.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Error message inside modal */}

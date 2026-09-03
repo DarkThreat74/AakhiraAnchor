@@ -1,29 +1,28 @@
-Today tab: class colors on homework, clickable goal circles, long-term goals; month view homework squares
+List view: hide past events for today; series edit: view all occurrences with per-event edit/delete
 
-Today tab - Upcoming homework:
-- Each item now shows a left border in the class color
-- Class name shown in parentheses in the class color, compact
-  (e.g. "Mosquito Pre-lab Quiz (AP Biology)")
-- Removed the priority dot in favor of the class color border
+List view - hide past events for today:
+- For the current day only, events whose end time has passed are now
+  hidden from the list
+- Events still in progress (start time passed but end time not yet)
+  continue to show
+- Past and future days are unaffected - all events show as before
+- Example: at 10 PM, a 9 AM event is hidden, but a 4-5 PM event that
+  ended at 5 PM is also hidden. An event from 9:30-10:30 PM still shows.
 
-Today tab - Goals:
-- Short-term goals now limited to max 3 (was 5)
-- Short-term and long-term goals use clickable circle checkboxes
-  instead of static dots - tap to toggle done/active
-- Completed goals show checkmark inside circle, line-through text
-- Long-term goals section now always visible (not just when > 0)
-  with empty state "No long-term goals yet"
-- Default goal color changed from green (var(--color-accent)) to
-  var(--color-ink-soft) for short-term and var(--color-ink-muted)
-  for long-term, so goals are no longer all green by default
-- Goal toggle calls PATCH /api/goals with optimistic update
-
-Month view - Homework indicators:
-- Changed from round dots to small squares (rounded-[1px]) to
-  differentiate from notification dots
-- Moved from bottom of cell to top, next to the day number
-- Max 3 squares shown (was 4 dots), with "+N" overflow counter
-- Default color changed to var(--color-warmth) when no class color
+Series event editing - view all occurrences:
+- The "Apply changes to all N events" toggle now has a "View all" link
+  next to it
+- Clicking "View all" fetches and displays every event in the series
+  as a scrollable list
+- Each occurrence shows: day name, date, time range
+- The currently-editing event is highlighted with "(editing)" label
+- Each occurrence has an "Open" button that navigates to that day so
+  the user can edit just that one occurrence without affecting others
+- Each occurrence has a delete button to delete that single event
+- Deleting from the list updates the list and series count in place
+- Helpful hint text: "Tap Open to edit a single occurrence without
+  affecting others"
+- "Hide list" button collapses the list
 
 Generated with [Devin](https://devin.ai)
 

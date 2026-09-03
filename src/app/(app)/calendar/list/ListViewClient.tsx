@@ -156,9 +156,16 @@ export default function ListViewClient({ today }: { today: string }) {
     for (const day of weekDays) {
       map.set(day, []);
     }
+    const now = new Date();
     for (const event of events) {
       const eventDate = getEventLocalDate(event.startAt);
       if (map.has(eventDate)) {
+        // For today only: hide events that have already ended
+        // (current time is past the event's end time)
+        if (eventDate === today) {
+          const end = new Date(event.endAt);
+          if (end.getTime() < now.getTime()) continue;
+        }
         map.get(eventDate)!.push(event);
       } else {
         // Event might be on a day outside our week — skip
@@ -169,7 +176,7 @@ export default function ListViewClient({ today }: { today: string }) {
       eventList.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     }
     return map;
-  }, [events, weekDays]);
+  }, [events, weekDays, today]);
 
   const totalEvents = useMemo(() => {
     let count = 0;
