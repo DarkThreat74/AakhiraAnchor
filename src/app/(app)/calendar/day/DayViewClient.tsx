@@ -902,7 +902,24 @@ export default function DayViewClient({ date }: { date: string }) {
         }
       }
     } catch {
-      // non-critical
+      // Offline fallback: filter from IndexedDB cache
+      try {
+        const db = getOfflineDB();
+        const cached = await db.events.toArray();
+        const series = cached
+          .filter((e) => e.seriesId === seriesId)
+          .map((e) => ({
+            id: e.id,
+            title: e.title,
+            startAt: e.startAt,
+            endAt: e.endAt || e.startAt,
+            type: e.type as CalendarEvent["type"],
+            color: e.color,
+            seriesId: e.seriesId,
+          }))
+          .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+        setSeriesEvents(series);
+      } catch { /* IndexedDB not available */ }
     } finally {
       setLoadingSeries(false);
     }

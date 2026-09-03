@@ -1,39 +1,28 @@
-Fix series list 'No events found'; redesign fun fact timing with time-based intervals and settings countdown
+Fix offline caching gaps: series events fallback, goals toggle, list view cache-first, homework optimistic
 
-Series events list fix:
-- Added GET /api/events?seriesId=... endpoint to fetch all events in a
-  recurring series directly by seriesId (bypassing the 31-day date
-  range cap)
-- Updated fetchSeriesEvents in DayViewClient to use the new seriesId
-  parameter instead of a 100-year date range that was rejected by the API
+Offline caching improvements across all recently added features:
 
-Fun fact popup redesign - time-based intervals:
-- Cards now appear on a 3-hour time-based schedule (every 3 hours from
-  midnight: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00)
-- On first visit, the next show time is initialized to the next 3-hour
-  mark
-- Card stays visible until dismissed - it does not auto-dismiss
-- The timer for the next card does NOT start until the current card is
-  dismissed (X or Got it)
-- When dismissed, next show time = now + 3 hours
+Series events list (DayViewClient):
+- fetchSeriesEvents now falls back to IndexedDB cache when offline
+- Filters cached events by seriesId to show all occurrences even
+  without network
 
-Fun fact - X vs Got it behavior:
-- X (close): card is saved as "current" and can reappear in the cycle.
-  The same fact may be shown again at the next interval.
-- "Got it" / "Explore Learn": card is marked as permanently seen (added
-  to seen list in localStorage). It will never appear again. The next
-  unseen card is chosen for the next interval.
-- X button has tooltip: "Close - this card may appear again"
-- "Got it" button has tooltip: "Mark as read - this card won't appear
-  again"
+Goals toggle (TodayTab):
+- Optimistic cache write now happens immediately on toggle, not just
+  on API success
+- Offline goal toggles are persisted to IndexedDB so they survive
+  page reloads
+- When API succeeds, cache is refreshed with server-confirmed data
 
-Fun fact - settings countdown:
-- New "Knowledge cards" collapsible section in Settings
-- Shows live countdown to next card ("2h 15m", "15m 30s", etc.)
-- Updates every second
-- Shows "Due now - will appear shortly" when the interval has elapsed
-- Shows "Not scheduled yet" if no next show time is set
-- Explains the X vs Got it behavior to the user
+Calendar list view (ListViewClient):
+- Now loads from IndexedDB cache first for instant display
+- Then fetches from API to get fresh data
+- If offline, cached data remains visible (no loading spinner stuck)
+
+Homework complete toggle (HomeworkClient):
+- No longer reverts optimistic state on network error
+- Offline completions are kept in both UI and cache
+- Previously, completing homework while offline would undo the change
 
 Generated with [Devin](https://devin.ai)
 

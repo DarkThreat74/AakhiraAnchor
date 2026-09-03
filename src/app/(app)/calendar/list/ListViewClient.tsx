@@ -95,25 +95,15 @@ export default function ListViewClient({ today }: { today: string }) {
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
+    // Load from IndexedDB cache first for instant display
     try {
-      // Fetch events for the full week range
-      const res = await fetch(`/api/events?from=${weekStart}&to=${weekEnd}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setEvents(data);
-        }
-      }
-    } catch {
-      // Try offline cache
-      try {
-        const db = getOfflineDB();
-        const cached = await db.events.toArray();
-        // Filter to current week
-        const filtered = cached.filter((e) => {
-          const eventDate = getEventLocalDate(e.startAt);
-          return eventDate >= weekStart && eventDate <= weekEnd;
-        });
+      const db = getOfflineDB();
+      const cached = await db.events.toArray();
+      const filtered = cached.filter((e) => {
+        const eventDate = getEventLocalDate(e.startAt);
+        return eventDate >= weekStart && eventDate <= weekEnd;
+      });
+      if (filtered.length > 0) {
         setEvents(filtered.map((e) => ({
           id: e.id,
           title: e.title,
@@ -123,7 +113,20 @@ export default function ListViewClient({ today }: { today: string }) {
           color: e.color,
           seriesId: e.seriesId,
         })));
-      } catch { /* offline cache not available */ }
+      }
+    } catch { /* IndexedDB not available yet */ }
+
+    // Then fetch from API to get fresh data
+    try {
+      const res = await fetch(`/api/events?from=${weekStart}&to=${weekEnd}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setEvents(data);
+        }
+      }
+    } catch {
+      // Offline — cached data is already showing from above
     } finally {
       setLoading(false);
     }

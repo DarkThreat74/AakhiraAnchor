@@ -96,13 +96,16 @@ export default function TodayTab({
     async (goal: Goal) => {
       const isDone = goal.status === "done";
       const updates = { status: isDone ? "active" : "done" as const, completedAt: isDone ? null : new Date() };
-      setGoals((prev) =>
-        prev.map((g) =>
+      // Optimistic update + cache write
+      setGoals((prev) => {
+        const updated = prev.map((g) =>
           g.id === goal.id
             ? { ...g, ...updates, updatedAt: new Date() }
             : g,
-        ),
-      );
+        );
+        syncGoalsToCache(updated);
+        return updated;
+      });
       try {
         const res = await fetch("/api/goals", {
           method: "PATCH",
@@ -120,7 +123,7 @@ export default function TodayTab({
           void clearApiCache();
         }
       } catch {
-        // keep optimistic state
+        // Offline: optimistic state + cache already updated, keep it
       }
     },
     [setGoals],

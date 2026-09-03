@@ -292,6 +292,7 @@ export default function HomeworkClient({
   async function handleToggleComplete(hw: HomeworkItem) {
     const newStatus: "pending" | "completed" = hw.status === "completed" ? "pending" : "completed";
     const updatedHw: HomeworkItem = { ...hw, status: newStatus, completedAt: newStatus === "completed" ? new Date() : null };
+    // Optimistic update + cache write — keep even if offline
     setHomework((prev) => prev.map((h) => (h.id === hw.id ? updatedHw : h)));
     upsertHomeworkToCache(updatedHw);
     try {
@@ -302,10 +303,7 @@ export default function HomeworkClient({
       });
       clearApiCache();
     } catch {
-      setHomework((prev) =>
-        prev.map((h) => (h.id === hw.id ? { ...h, status: hw.status, completedAt: hw.completedAt } : h)),
-      );
-      upsertHomeworkToCache({ ...hw });
+      // Offline: keep optimistic state + cache as-is (don't revert)
     }
   }
 
