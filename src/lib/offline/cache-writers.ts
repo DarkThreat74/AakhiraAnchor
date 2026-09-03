@@ -216,6 +216,8 @@ interface GoalLike {
   title: string;
   description: string | null;
   status: string;
+  goalType?: string;
+  targetDate?: string | null;
   sortOrder: number;
   color: string | null;
   createdAt: string | Date;
@@ -436,6 +438,8 @@ interface HabitLike {
   name: string;
   description: string | null;
   frequency: string;
+  timeOfDay?: string | null;
+  reminderTime?: string | null;
   color: string;
   targetCount: number;
   archived: boolean;

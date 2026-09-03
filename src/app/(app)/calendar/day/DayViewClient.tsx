@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff } from "lucide-react";
+import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff, BookOpen } from "lucide-react";
 import Link from "next/link";
 import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
 import { useUISFX } from "@/components/uisfx-provider";
@@ -64,7 +64,7 @@ const REMINDER_COLORS = [
   "#9f1239", // crimson
 ];
 
-// Color palette for event blocks — user-selectable (16 visually distinct colors)
+// Color palette for event blocks — user-selectable (36 visually distinct colors)
 const EVENT_COLORS = [
   { label: "Teal", value: "#0e7490" },
   { label: "Burnt Orange", value: "#c2410c" },
@@ -82,6 +82,26 @@ const EVENT_COLORS = [
   { label: "Slate Blue", value: "#3730a3" },
   { label: "Plum", value: "#86198f" },
   { label: "Olive", value: "#4d7c0f" },
+  { label: "Coral", value: "#e11d48" },
+  { label: "Cyan", value: "#0891b2" },
+  { label: "Lime", value: "#65a30d" },
+  { label: "Periwinkle", value: "#6366f1" },
+  { label: "Salmon", value: "#f43f5e" },
+  { label: "Turquoise", value: "#0d9488" },
+  { label: "Brick", value: "#991b1b" },
+  { label: "Lavender", value: "#8b5cf6" },
+  { label: "Gold", value: "#ca8a04" },
+  { label: "Moss", value: "#3f6212" },
+  { label: "Navy", value: "#1e3a8a" },
+  { label: "Ruby", value: "#b91c1c" },
+  { label: "Sage", value: "#4d7c0f" },
+  { label: "Mauve", value: "#a4778e" },
+  { label: "Clay", value: "#a8453b" },
+  { label: "Steel", value: "#475569" },
+  { label: "Marigold", value: "#d97706" },
+  { label: "Emerald", value: "#059669" },
+  { label: "Bronze", value: "#92400e" },
+  { label: "Mulberry", value: "#7e22ce" },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -137,6 +157,7 @@ export default function DayViewClient({ date }: { date: string }) {
   const [userTimezone, setUserTimezone] = useState("America/Chicago");
   const [userMadhab, setUserMadhab] = useState<string>("standard");
   const [locationSet, setLocationSet] = useState(true);
+  const [dayHomeworkCount, setDayHomeworkCount] = useState<number>(0);
 
   // ── Load cached prayer settings from localStorage instantly ──
   // This avoids a network round-trip for timezone/madhab on every page load
@@ -211,10 +232,11 @@ export default function DayViewClient({ date }: { date: string }) {
 
       // ── Step 2: Fetch from API in background ──
       try {
-        const [eventsRes, prayerRes, logRes] = await Promise.all([
+        const [eventsRes, prayerRes, logRes, hwRes] = await Promise.all([
           fetch(`/api/events?date=${date}`).catch(() => null),
           fetch(`/api/prayer-times?date=${date}`).catch(() => null),
           fetch(`/api/prayer-log?date=${date}`).catch(() => null),
+          fetch(`/api/homework`).catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -248,6 +270,21 @@ export default function DayViewClient({ date }: { date: string }) {
             })));
           } catch {
             // IndexedDB write failed — non-critical
+          }
+        }
+
+        // ── Count homework due on this day for the badge ──
+        if (hwRes?.ok && !cancelled) {
+          try {
+            const hwData = await hwRes.json();
+            if (Array.isArray(hwData)) {
+              const dueToday = hwData.filter((h: { dueDate: string; status: string }) =>
+                h.dueDate === date && h.status === "pending"
+              );
+              if (!cancelled) setDayHomeworkCount(dueToday.length);
+            }
+          } catch {
+            // non-critical
           }
         }
 
@@ -890,6 +927,25 @@ export default function DayViewClient({ date }: { date: string }) {
             );
           })}
         </div>
+      )}
+
+      {/* Homework badge — shows count of pending homework due this day */}
+      {dayHomeworkCount > 0 && (
+        <Link
+          href="/goals#homework"
+          className="mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:opacity-80 sm:mb-4"
+          style={{
+            borderColor: "var(--color-warmth)",
+            backgroundColor: "color-mix(in oklab, var(--color-warmth) 8%, var(--color-paper))",
+            color: "var(--color-ink)",
+          }}
+        >
+          <BookOpen className="h-4 w-4 shrink-0" style={{ color: "var(--color-warmth)" }} />
+          <span className="flex-1">
+            {dayHomeworkCount} assignment{dayHomeworkCount > 1 ? "s" : ""} due today
+          </span>
+          <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>View →</span>
+        </Link>
       )}
 
       {/* No location message — only when location is actually not set */}

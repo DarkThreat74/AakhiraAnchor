@@ -1,7 +1,15 @@
-Remove Goals tab from bottom navigation
+Add fun fact popup, custom selectors, 36 event colors, notepad, habits colors, collapsible Today sections
 
-Today is the primary entry point; Goals tabs are accessible from within
-the unified Goals workspace.
+- Daily fun fact popup: shows every 12h, teaser then reveal, inline clickable
+  glossary terms, 60 human-curated Hanafi-focused facts (of 365 planned)
+- Replace native dropdowns in homework with custom pill-button selectors
+- Expand event color palette from 16 to 36 visually distinct colors
+- Redesign Notes tab as immersive notepad with auto-save and auto-growing textarea
+- Expand habit colors from 7 to 16, add day-of-week picker for "Other" frequency
+- Today tab: rename to "Goals for this week" / "Goals long-term", collapsible
+  sections showing 4 by default with expand option
+- Add targetDate to goals, timeOfDay/reminderTime to habits (schema + API + UI)
+- Migration 0011 for new fields + index
 
 Generated with [Devin](https://devin.ai)
 

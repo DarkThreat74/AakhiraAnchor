@@ -23,9 +23,11 @@ export default function GoalsTab({
   const [addingRoot, setAddingRoot] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newTargetDate, setNewTargetDate] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editTargetDate, setEditTargetDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // Filter goals by type
@@ -37,7 +39,7 @@ export default function GoalsTab({
   const { total, done } = useMemo(() => countCompleted(tree), [tree]);
 
   const createGoal = useCallback(
-    async (title: string, parentId?: string | null, description?: string) => {
+    async (title: string, parentId?: string | null, description?: string, targetDate?: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
       setLoading(true);
@@ -47,7 +49,7 @@ export default function GoalsTab({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ title: trimmed, parentId: parentId ?? null, description: description?.trim() || undefined, goalType }),
+          body: JSON.stringify({ title: trimmed, parentId: parentId ?? null, description: description?.trim() || undefined, goalType, targetDate: targetDate || null }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.goal) {
@@ -170,8 +172,8 @@ export default function GoalsTab({
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { void createGoal(newTitle, null, newDescription); setNewTitle(""); setNewDescription(""); setAddingRoot(false); }
-              if (e.key === "Escape") { setAddingRoot(false); setNewTitle(""); setNewDescription(""); }
+              if (e.key === "Enter") { void createGoal(newTitle, null, newDescription, newTargetDate); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); setAddingRoot(false); }
+              if (e.key === "Escape") { setAddingRoot(false); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); }
             }}
             placeholder="Goal title..."
             className="rounded-lg border px-3 py-2 text-sm outline-none"
@@ -181,16 +183,28 @@ export default function GoalsTab({
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { void createGoal(newTitle, null, newDescription); setNewTitle(""); setNewDescription(""); setAddingRoot(false); }
-              if (e.key === "Escape") { setAddingRoot(false); setNewTitle(""); setNewDescription(""); }
+              if (e.key === "Enter") { void createGoal(newTitle, null, newDescription, newTargetDate); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); setAddingRoot(false); }
+              if (e.key === "Escape") { setAddingRoot(false); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); }
             }}
             placeholder="Description (optional)..."
             className="rounded-lg border px-3 py-2 text-sm outline-none"
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
           />
+          <input
+            type="date"
+            value={newTargetDate}
+            onChange={(e) => setNewTargetDate(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { void createGoal(newTitle, null, newDescription, newTargetDate); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); setAddingRoot(false); }
+              if (e.key === "Escape") { setAddingRoot(false); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); }
+            }}
+            placeholder="Target date (optional)"
+            className="rounded-lg border px-3 py-2 text-sm outline-none"
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+          />
           <div className="flex gap-2">
             <button
-              onClick={() => { void createGoal(newTitle, null, newDescription); setNewTitle(""); setNewDescription(""); setAddingRoot(false); }}
+              onClick={() => { void createGoal(newTitle, null, newDescription, newTargetDate); setNewTitle(""); setNewDescription(""); setNewTargetDate(""); setAddingRoot(false); }}
               disabled={loading || !newTitle.trim()}
               className="rounded-lg px-3 py-1.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
@@ -239,6 +253,8 @@ export default function GoalsTab({
               setEditDescription={setEditDescription}
               onUpdate={updateGoal}
               onDelete={deleteGoal}
+              editTargetDate={editTargetDate}
+              setEditTargetDate={setEditTargetDate}
             />
           ))}
         </div>
@@ -269,7 +285,7 @@ export default function GoalsTab({
 
 // ─── Goal Row (list view) ───
 function GoalRow({
-  goal, editingId, setEditingId, editTitle, setEditTitle, editDescription, setEditDescription, onUpdate, onDelete,
+  goal, editingId, setEditingId, editTitle, setEditTitle, editDescription, setEditDescription, editTargetDate, setEditTargetDate, onUpdate, onDelete,
 }: {
   goal: Goal;
   editingId: string | null;
@@ -278,6 +294,8 @@ function GoalRow({
   setEditTitle: (s: string) => void;
   editDescription: string;
   setEditDescription: (s: string) => void;
+  editTargetDate: string;
+  setEditTargetDate: (s: string) => void;
   onUpdate: (id: string, updates: Partial<Goal>) => void;
   onDelete: (id: string) => void;
 }) {
@@ -313,7 +331,7 @@ function GoalRow({
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { onUpdate(goal.id, { title: editTitle, description: editDescription }); setEditingId(null); }
+                if (e.key === "Enter") { onUpdate(goal.id, { title: editTitle, description: editDescription, targetDate: editTargetDate || null }); setEditingId(null); }
                 if (e.key === "Escape") setEditingId(null);
               }}
               className="rounded border px-2 py-1 text-sm outline-none"
@@ -323,10 +341,22 @@ function GoalRow({
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { onUpdate(goal.id, { title: editTitle, description: editDescription }); setEditingId(null); }
+                if (e.key === "Enter") { onUpdate(goal.id, { title: editTitle, description: editDescription, targetDate: editTargetDate || null }); setEditingId(null); }
                 if (e.key === "Escape") setEditingId(null);
               }}
               placeholder="Description..."
+              className="rounded border px-2 py-1 text-xs outline-none"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+            />
+            <input
+              type="date"
+              value={editTargetDate}
+              onChange={(e) => setEditTargetDate(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { onUpdate(goal.id, { title: editTitle, description: editDescription, targetDate: editTargetDate || null }); setEditingId(null); }
+                if (e.key === "Escape") setEditingId(null);
+              }}
+              placeholder="Target date"
               className="rounded border px-2 py-1 text-xs outline-none"
               style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
             />
@@ -345,13 +375,18 @@ function GoalRow({
             {goal.description && (
               <p className="text-xs mt-0.5" style={{ color: "var(--color-ink-muted)" }}>{goal.description}</p>
             )}
+            {goal.targetDate && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--color-warmth)" }}>
+                Target: {new Date(goal.targetDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </p>
+            )}
           </>
         )}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
         <button
-          onClick={() => { setEditingId(goal.id); setEditTitle(goal.title); setEditDescription(goal.description || ""); }}
+          onClick={() => { setEditingId(goal.id); setEditTitle(goal.title); setEditDescription(goal.description || ""); setEditTargetDate(goal.targetDate || ""); }}
           className="rounded p-1 text-xs transition-colors hover:bg-[var(--color-paper-3)]"
           style={{ color: "var(--color-ink-muted)" }}
           title="Edit"

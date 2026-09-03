@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
       parentId?: string | null;
       description?: string;
       color?: string;
+      goalType?: string;
+      targetDate?: string | null;
     };
     try {
       body = await request.json();
@@ -78,6 +80,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Validate goalType if provided
+    const goalType = body.goalType && ["long_term", "short_term"].includes(body.goalType)
+      ? body.goalType
+      : "short_term";
+
+    // Validate targetDate if provided (YYYY-MM-DD)
+    let targetDate: string | null = null;
+    if (body.targetDate) {
+      const parsed = new Date(body.targetDate);
+      if (!isNaN(parsed.getTime())) {
+        targetDate = body.targetDate;
+      }
+    }
+
     const [goal] = await db
       .insert(schema.goals)
       .values({
@@ -86,6 +102,8 @@ export async function POST(request: NextRequest) {
         title,
         description: body.description?.trim() || null,
         color: body.color || null,
+        goalType,
+        targetDate,
       })
       .returning();
 
@@ -116,6 +134,8 @@ export async function PATCH(request: NextRequest) {
       color?: string;
       parentId?: string | null;
       sortOrder?: number;
+      goalType?: string;
+      targetDate?: string | null;
     };
     try {
       body = await request.json();
@@ -176,11 +196,28 @@ export async function PATCH(request: NextRequest) {
       updates.description = desc.trim() || null;
     }
     if (body.status !== undefined) {
-      if (!["active", "done", "archived"].includes(body.status)) {
+      if (!["active", "done", "archived", "backlog"].includes(body.status)) {
         return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       }
       updates.status = body.status;
       updates.completedAt = body.status === "done" ? new Date() : null;
+    }
+    if (body.goalType !== undefined) {
+      if (!["long_term", "short_term"].includes(body.goalType)) {
+        return NextResponse.json({ error: "Invalid goal type" }, { status: 400 });
+      }
+      updates.goalType = body.goalType;
+    }
+    if (body.targetDate !== undefined) {
+      if (body.targetDate === null || body.targetDate === "") {
+        updates.targetDate = null;
+      } else {
+        const parsed = new Date(body.targetDate);
+        if (isNaN(parsed.getTime())) {
+          return NextResponse.json({ error: "Invalid target date" }, { status: 400 });
+        }
+        updates.targetDate = body.targetDate;
+      }
     }
     if (body.color !== undefined) updates.color = body.color || null;
     if (body.parentId !== undefined) updates.parentId = body.parentId;

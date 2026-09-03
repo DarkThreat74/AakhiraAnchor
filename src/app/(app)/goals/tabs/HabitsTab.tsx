@@ -6,7 +6,24 @@ import type { Habit, HabitLog } from "@/lib/db/schema";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { upsertHabitToCache, deleteHabitFromCache, toggleHabitLogInCache } from "@/lib/offline/cache-writers";
 
-const HABIT_COLORS = ["#c2410c", "#0e7490", "#b45309", "#15803d", "#be185d", "#3730a3", "#a16207"];
+const HABIT_COLORS = [
+  "#c2410c", // burnt orange
+  "#0e7490", // teal
+  "#b45309", // amber
+  "#15803d", // forest green
+  "#be185d", // rose
+  "#3730a3", // indigo
+  "#a16207", // mustard
+  "#9f1239", // crimson
+  "#1e40af", // royal blue
+  "#7c2d12", // sienna
+  "#166534", // pine
+  "#86198f", // magenta
+  "#155e75", // cyan
+  "#854d0e", // bronze
+  "#3f6212", // olive
+  "#831843", // plum
+];
 
 function todayStr() {
   const d = new Date();
@@ -38,6 +55,10 @@ export default function HabitsTab({
   const [name, setName] = useState("");
   const [color, setColor] = useState(HABIT_COLORS[0]);
   const [frequency, setFrequency] = useState<"daily" | "weekly">("daily");
+  const [showDayPicker, setShowDayPicker] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<number[]>([]); // 0=Sun, 1=Mon, ...
+  const [timeOfDay, setTimeOfDay] = useState<string | null>(null);
+  const [reminderTime, setReminderTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,7 +106,7 @@ export default function HabitsTab({
       const res = await fetch("/api/habits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, color, frequency }),
+        body: JSON.stringify({ name: trimmed, color, frequency, timeOfDay, reminderTime: reminderTime || null }),
       });
       if (res.ok) {
         const newHabit = await res.json();
@@ -94,6 +115,10 @@ export default function HabitsTab({
         clearApiCache();
         setName("");
         setColor(HABIT_COLORS[habits.length % HABIT_COLORS.length]);
+        setTimeOfDay(null);
+        setReminderTime("");
+        setShowDayPicker(false);
+        setSelectedDays([]);
         setShowAddForm(false);
       } else {
         const data = await res.json().catch(() => ({}));
@@ -196,21 +221,94 @@ export default function HabitsTab({
               />
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Frequency:</span>
             {(["daily", "weekly"] as const).map((f) => (
               <button
                 key={f}
-                onClick={() => setFrequency(f)}
+                onClick={() => { setFrequency(f); setShowDayPicker(false); }}
                 className="rounded-lg px-3 py-1 text-xs font-medium capitalize transition-colors"
                 style={{
-                  backgroundColor: frequency === f ? "var(--color-ink)" : "var(--color-paper-2)",
-                  color: frequency === f ? "var(--color-paper)" : "var(--color-ink-muted)",
+                  backgroundColor: frequency === f && !showDayPicker ? "var(--color-ink)" : "var(--color-paper-2)",
+                  color: frequency === f && !showDayPicker ? "var(--color-paper)" : "var(--color-ink-muted)",
                 }}
               >
                 {f}
               </button>
             ))}
+            <button
+              onClick={() => { setShowDayPicker(true); setFrequency("weekly"); }}
+              className="rounded-lg px-3 py-1 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: showDayPicker ? "var(--color-ink)" : "var(--color-paper-2)",
+                color: showDayPicker ? "var(--color-paper)" : "var(--color-ink-muted)",
+              }}
+            >
+              Other
+            </button>
+          </div>
+
+          {/* Day-of-week picker (shown when "Other" is selected) */}
+          {showDayPicker && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>On:</span>
+              {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => {
+                const isSelected = selectedDays.includes(idx);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedDays((prev) =>
+                        isSelected ? prev.filter((d) => d !== idx) : [...prev, idx]
+                      );
+                    }}
+                    className="h-8 w-8 rounded-full text-xs font-medium transition-colors"
+                    style={{
+                      backgroundColor: isSelected ? "var(--color-ink)" : "var(--color-paper-2)",
+                      color: isSelected ? "var(--color-paper)" : "var(--color-ink-muted)",
+                    }}
+                  >
+                    {dayLabel}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Time of day:</span>
+            <button
+              onClick={() => setTimeOfDay(null)}
+              className="rounded-lg px-2.5 py-1 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: timeOfDay === null ? "var(--color-ink)" : "var(--color-paper-2)",
+                color: timeOfDay === null ? "var(--color-paper)" : "var(--color-ink-muted)",
+              }}
+            >
+              Anytime
+            </button>
+            {(["morning", "afternoon", "evening", "night"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTimeOfDay(t)}
+                className="rounded-lg px-2.5 py-1 text-xs font-medium capitalize transition-colors"
+                style={{
+                  backgroundColor: timeOfDay === t ? "var(--color-ink)" : "var(--color-paper-2)",
+                  color: timeOfDay === t ? "var(--color-paper)" : "var(--color-ink-muted)",
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Reminder time:</span>
+            <input
+              type="time"
+              value={reminderTime}
+              onChange={(e) => setReminderTime(e.target.value)}
+              className="rounded-lg border px-2 py-1 text-xs outline-none"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
+            />
           </div>
           <div className="flex gap-2">
             <button

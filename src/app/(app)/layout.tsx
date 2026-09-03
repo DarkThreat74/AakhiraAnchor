@@ -8,6 +8,7 @@ import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
 import BiometricGate from "@/components/biometric-gate";
 import DeepLinkHandler from "@/components/deep-link-handler";
+import FunFactPopup from "@/components/fun-fact-popup";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 export const dynamic = "force-dynamic";
@@ -152,10 +153,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
 
-      {/* Service worker + notification scheduler + deep links */}
+      {/* Service worker + notification scheduler + deep links + fun fact popup */}
       <ServiceWorkerRegister />
       <NotificationScheduler />
       <DeepLinkHandler />
+      <FunFactPopup />
     </div>
   );
 }

@@ -696,28 +696,46 @@ export default function HomeworkClient({
               <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Due time (optional)</span>
             </div>
 
-            {/* Kind + Priority */}
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={kind}
-                onChange={(e) => setKind(e.target.value as typeof kind)}
-                className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
-              >
+            {/* Kind + Priority — custom styled selectors (no native dropdowns) */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Type:</span>
                 {Object.entries(KIND_LABELS).map(([k, label]) => (
-                  <option key={k} value={k}>{label}</option>
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKind(k as typeof kind)}
+                    className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+                    style={{
+                      backgroundColor: kind === k ? "var(--color-ink)" : "var(--color-paper-2)",
+                      color: kind === k ? "var(--color-paper)" : "var(--color-ink-muted)",
+                    }}
+                  >
+                    {label}
+                  </button>
                 ))}
-              </select>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as typeof priority)}
-                className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)" }}
-              >
-                <option value="low">Low priority</option>
-                <option value="medium">Medium priority</option>
-                <option value="high">High priority</option>
-              </select>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Priority:</span>
+                {(["low", "medium", "high"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPriority(p)}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+                    style={{
+                      backgroundColor: priority === p ? "color-mix(in oklab, " + PRIORITY_COLORS[p] + " 15%, var(--color-paper))" : "var(--color-paper-2)",
+                      color: priority === p ? PRIORITY_COLORS[p] : "var(--color-ink-muted)",
+                    }}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: PRIORITY_COLORS[p] }}
+                    />
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {error && (

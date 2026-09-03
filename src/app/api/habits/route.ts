@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
       frequency?: string;
       color?: string;
       targetCount?: number;
+      timeOfDay?: string | null;
+      reminderTime?: string | null;
     };
     try {
       body = await request.json();
@@ -85,6 +87,18 @@ export async function POST(request: NextRequest) {
       targetCount = body.targetCount;
     }
 
+    // Validate timeOfDay if provided
+    const validTimes = ["morning", "afternoon", "evening", "night"];
+    const timeOfDay = body.timeOfDay && validTimes.includes(body.timeOfDay) ? body.timeOfDay : null;
+
+    // Validate reminderTime if provided (HH:MM format)
+    let reminderTime: string | null = null;
+    if (body.reminderTime) {
+      if (/^([01]\d|2[0-3]):([0-5]\d)$/.test(body.reminderTime)) {
+        reminderTime = body.reminderTime;
+      }
+    }
+
     const [habit] = await db
       .insert(schema.habits)
       .values({
@@ -94,6 +108,8 @@ export async function POST(request: NextRequest) {
         frequency: frequency as "daily" | "weekly",
         color,
         targetCount,
+        timeOfDay,
+        reminderTime,
       })
       .returning();
 
@@ -124,6 +140,8 @@ export async function PATCH(request: NextRequest) {
       color?: string;
       archived?: boolean;
       targetCount?: number;
+      timeOfDay?: string | null;
+      reminderTime?: string | null;
     };
     try {
       body = await request.json();
@@ -161,6 +179,17 @@ export async function PATCH(request: NextRequest) {
       updates.color = body.color;
     }
     if (body.archived !== undefined) updates.archived = body.archived;
+    if (body.timeOfDay !== undefined) {
+      const validTimes = ["morning", "afternoon", "evening", "night"];
+      updates.timeOfDay = (body.timeOfDay && validTimes.includes(body.timeOfDay)) ? body.timeOfDay : null;
+    }
+    if (body.reminderTime !== undefined) {
+      if (body.reminderTime === null || body.reminderTime === "") {
+        updates.reminderTime = null;
+      } else if (/^([01]\d|2[0-3]):([0-5]\d)$/.test(body.reminderTime)) {
+        updates.reminderTime = body.reminderTime;
+      }
+    }
     if (body.targetCount !== undefined) {
       if (!Number.isInteger(body.targetCount) || body.targetCount < 1) {
         return NextResponse.json({ error: "targetCount must be a positive integer" }, { status: 400 });

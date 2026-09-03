@@ -97,7 +97,7 @@ export default function GoalsPageClient({
           db.goals.bulkPut(initialGoals.map((g) => ({
             id: g.id, userId: g.userId, parentId: g.parentId, title: g.title,
             description: g.description, status: g.status, sortOrder: g.sortOrder,
-            color: g.color,
+            color: g.color, goalType: g.goalType, targetDate: g.targetDate,
             createdAt: g.createdAt.toISOString(), updatedAt: g.updatedAt.toISOString(),
             completedAt: g.completedAt ? g.completedAt.toISOString() : null,
             _cachedAt: Date.now(),
@@ -126,6 +126,7 @@ export default function GoalsPageClient({
         db.habits.clear().then(() =>
           db.habits.bulkPut(initialHabits.map((h) => ({
             id: h.id, name: h.name, description: h.description, frequency: h.frequency,
+            timeOfDay: h.timeOfDay, reminderTime: h.reminderTime,
             color: h.color, targetCount: h.targetCount, archived: h.archived, sortOrder: h.sortOrder,
             _cachedAt: Date.now(),
           })))

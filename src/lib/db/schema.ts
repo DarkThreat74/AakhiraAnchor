@@ -423,6 +423,8 @@ export const goals = pgTable('goals', {
   status: text('status').default('active').notNull(), // active | done | archived | backlog
   // Type: long-term (yearly/life goals) vs short-term (weekly/monthly milestones)
   goalType: text('goal_type').default('short_term').notNull(), // long_term | short_term
+  // Optional target date — when the goal should be achieved by
+  targetDate: date('target_date'),
   sortOrder: integer('sort_order').default(0).notNull(),
   color: text('color'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -438,6 +440,8 @@ export const goals = pgTable('goals', {
   userSortCreatedIdx: index('goals_user_sort_created_idx').on(table.userId, table.sortOrder, table.createdAt),
   // Filter by type (long-term vs short-term tabs)
   userIdxType: index('goals_user_type_idx').on(table.userId, table.goalType),
+  // Filter by target date (Today tab: goals due this week)
+  userIdxTargetDate: index('goals_user_target_date_idx').on(table.userId, table.targetDate),
 }));
 
 export const goalShareTokens = pgTable('goal_share_tokens', {
@@ -505,6 +509,10 @@ export const habits = pgTable('habits', {
   name: text('name').notNull(),
   description: text('description'),
   frequency: habitFrequency('frequency').default('daily').notNull(),
+  // Optional time-of-day grouping: morning | afternoon | evening | night
+  timeOfDay: text('time_of_day'),
+  // Optional specific time (e.g., "07:00") for reminders/display
+  reminderTime: text('reminder_time'),
   color: text('color').default('#c2410c').notNull(),
   targetCount: integer('target_count').default(1).notNull(),
   archived: boolean('archived').default(false).notNull(),
