@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone, ChevronDown, ChevronUp, Pencil, Lightbulb } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
 import { clearOfflineCache } from "@/lib/offline/db";
@@ -70,6 +70,59 @@ function RedDot() {
       style={{ backgroundColor: "#dc2626" }}
       aria-label="Required — please fill in this field"
     />
+  );
+}
+
+// Fun fact countdown component
+function FunFactCountdown() {
+  const [countdown, setCountdown] = useState<string>("");
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    function update() {
+      if (typeof window === "undefined") return;
+      const nextShowStr = localStorage.getItem("waqt:funfact:nextShow");
+      if (!nextShowStr) {
+        setCountdown("Not scheduled yet");
+        setPending(false);
+        return;
+      }
+      const nextShow = parseInt(nextShowStr, 10);
+      const diff = nextShow - Date.now();
+      if (diff <= 0) {
+        setCountdown("Due now — will appear shortly");
+        setPending(true);
+        return;
+      }
+      setPending(false);
+      const hours = Math.floor(diff / (60 * 60 * 1000));
+      const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+      const seconds = Math.floor((diff % (60 * 1000)) / 1000);
+      if (hours > 0) {
+        setCountdown(`${hours}h ${minutes}m`);
+      } else if (minutes > 0) {
+        setCountdown(`${minutes}m ${seconds}s`);
+      } else {
+        setCountdown(`${seconds}s`);
+      }
+    }
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border px-3 py-2.5" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}>
+      <Lightbulb className="h-4 w-4 shrink-0" style={{ color: pending ? "var(--color-accent)" : "var(--color-ink-muted)" }} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium" style={{ color: "var(--color-ink)" }}>
+          Next knowledge card
+        </p>
+        <p className="text-xs" style={{ color: pending ? "var(--color-accent)" : "var(--color-ink-muted)" }}>
+          {countdown}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -1691,6 +1744,21 @@ export default function SettingsClient({
             {loggingOut ? "Logging out..." : "Log out"}
           </button>
         </div>
+
+        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+
+        {/* ── Learn / Knowledge cards — collapsible ── */}
+        <CollapsibleSection
+          icon={<Lightbulb className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent)" }} />}
+          title="Knowledge cards"
+          defaultOpen={false}
+        >
+          <p className="mb-3 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+            A new knowledge card appears every 3 hours. Closing with the X lets the card reappear later.
+            Tapping &ldquo;Got it&rdquo; marks it as read so it won&rsquo;t appear again.
+          </p>
+          <FunFactCountdown />
+        </CollapsibleSection>
 
         <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
 

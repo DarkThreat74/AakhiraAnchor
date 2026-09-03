@@ -893,12 +893,10 @@ export default function DayViewClient({ date }: { date: string }) {
   async function fetchSeriesEvents(seriesId: string) {
     setLoadingSeries(true);
     try {
-      // Fetch a wide date range to get all events in the series
-      const res = await fetch(`/api/events?from=2000-01-01&to=2100-01-01`);
+      const res = await fetch(`/api/events?seriesId=${seriesId}`);
       if (res.ok) {
-        const all = await res.json();
-        if (Array.isArray(all)) {
-          const series = all.filter((e: CalendarEvent) => e.seriesId === seriesId);
+        const series = await res.json();
+        if (Array.isArray(series)) {
           series.sort((a: CalendarEvent, b: CalendarEvent) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
           setSeriesEvents(series);
         }

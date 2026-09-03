@@ -1,28 +1,39 @@
-List view: hide past events for today; series edit: view all occurrences with per-event edit/delete
+Fix series list 'No events found'; redesign fun fact timing with time-based intervals and settings countdown
 
-List view - hide past events for today:
-- For the current day only, events whose end time has passed are now
-  hidden from the list
-- Events still in progress (start time passed but end time not yet)
-  continue to show
-- Past and future days are unaffected - all events show as before
-- Example: at 10 PM, a 9 AM event is hidden, but a 4-5 PM event that
-  ended at 5 PM is also hidden. An event from 9:30-10:30 PM still shows.
+Series events list fix:
+- Added GET /api/events?seriesId=... endpoint to fetch all events in a
+  recurring series directly by seriesId (bypassing the 31-day date
+  range cap)
+- Updated fetchSeriesEvents in DayViewClient to use the new seriesId
+  parameter instead of a 100-year date range that was rejected by the API
 
-Series event editing - view all occurrences:
-- The "Apply changes to all N events" toggle now has a "View all" link
-  next to it
-- Clicking "View all" fetches and displays every event in the series
-  as a scrollable list
-- Each occurrence shows: day name, date, time range
-- The currently-editing event is highlighted with "(editing)" label
-- Each occurrence has an "Open" button that navigates to that day so
-  the user can edit just that one occurrence without affecting others
-- Each occurrence has a delete button to delete that single event
-- Deleting from the list updates the list and series count in place
-- Helpful hint text: "Tap Open to edit a single occurrence without
-  affecting others"
-- "Hide list" button collapses the list
+Fun fact popup redesign - time-based intervals:
+- Cards now appear on a 3-hour time-based schedule (every 3 hours from
+  midnight: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00)
+- On first visit, the next show time is initialized to the next 3-hour
+  mark
+- Card stays visible until dismissed - it does not auto-dismiss
+- The timer for the next card does NOT start until the current card is
+  dismissed (X or Got it)
+- When dismissed, next show time = now + 3 hours
+
+Fun fact - X vs Got it behavior:
+- X (close): card is saved as "current" and can reappear in the cycle.
+  The same fact may be shown again at the next interval.
+- "Got it" / "Explore Learn": card is marked as permanently seen (added
+  to seen list in localStorage). It will never appear again. The next
+  unseen card is chosen for the next interval.
+- X button has tooltip: "Close - this card may appear again"
+- "Got it" button has tooltip: "Mark as read - this card won't appear
+  again"
+
+Fun fact - settings countdown:
+- New "Knowledge cards" collapsible section in Settings
+- Shows live countdown to next card ("2h 15m", "15m 30s", etc.)
+- Updates every second
+- Shows "Due now - will appear shortly" when the interval has elapsed
+- Shows "Not scheduled yet" if no next show time is set
+- Explains the X vs Got it behavior to the user
 
 Generated with [Devin](https://devin.ai)
 

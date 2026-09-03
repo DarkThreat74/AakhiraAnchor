@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { isValidUUID } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,27 @@ export async function GET(request: NextRequest) {
   const dateStr = searchParams.get("date");
   const fromStr = searchParams.get("from");
   const toStr = searchParams.get("to");
+  const seriesId = searchParams.get("seriesId");
+
+  // GET /api/events?seriesId=... — list all events in a recurring series
+  if (seriesId) {
+    if (!isValidUUID(seriesId)) {
+      return NextResponse.json({ error: "Valid seriesId is required." }, { status: 400 });
+    }
+    const events = await db
+      .select()
+      .from(schema.events)
+      .where(
+        and(
+          eq(schema.events.userId, session.userId),
+          eq(schema.events.seriesId, seriesId),
+        ),
+      )
+      .orderBy(schema.events.startAt)
+      .limit(500);
+
+    return NextResponse.json(events);
+  }
 
   if (fromStr && toStr) {
     // Use user's timezone for range boundaries

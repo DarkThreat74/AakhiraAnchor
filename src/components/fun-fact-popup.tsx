@@ -6,29 +6,68 @@ import { X, ChevronRight, BookOpen, Lightbulb } from "lucide-react";
 import {
   getNextFunFactIndex,
   getFunFactByIndex,
-  shouldShowFunFact,
   GLOBAL_GLOSSARY,
   type FunFact,
 } from "@/lib/content/fun-facts";
 
-const STORAGE_KEY_LAST_SHOWN = "waqt:funfact:lastShown";
-const STORAGE_KEY_INDEX = "waqt:funfact:index";
-const MIN_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
+// ── Storage keys ──
+const STORAGE_KEY_NEXT_SHOW = "waqt:funfact:nextShow"; // timestamp when next card should appear
+const STORAGE_KEY_INDEX = "waqt:funfact:index"; // last shown index
+const STORAGE_KEY_SEEN = "waqt:funfact:seen"; // JSON array of permanently seen indices
+const STORAGE_KEY_CURRENT = "waqt:funfact:current"; // current fact index being shown (for X-out reuse)
 
-function getInitialFact(): { fact: FunFact | null; shouldShow: boolean } {
-  if (typeof window === "undefined") return { fact: null, shouldShow: false };
+const INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
-  const lastShownStr = localStorage.getItem(STORAGE_KEY_LAST_SHOWN);
-  const lastShown = lastShownStr ? parseInt(lastShownStr, 10) : null;
+// ── Time-based scheduling ──
+// Calculate the next 3-hour mark from now (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00)
+function getNextScheduledTime(from: Date = new Date()): number {
+  const next = new Date(from);
+  next.setMinutes(0, 0, 0);
+  next.setHours(next.getHours() + 1);
+  // Round up to the next multiple of 3 hours
+  while (next.getHours() % 3 !== 0) {
+    next.setHours(next.getHours() + 1);
+  }
+  return next.getTime();
+}
 
-  if (!shouldShowFunFact(lastShown, MIN_INTERVAL_MS)) return { fact: null, shouldShow: false };
+// Get the initial state on mount
+function getInitialFact(): { fact: FunFact | null; shouldShow: boolean; factIndex: number } {
+  if (typeof window === "undefined") return { fact: null, shouldShow: false, factIndex: -1 };
+
+  const nextShowStr = localStorage.getItem(STORAGE_KEY_NEXT_SHOW);
+  const nextShow = nextShowStr ? parseInt(nextShowStr, 10) : null;
+
+  // If no next show time set, or time hasn't arrived yet, don't show
+  if (nextShow === null) return { fact: null, shouldShow: false, factIndex: -1 };
+  if (Date.now() < nextShow) return { fact: null, shouldShow: false, factIndex: -1 };
+
+  // Time to show! Pick the next fact.
+  // Check if there's a "current" fact (from X-out, can be reused)
+  const currentStr = localStorage.getItem(STORAGE_KEY_CURRENT);
+  if (currentStr !== null) {
+    const currentIndex = parseInt(currentStr, 10);
+    const fact = getFunFactByIndex(currentIndex);
+    return { fact, shouldShow: true, factIndex: currentIndex };
+  }
+
+  // Otherwise, pick the next unseen fact
+  const seenStr = localStorage.getItem(STORAGE_KEY_SEEN);
+  const seen: number[] = seenStr ? JSON.parse(seenStr) : [];
 
   const lastIndexStr = localStorage.getItem(STORAGE_KEY_INDEX);
   const lastIndex = lastIndexStr ? parseInt(lastIndexStr, 10) : -1;
-  const nextIndex = getNextFunFactIndex(lastIndex);
-  const nextFact = getFunFactByIndex(nextIndex);
 
-  return { fact: nextFact, shouldShow: true };
+  // Find next index that hasn't been permanently seen
+  let nextIndex = getNextFunFactIndex(lastIndex);
+  let attempts = 0;
+  while (seen.includes(nextIndex) && attempts < 100) {
+    nextIndex = getNextFunFactIndex(nextIndex);
+    attempts++;
+  }
+
+  const fact = getFunFactByIndex(nextIndex);
+  return { fact, shouldShow: true, factIndex: nextIndex };
 }
 
 // Merge global glossary with per-card glossary (per-card takes priority on conflicts)
@@ -42,8 +81,6 @@ function getMergedGlossary(fact: FunFact): { term: string; definition: string }[
 }
 
 // ── Inline glossary text renderer ──
-// Highlights any glossary term found in the text and makes it clickable.
-// Uses a lookahead-based regex that handles multi-word and hyphenated terms.
 function GlossaryText({
   text,
   glossary,
@@ -56,11 +93,8 @@ function GlossaryText({
   const segments = useMemo(() => {
     if (!glossary || glossary.length === 0) return [{ type: "text" as const, value: text }];
 
-    // Sort terms by length descending so longer terms match first
     const sortedTerms = [...glossary].sort((a, b) => b.term.length - a.term.length);
     const escaped = sortedTerms.map((g) => g.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    // Use lookahead so we don't consume characters, and handle word boundaries
-    // including hyphens and spaces within terms
     const regex = new RegExp(`(${escaped.join("|")})`, "gi");
 
     const parts: { type: "text" | "term"; value: string; term?: string }[] = [];
@@ -77,7 +111,6 @@ function GlossaryText({
       );
       parts.push({ type: "term", value: matchedText, term: glossaryEntry?.term });
       lastIndex = match.index + matchedText.length;
-      // Prevent infinite loop on zero-length matches
       if (regex.lastIndex === match.index) regex.lastIndex++;
     }
     if (lastIndex < text.length) {
@@ -153,23 +186,50 @@ export default function FunFactPopup() {
   const [show, setShow] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [fact] = useState<FunFact | null>(initialState.fact);
+  const [factIndex] = useState<number>(initialState.factIndex);
 
   useEffect(() => {
+    // Initialize next show time if not set (first visit)
+    if (typeof window !== "undefined") {
+      const nextShowStr = localStorage.getItem(STORAGE_KEY_NEXT_SHOW);
+      if (!nextShowStr) {
+        // Set first card to appear at the next 3-hour mark
+        localStorage.setItem(STORAGE_KEY_NEXT_SHOW, getNextScheduledTime().toString());
+      }
+    }
     if (!initialState.shouldShow || !initialState.fact) return;
     const timer = setTimeout(() => setShow(true), 800);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── "Got it" / Continue: mark as permanently seen, advance to next ──
+  function handleGotIt() {
+    setShow(false);
+    // Mark this fact as permanently seen
+    const seenStr = localStorage.getItem(STORAGE_KEY_SEEN);
+    const seen: number[] = seenStr ? JSON.parse(seenStr) : [];
+    if (factIndex >= 0 && !seen.includes(factIndex)) {
+      seen.push(factIndex);
+      localStorage.setItem(STORAGE_KEY_SEEN, JSON.stringify(seen));
+    }
+    // Advance index
+    localStorage.setItem(STORAGE_KEY_INDEX, factIndex.toString());
+    // Clear current (no reuse possible)
+    localStorage.removeItem(STORAGE_KEY_CURRENT);
+    // Set next show time: 3 hours from now (timer starts on dismiss)
+    localStorage.setItem(STORAGE_KEY_NEXT_SHOW, (Date.now() + INTERVAL_MS).toString());
+  }
+
+  // ── X (close): card can come back, don't mark as seen ──
   function handleDismiss() {
     setShow(false);
-    if (fact) {
-      localStorage.setItem(STORAGE_KEY_LAST_SHOWN, Date.now().toString());
-      const lastIndexStr = localStorage.getItem(STORAGE_KEY_INDEX);
-      const lastIndex = lastIndexStr ? parseInt(lastIndexStr, 10) : -1;
-      const nextIndex = getNextFunFactIndex(lastIndex);
-      localStorage.setItem(STORAGE_KEY_INDEX, nextIndex.toString());
+    // Keep the current fact index so it can be reused next time
+    if (factIndex >= 0) {
+      localStorage.setItem(STORAGE_KEY_CURRENT, factIndex.toString());
     }
+    // Set next show time: 3 hours from now (timer starts on dismiss)
+    localStorage.setItem(STORAGE_KEY_NEXT_SHOW, (Date.now() + INTERVAL_MS).toString());
   }
 
   useEffect(() => {
@@ -180,7 +240,7 @@ export default function FunFactPopup() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show, fact]);
+  }, [show, fact, factIndex]);
 
   if (!show || !fact) return null;
 
@@ -241,12 +301,13 @@ export default function FunFactPopup() {
           <span className="text-lg" style={{ color: accentColor, opacity: 0.6 }}>۞</span>
         </div>
 
-        {/* Close button */}
+        {/* Close button (X) — dismisses without marking as seen */}
         <button
           onClick={handleDismiss}
           className="absolute right-3 top-3 z-10 rounded-full p-1.5 transition-colors hover:bg-[var(--color-paper-2)]"
           style={{ color: "var(--color-ink-muted)" }}
-          aria-label="Close"
+          aria-label="Close (card may reappear later)"
+          title="Close — this card may appear again"
         >
           <X className="h-4 w-4" />
         </button>
@@ -341,18 +402,20 @@ export default function FunFactPopup() {
                 href="/learn"
                 className="flex items-center gap-1.5 text-xs font-medium transition-colors hover:opacity-70"
                 style={{ color: accentColor }}
-                onClick={handleDismiss}
+                onClick={handleGotIt}
               >
                 <BookOpen className="h-3.5 w-3.5" />
                 Explore Learn
               </Link>
+              {/* "Got it" — marks as permanently seen, won't reappear */}
               <button
-                onClick={handleDismiss}
+                onClick={handleGotIt}
                 className="rounded-full px-4 py-1.5 text-xs font-medium transition-opacity hover:opacity-80"
                 style={{
                   backgroundColor: "var(--color-ink)",
                   color: "var(--color-paper)",
                 }}
+                title="Mark as read — this card won't appear again"
               >
                 Got it
               </button>
