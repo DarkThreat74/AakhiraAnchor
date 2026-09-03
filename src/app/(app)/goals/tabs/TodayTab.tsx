@@ -23,13 +23,23 @@ function daysUntil(dateStr: string): number {
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
 
-function formatTargetDate(dateStr: string): string {
+function formatTime(time: string | null): string | null {
+  if (!time) return null;
+  const [h, m] = time.split(":").map(Number);
+  const hour = h % 12 || 12;
+  const period = h < 12 ? "AM" : "PM";
+  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function formatTargetDate(dateStr: string, time: string | null = null): string {
   const days = daysUntil(dateStr);
-  if (days < 0) return `${Math.abs(days)}d overdue`;
-  if (days === 0) return "today";
-  if (days === 1) return "tomorrow";
-  if (days <= 6) return `in ${days}d`;
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const timeStr = formatTime(time);
+  if (days < 0) return timeStr ? `${Math.abs(days)}d overdue · ${timeStr}` : `${Math.abs(days)}d overdue`;
+  if (days === 0) return timeStr ? `today at ${timeStr}` : "today";
+  if (days === 1) return timeStr ? `tomorrow at ${timeStr}` : "tomorrow";
+  if (days <= 6) return timeStr ? `in ${days}d at ${timeStr}` : `in ${days}d`;
+  const dateLabel = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return timeStr ? `${dateLabel} at ${timeStr}` : dateLabel;
 }
 
 const TIME_OF_DAY_ORDER = ["morning", "afternoon", "evening", "night"] as const;
@@ -265,11 +275,31 @@ export default function TodayTab({
           <>
             {(showAllUpcoming ? upcomingHomework : upcomingShown).map((h) => {
               const cls = h.classId ? classMap.get(h.classId) : null;
+              const days = daysUntil(h.dueDate);
+              const isOverdueItem = days < 0;
+              const isDueTomorrow = days === 1;
               return (
                 <div
                   key={h.id}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors"
-                  style={{ borderLeft: cls ? `3px solid ${cls.color}` : undefined, marginLeft: cls ? "-3px" : undefined, paddingLeft: cls ? "12px" : undefined }}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 transition-colors"
+                  style={{
+                    borderLeft: cls ? `3px solid ${cls.color}` : undefined,
+                    marginLeft: cls ? "-3px" : undefined,
+                    paddingLeft: cls ? "12px" : undefined,
+                    backgroundColor: isOverdueItem
+                      ? "color-mix(in oklab, var(--color-error) 4%, transparent)"
+                      : isDueTomorrow
+                        ? "color-mix(in oklab, var(--color-warmth) 5%, transparent)"
+                        : "transparent",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--color-paper-2)"; }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = isOverdueItem
+                      ? "color-mix(in oklab, var(--color-error) 4%, transparent)"
+                      : isDueTomorrow
+                        ? "color-mix(in oklab, var(--color-warmth) 5%, transparent)"
+                        : "transparent";
+                  }}
                 >
                   <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>
                     {h.title}
@@ -280,10 +310,18 @@ export default function TodayTab({
                     )}
                   </span>
                   <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
-                    backgroundColor: daysUntil(h.dueDate) <= 0 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
-                    color: daysUntil(h.dueDate) <= 0 ? "var(--color-error)" : "var(--color-ink-muted)",
+                    backgroundColor: isOverdueItem
+                      ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))"
+                      : isDueTomorrow
+                        ? "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))"
+                        : "var(--color-paper-2)",
+                    color: isOverdueItem
+                      ? "var(--color-error)"
+                      : isDueTomorrow
+                        ? "var(--color-warmth)"
+                        : "var(--color-ink-muted)",
                   }}>
-                    {formatTargetDate(h.dueDate)}
+                    {formatTargetDate(h.dueDate, h.dueTime)}
                   </span>
                 </div>
               );

@@ -129,7 +129,7 @@ export default function HomeworkClient({
   const [showAddClass, setShowAddClass] = useState(false);
   const [filterClassId, setFilterClassId] = useState<string | null>(null);
   const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
-  const [sortBy, setSortBy] = useState<"soonest" | "latest" | "priority" | "ending">("soonest");
+  const [sortBy, setSortBy] = useState<"soonest" | "latest" | "priority">("soonest");
   const [showCompleted, setShowCompleted] = useState(false);
   const [deleteClassConfirm, setDeleteClassConfirm] = useState<ClassItem | null>(null);
   const [deleteHwConfirm, setDeleteHwConfirm] = useState<HomeworkItem | null>(null);
@@ -410,16 +410,6 @@ export default function HomeworkClient({
         if (dateCmp !== 0) return dateCmp;
         return (b.dueTime || "00:00").localeCompare(a.dueTime || "00:00");
       }
-      case "ending": {
-        // Ending soonest = closest to end (overdue first, then by due date ascending)
-        // Same as soonest but prioritizes overdue items at top
-        const aOverdue = isOverdue(a) ? 0 : 1;
-        const bOverdue = isOverdue(b) ? 0 : 1;
-        if (aOverdue !== bOverdue) return aOverdue - bOverdue;
-        const dateCmp = a.dueDate.localeCompare(b.dueDate);
-        if (dateCmp !== 0) return dateCmp;
-        return (a.dueTime || "23:59").localeCompare(b.dueTime || "23:59");
-      }
       case "priority":
       default: {
         // By priority (high first), then by due date
@@ -461,13 +451,18 @@ export default function HomeworkClient({
   function renderHomeworkCard(hw: HomeworkItem) {
     const cls = getClassInfo(hw.classId);
     const overdue_ = isOverdue(hw);
+    const dueTomorrow = !overdue_ && hw.status === "pending" && daysUntil(hw.dueDate) === 1;
     return (
       <div
         key={hw.id}
         className="flex items-start gap-3 rounded-xl border p-3 transition-colors hover:bg-[var(--color-paper-2)]"
         style={{
           borderColor: cls ? `color-mix(in oklab, ${cls.color} 20%, var(--color-paper-3))` : "var(--color-paper-3)",
-          backgroundColor: overdue_ ? "color-mix(in oklab, var(--color-error) 4%, transparent)" : "transparent",
+          backgroundColor: overdue_
+            ? "color-mix(in oklab, var(--color-error) 4%, transparent)"
+            : dueTomorrow
+              ? "color-mix(in oklab, var(--color-warmth) 5%, transparent)"
+              : "transparent",
           borderLeft: cls ? `3px solid ${cls.color}` : undefined,
         }}
       >
@@ -523,8 +518,16 @@ export default function HomeworkClient({
             <span
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
               style={{
-                backgroundColor: "var(--color-paper-2)",
-                color: overdue_ ? "var(--color-error)" : "var(--color-ink-muted)",
+                backgroundColor: overdue_
+                  ? "color-mix(in oklab, var(--color-error) 12%, var(--color-paper))"
+                  : dueTomorrow
+                    ? "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))"
+                    : "var(--color-paper-2)",
+                color: overdue_
+                  ? "var(--color-error)"
+                  : dueTomorrow
+                    ? "var(--color-warmth)"
+                    : "var(--color-ink-muted)",
               }}
             >
               <Clock className="h-2.5 w-2.5" />
@@ -782,7 +785,6 @@ export default function HomeworkClient({
             <div className="flex items-center gap-1 rounded-full p-0.5" style={{ backgroundColor: "var(--color-paper-2)" }}>
               {([
                 { key: "soonest" as const, label: "Soonest", icon: CalendarClock },
-                { key: "ending" as const, label: "Ending", icon: AlertCircle },
                 { key: "priority" as const, label: "Priority", icon: ArrowDownWideNarrow },
                 { key: "latest" as const, label: "Latest", icon: CalendarDays },
               ]).map(({ key, label, icon: Icon }) => (
