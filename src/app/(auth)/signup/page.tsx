@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
-import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
+import { CaptchaWidget, type CaptchaHandle } from "@/components/captcha-widget";
 import { getHashedFingerprint } from "@/lib/auth/fingerprint";
 
 type Step = "email" | "captcha" | "password";
@@ -16,7 +16,7 @@ export default function SignupForm() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+  const turnstileRef = useRef<CaptchaHandle>(null);
 
   // ── Honeypot fields — hidden from humans, bots fill these ──
   const [honeypotWebsite, setHoneypotWebsite] = useState("");
@@ -244,7 +244,7 @@ export default function SignupForm() {
           </p>
 
           <div className="flex justify-center">
-            <TurnstileWidget
+            <CaptchaWidget
               ref={turnstileRef}
               onVerify={handleCaptchaVerify}
               onExpire={() => setCaptchaToken(null)}

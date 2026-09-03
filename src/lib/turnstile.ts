@@ -35,10 +35,9 @@ export async function verifyTurnstileToken(
 
   // If no secret key is configured:
   // - In development: use Cloudflare's test secret key (always passes)
-  // - In production: log a warning and allow signup, relying on other
-  //   security measures (fingerprint, honeypot, rate limiting, time-trap).
-  //   This prevents the CAPTCHA from blocking all signups when the secret
-  //   key hasn't been set up yet. Once the key is configured, full
+  // - In production: accept the playcaptcha fallback token, or allow if no
+  //   token at all (relying on other security measures: fingerprint, honeypot,
+  //   rate limiting, time-trap). Once the secret key is configured, full
   //   Turnstile verification is enforced automatically.
   if (!env.turnstileSecretKey) {
     if (!env.isProduction) {
@@ -63,8 +62,11 @@ export async function verifyTurnstileToken(
         return true;
       }
     }
-    // Production without secret key: allow but warn
-    // Other security layers (rate limit, honeypot, time-trap, fingerprint) still apply
+    // Production without secret key: accept playcaptcha token, or allow
+    // (other security layers still apply: rate limit, honeypot, time-trap, fingerprint)
+    if (token === 'playcaptcha-verified') {
+      return true;
+    }
     console.warn('[turnstile] TURNSTILE_SECRET_KEY not configured in production. Relying on other security measures. Set the secret key to enable full Turnstile verification.');
     return true;
   }
