@@ -152,8 +152,7 @@ export default function TodayTab({
         if (a.targetDate && !b.targetDate) return -1;
         if (!a.targetDate && b.targetDate) return 1;
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      })
-      .slice(0, 3),
+      }),
     [goals],
   );
 
@@ -343,18 +342,17 @@ export default function TodayTab({
             {!showAllUpcoming && upcomingRemaining > 0 && (
               <button
                 onClick={() => setShowAllUpcoming(true)}
-                className="flex items-center gap-1 self-start rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80"
-                style={{ color: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 8%, transparent)" }}
+                className="self-start pl-3 pt-1 text-xs font-medium transition-colors hover:opacity-70"
+                style={{ color: "var(--color-ink-muted)" }}
               >
                 +{upcomingRemaining} more
-                <ChevronRight className="h-3 w-3" />
               </button>
             )}
             {showAllUpcoming && upcomingRemaining > 0 && (
               <button
                 onClick={() => setShowAllUpcoming(false)}
-                className="flex items-center gap-1 self-start rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80"
-                style={{ color: "var(--color-ink-muted)", backgroundColor: "var(--color-paper-2)" }}
+                className="self-start pl-3 pt-1 text-xs font-medium transition-colors hover:opacity-70"
+                style={{ color: "var(--color-ink-muted)" }}
               >
                 Show less
               </button>
@@ -724,8 +722,8 @@ function CollapsibleSection<T>({
             {hasMore && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1 self-start rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80"
-                style={{ color: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 8%, transparent)" }}
+                className="flex items-center gap-1 self-start pl-3 pt-1 text-xs transition-colors hover:opacity-70"
+                style={{ color: "var(--color-ink-muted)" }}
               >
                 {expanded ? "Show less" : `+${items.length - initialLimit} more`}
                 <ChevronRight className="h-3 w-3" style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />

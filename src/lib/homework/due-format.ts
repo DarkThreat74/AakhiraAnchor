@@ -168,9 +168,9 @@ export function urgencyColors(urgency: UrgencyLevel): {
       };
     case "soon":
       return {
-        color: "var(--color-warmth)",
-        bgColor: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))",
-        borderColor: "color-mix(in oklab, var(--color-warmth) 25%, var(--color-paper-3))",
+        color: "var(--color-ink-soft)",
+        bgColor: "var(--color-paper-2)",
+        borderColor: "var(--color-paper-3)",
         fontWeight: 500,
       };
     case "this_week":
@@ -223,7 +223,7 @@ export function urgencyCardTint(urgency: UrgencyLevel): {
       };
     case "soon":
       return {
-        backgroundColor: "color-mix(in oklab, var(--color-warmth) 2%, transparent)",
+        backgroundColor: "transparent",
         borderLeftColor: null,
       };
     default:

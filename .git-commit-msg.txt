@@ -1,31 +1,31 @@
-Unified urgency-based due date system with compact badges
+Fix goals show-more button, revert to plain text more buttons, fix orange pill colors
 
-Created a shared due-date formatter (src/lib/homework/due-format.ts) that
-replaces the inconsistent "tomorrow at 9:30 AM" / "in 3d" labels with a
-compact, urgency-driven badge system used everywhere:
+1. Goals "show more" was never appearing because shortTermGoals was
+   hard-capped at 3 items via .slice(0, 3) before being passed to
+   CollapsibleSection. Since items.length === initialLimit === 3,
+   hasMore was always false. Removed the slice so all goals are passed
+   to the section, and the CollapsibleSection handles the limit + show
+   more logic as intended.
 
-- Overdue: "2d OVERDUE · 9:30a" (red, bold)
-- Today: "TODAY · 9:30a" (red, bold)
-- Tomorrow: "Tomorrow · 9:30a" (amber, semibold)
-- This week (2-3d): "Wed · 9:30a" (amber, medium)
-- This week (4-6d): "Fri · 9:30a" (neutral)
-- Later: "Sep 15 · 9:30a" (muted)
+2. Reverted all "more" buttons (upcoming homework, goals for this week,
+   goals long-term) back to plain text links instead of shaded pills.
+   The user wanted normal text, not styled pills.
 
-Key improvements:
-- Compact time format: "9:30a" / "12p" instead of "9:30 AM" / "12:00 PM"
-  keeps pill widths uniform regardless of the time value
-- Day names (Wed, Thu) instead of "in 3d" so you immediately see WHEN
-  something is due, not just how far away it is
-- Color-coded urgency: red for overdue/today, amber for tomorrow/soon,
-  neutral for later — matches patterns from Todoist, Notion, and other
-  competitors
-- Card-level tints: overdue/today/tomorrow cards get subtle background
-  tints and left-border accents for visual urgency at a glance
-- Today page header now shows urgency breakdown badges ("2 overdue",
-  "3 due today", "1 tomorrow") instead of a generic "8 items need
-  attention" that didn't convey when anything was due
-- Both TodayTab and HomeworkClient use the same formatter so labels are
-  identical across the app
+3. Fixed urgency pill colors — everything was orange because both
+   "tomorrow" and "soon" (2-3 days) used var(--color-warmth). Now only
+   "tomorrow" uses warmth/amber. "Soon" (2-3 days) and "this_week"
+   (4-6 days) both use neutral gray (var(--color-ink-soft) on
+   var(--color-paper-2)), same as "later". This means:
+   - Overdue: red (bold)
+   - Today: red (bold)
+   - Tomorrow: amber/orange (semibold)
+   - Soon (2-3d): gray
+   - This week (4-6d): gray
+   - Later: muted gray
+   Only genuinely urgent items (overdue/today/tomorrow) get color.
+
+4. Removed the orange card tint for "soon" items since they're no
+   longer orange.
 
 Generated with [Devin](https://devin.ai)
 
