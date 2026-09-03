@@ -1,42 +1,31 @@
-Fix Turnstile blocking signups; add show-more to goals long-term and habits in Today tab
+Add playcaptcha as fallback when Turnstile isn't configured
 
-Turnstile CAPTCHA fix — root cause: empty TURNSTILE_SECRET_KEY in .env:
-- The site key was set but the secret key was blank, so the server
-  couldn't verify tokens and rejected every signup with 403
-- Server-side (turnstile.ts): when secret key is missing in production,
-  now logs a warning and allows signup (relying on fingerprint,
-  honeypot, rate limiting, time-trap) instead of hard-blocking
-- When secret key IS set, full Turnstile verification is enforced
-- Added action validation: server now checks that the token's action
-  matches "signup" (defense against cross-action token replay)
-- Dev mode: uses Cloudflare's test secret key (1x0000000000000000000000000000000AA)
-  which always passes, instead of silently skipping verification
+When NEXT_PUBLIC_TURNSTILE_SITE_KEY is not set, the signup page now
+shows a playcaptcha claw machine challenge ("grab the right toy to
+prove you're human") instead of a broken Turnstile widget.
 
-Turnstile widget (turnstile-widget.tsx) improvements:
-- Script load promise now resets on failure, allowing retry
-- Added timeout-callback support (users no longer stuck if challenge
-  never resolves)
-- Added error UI with "Retry" button when script fails to load
-- Dev fallback: uses Cloudflare test site key (1x00000000000000000000AA)
-  when NEXT_PUBLIC_TURNSTILE_SITE_KEY is not set
-- error-callback now receives and forwards the error code
+New unified CaptchaWidget component (captcha-widget.tsx):
+- If Turnstile site key is set → renders Cloudflare Turnstile widget
+- If Turnstile site key is missing → renders playcaptcha ClawCaptcha
+- Exposes same CaptchaHandle interface (reset()) for both modes
+- onVerify callback receives a token string in both modes:
+  - Turnstile: real cf-turnstile-response token
+  - Play captcha: synthetic "playcaptcha-verified" token
 
-Signup page (signup/page.tsx) improvements:
-- Added onTimeout handler: resets widget and shows error message
-- Back buttons now reset the Turnstile widget (prevents stale tokens)
-- On 403 from server: automatically resets widget and returns to
-  captcha step so user can re-verify
-- Updated .env and .env.example with helpful comments about getting
-  keys from Cloudflare dashboard
+Server-side (turnstile.ts):
+- When TURNSTILE_SECRET_KEY is not configured in production, accepts
+  the "playcaptcha-verified" token as valid
+- Other security layers still apply (rate limit, honeypot, time-trap,
+  fingerprint)
+- When the secret key IS set, full Turnstile verification is enforced
 
-Today tab — show more for goals long-term and habits:
-- Goals long-term: now uses CollapsibleSection with initialLimit=3
-  (was showing all in a plain Section with no expand/collapse)
-  Shows "+N more" / "Show less" button when there are more than 3
-- Habits: added show-more with limit of 5 visible habits
-  Flattens grouped habits, shows first 5, then "+N more" button
-  Expanding shows all habits grouped by time of day
-  Collapsing back to 5 with "Show less" button
+Signup page (signup/page.tsx):
+- Now imports CaptchaWidget instead of TurnstileWidget directly
+- All existing behavior preserved (timeout, back-button reset, 403 retry)
+
+Assets:
+- Copied 12 toy PNGs to public/toys/ for playcaptcha to load
+- Imported playcaptcha CSS via package export path
 
 Generated with [Devin](https://devin.ai)
 

@@ -9,4 +9,7 @@ export const publicEnv = {
   aladhanBaseUrl: process.env.NEXT_PUBLIC_ALADHAN_BASE_URL ?? 'https://api.aladhan.com/v1',
   vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '',
   turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '',
+  // When "false", the signup page uses playcaptcha instead of Turnstile.
+  // Set to "true" only when BOTH Turnstile keys are configured.
+  turnstileEnabled: process.env.NEXT_PUBLIC_TURNSTILE_ENABLED !== 'false',
 } as const;

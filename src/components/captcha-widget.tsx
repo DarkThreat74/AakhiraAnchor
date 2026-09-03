@@ -37,7 +37,9 @@ function randomToy(): ToyId {
  */
 export const CaptchaWidget = forwardRef<CaptchaHandle, CaptchaWidgetProps>(
   function CaptchaWidget(props, ref) {
-    const hasTurnstileKey = Boolean(publicEnv.turnstileSiteKey);
+    // Use Turnstile only when explicitly enabled AND site key is set.
+    // Otherwise fall back to playcaptcha (claw machine).
+    const hasTurnstileKey = publicEnv.turnstileEnabled && Boolean(publicEnv.turnstileSiteKey);
     const turnstileRef = useRef<TurnstileWidgetHandle>(null);
     const [targetToy, setTargetToy] = useState<ToyId>(randomToy);
 
