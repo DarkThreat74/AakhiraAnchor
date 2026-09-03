@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown } from "lucide-react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, FolderPlus, Filter } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { getOfflineDB } from "@/lib/offline/db";
 import {
@@ -10,6 +10,7 @@ import {
   deleteHomeworkFromCache,
   syncClassesToCache,
   upsertClassToCache,
+  deleteClassFromCache,
 } from "@/lib/offline/cache-writers";
 
 interface HomeworkItem {
@@ -35,7 +36,7 @@ interface ClassItem {
 const CLASS_COLORS = [
   "#c2410c", "#0e7490", "#b45309", "#15803d",
   "#be185d", "#7c2d12", "#166534", "#3730a3",
-  "#a16207", "#9f1239",
+  "#a16207", "#9f1239", "#1e40af", "#6d28d9",
 ];
 
 const KIND_LABELS: Record<string, string> = {
@@ -52,6 +53,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: "var(--color-ink-muted)",
   low: "var(--color-accent)",
 };
+
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 function todayStr(): string {
   return new Date().toLocaleDateString("en-CA");
@@ -112,7 +115,9 @@ export default function HomeworkClient({
   const [showAddForm, setShowAddForm] = useState(false);
   const [showAddClass, setShowAddClass] = useState(false);
   const [filterClassId, setFilterClassId] = useState<string | null>(null);
+  const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [deleteClassConfirm, setDeleteClassConfirm] = useState<ClassItem | null>(null);
 
   // Add form state
   const [title, setTitle] = useState("");
@@ -149,7 +154,6 @@ export default function HomeworkClient({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Step 1: Load from IndexedDB first (instant if cached)
       try {
         const db = getOfflineDB();
         const [cachedHw, cachedClasses] = await Promise.all([
@@ -183,7 +187,6 @@ export default function HomeworkClient({
         // IndexedDB not available — continue to API
       }
 
-      // Step 2: Fetch from API in background (authoritative)
       try {
         const [hwRes, clsRes] = await Promise.all([
           fetch("/api/homework"),
@@ -211,7 +214,6 @@ export default function HomeworkClient({
     return () => { cancelled = true; };
   }, []);
 
-  // ── Listen for outbox sync events to refresh after offline writes ──
   useEffect(() => {
     function onSynced() {
       refreshHomework();
@@ -274,7 +276,6 @@ export default function HomeworkClient({
   async function handleToggleComplete(hw: HomeworkItem) {
     const newStatus: "pending" | "completed" = hw.status === "completed" ? "pending" : "completed";
     const updatedHw: HomeworkItem = { ...hw, status: newStatus, completedAt: newStatus === "completed" ? new Date() : null };
-    // Optimistic update
     setHomework((prev) => prev.map((h) => (h.id === hw.id ? updatedHw : h)));
     upsertHomeworkToCache(updatedHw);
     try {
@@ -285,7 +286,6 @@ export default function HomeworkClient({
       });
       clearApiCache();
     } catch {
-      // Revert on failure
       setHomework((prev) =>
         prev.map((h) => (h.id === hw.id ? { ...h, status: hw.status, completedAt: hw.completedAt } : h)),
       );
@@ -300,7 +300,6 @@ export default function HomeworkClient({
       await fetch(`/api/homework/${id}`, { method: "DELETE" });
       clearApiCache();
     } catch {
-      // Re-fetch on failure
       refreshHomework();
     }
   }
@@ -330,28 +329,77 @@ export default function HomeworkClient({
     }
   }
 
-  // Group homework into urgency buckets
-  const filtered = homework.filter((h) => {
-    if (filterClassId && h.classId !== filterClassId) return false;
-    return true;
-  });
+  async function handleDeleteClass(cls: ClassItem) {
+    setClasses((prev) => prev.filter((c) => c.id !== cls.id));
+    // Unassign homework from deleted class
+    setHomework((prev) => prev.map((h) => (h.classId === cls.id ? { ...h, classId: null } : h)));
+    deleteClassFromCache(cls.id);
+    if (filterClassId === cls.id) setFilterClassId(null);
+    setDeleteClassConfirm(null);
+    try {
+      await fetch(`/api/classes?id=${cls.id}`, { method: "DELETE" });
+      clearApiCache();
+    } catch {
+      // Re-fetch on failure
+      try {
+        const res = await fetch("/api/classes");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setClasses(data);
+            syncClassesToCache(data);
+          }
+        }
+      } catch { /* offline */ }
+    }
+  }
+
+  // ── Filtering logic ──
+  const filtered = useMemo(() => {
+    return homework.filter((h) => {
+      if (filterClassId && h.classId !== filterClassId) return false;
+      if (filterPriority !== "all" && h.priority !== filterPriority) return false;
+      return true;
+    });
+  }, [homework, filterClassId, filterPriority]);
 
   const pending = filtered.filter((h) => h.status === "pending");
   const completed = filtered.filter((h) => h.status === "completed");
 
-  const overdue = pending.filter(isOverdue);
-  const today = pending.filter((h) => daysUntil(h.dueDate) === 0 && !isOverdue(h));
-  const tomorrow = pending.filter((h) => daysUntil(h.dueDate) === 1);
-  const thisWeek = pending.filter((h) => {
+  // Sort pending by priority then due date
+  const sortedPending = [...pending].sort((a, b) => {
+    const pa = PRIORITY_ORDER[a.priority] ?? 1;
+    const pb = PRIORITY_ORDER[b.priority] ?? 1;
+    if (pa !== pb) return pa - pb;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+
+  const overdue = sortedPending.filter(isOverdue);
+  const today = sortedPending.filter((h) => daysUntil(h.dueDate) === 0 && !isOverdue(h));
+  const tomorrow = sortedPending.filter((h) => daysUntil(h.dueDate) === 1);
+  const thisWeek = sortedPending.filter((h) => {
     const d = daysUntil(h.dueDate);
     return d >= 2 && d <= 6;
   });
-  const later = pending.filter((h) => daysUntil(h.dueDate) >= 7);
+  const later = sortedPending.filter((h) => daysUntil(h.dueDate) >= 7);
 
   function getClassInfo(id: string | null): ClassItem | null {
     if (!id) return null;
     return classes.find((c) => c.id === id) || null;
   }
+
+  // Count pending homework per class
+  const classCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const h of homework) {
+      if (h.status === "pending" && h.classId) {
+        counts.set(h.classId, (counts.get(h.classId) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [homework]);
+
+  const activeClasses = classes.filter((c) => !c.archived);
 
   function renderHomeworkCard(hw: HomeworkItem) {
     const cls = getClassInfo(hw.classId);
@@ -361,8 +409,9 @@ export default function HomeworkClient({
         key={hw.id}
         className="flex items-start gap-3 rounded-xl border p-3 transition-colors hover:bg-[var(--color-paper-2)]"
         style={{
-          borderColor: "var(--color-paper-3)",
+          borderColor: cls ? `color-mix(in oklab, ${cls.color} 20%, var(--color-paper-3))` : "var(--color-paper-3)",
           backgroundColor: overdue_ ? "color-mix(in oklab, var(--color-error) 4%, transparent)" : "transparent",
+          borderLeft: cls ? `3px solid ${cls.color}` : undefined,
         }}
       >
         {/* Checkbox */}
@@ -434,10 +483,12 @@ export default function HomeworkClient({
             )}
             {hw.priority === "high" && hw.status === "pending" && (
               <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: PRIORITY_COLORS[hw.priority] }}
-                title="High priority"
-              />
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={{ backgroundColor: "color-mix(in oklab, var(--color-warmth) 10%, transparent)", color: "var(--color-warmth)" }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: PRIORITY_COLORS[hw.priority] }} />
+                High
+              </span>
             )}
           </div>
 
@@ -490,52 +541,75 @@ export default function HomeworkClient({
         </button>
       </div>
 
-      {/* Class filter chips */}
-      {classes.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setFilterClassId(null)}
-            className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-            style={{
-              backgroundColor: filterClassId === null ? "var(--color-ink)" : "var(--color-paper-2)",
-              color: filterClassId === null ? "var(--color-paper)" : "var(--color-ink-muted)",
-            }}
-          >
-            All
-          </button>
-          {classes.filter((c) => !c.archived).map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setFilterClassId(c.id === filterClassId ? null : c.id)}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: filterClassId === c.id ? c.color : "var(--color-paper-2)",
-                color: filterClassId === c.id ? "var(--color-paper)" : "var(--color-ink-muted)",
-              }}
-            >
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
-              {c.name}
-            </button>
-          ))}
+      {/* ── Class cards (folder-style) ── */}
+      {activeClasses.length > 0 && (
+        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {activeClasses.map((cls) => {
+            const count = classCounts.get(cls.id) || 0;
+            const isActive = filterClassId === cls.id;
+            return (
+              <div
+                key={cls.id}
+                className="group relative overflow-hidden rounded-xl border p-3 transition-all"
+                style={{
+                  borderColor: isActive ? cls.color : `color-mix(in oklab, ${cls.color} 20%, var(--color-paper-3))`,
+                  backgroundColor: isActive ? `color-mix(in oklab, ${cls.color} 8%, var(--color-paper))` : "var(--color-paper)",
+                  cursor: "pointer",
+                }}
+                onClick={() => setFilterClassId(isActive ? null : cls.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFilterClassId(isActive ? null : cls.id); } }}
+              >
+                {/* Color bar at top */}
+                <div className="absolute left-0 right-0 top-0 h-1" style={{ backgroundColor: cls.color }} />
+
+                {/* Delete button (appears on hover) */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setDeleteClassConfirm(cls); }}
+                  className="absolute right-1.5 top-2 z-10 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ color: "var(--color-ink-muted)" }}
+                  aria-label={`Delete ${cls.name}`}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+
+                <div className="mt-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cls.color }} />
+                    <span className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                      {cls.name}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                    {count} pending
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Add class card */}
           <button
             onClick={() => setShowAddClass(!showAddClass)}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed px-3 py-1 text-xs font-medium transition-colors"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
+            className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-3 transition-colors hover:bg-[var(--color-paper-2)]"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 80 }}
           >
-            <Plus className="h-3 w-3" />
-            Class
+            <FolderPlus className="h-5 w-5" />
+            <span className="text-xs font-medium">Add class</span>
           </button>
         </div>
       )}
 
-      {classes.length === 0 && (
+      {/* Add class button when no classes exist */}
+      {activeClasses.length === 0 && !showAddClass && (
         <div className="mb-4">
           <button
-            onClick={() => setShowAddClass(!showAddClass)}
+            onClick={() => setShowAddClass(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs font-medium transition-colors"
             style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
           >
-            <Plus className="h-3.5 w-3.5" />
+            <FolderPlus className="h-3.5 w-3.5" />
             Add a class (subject)
           </button>
         </div>
@@ -587,6 +661,43 @@ export default function HomeworkClient({
               {savingClass ? "Adding..." : "Add class"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Priority filter chips ── */}
+      {(pending.length > 0 || completed.length > 0) && (
+        <div className="mb-4 flex items-center gap-1.5 flex-wrap">
+          <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+            <Filter className="h-3 w-3" />
+            Priority:
+          </span>
+          {(["all", "high", "medium", "low"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setFilterPriority(p)}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: filterPriority === p
+                  ? p === "all" ? "var(--color-ink)" : `color-mix(in oklab, ${PRIORITY_COLORS[p]} 15%, var(--color-paper))`
+                  : "var(--color-paper-2)",
+                color: filterPriority === p
+                  ? p === "all" ? "var(--color-paper)" : PRIORITY_COLORS[p]
+                  : "var(--color-ink-muted)",
+              }}
+            >
+              {p === "all" ? "All" : p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+          {filterClassId && (
+            <button
+              onClick={() => setFilterClassId(null)}
+              className="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={{ backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-muted)" }}
+            >
+              <X className="h-3 w-3" />
+              Clear class filter
+            </button>
+          )}
         </div>
       )}
 
@@ -696,7 +807,7 @@ export default function HomeworkClient({
               <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>Due time (optional)</span>
             </div>
 
-            {/* Kind + Priority — custom styled selectors (no native dropdowns) */}
+            {/* Kind + Priority — custom styled selectors */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Type:</span>
@@ -762,7 +873,9 @@ export default function HomeworkClient({
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <BookOpen className="mb-3 h-10 w-10" style={{ color: "var(--color-ink-muted)" }} />
           <p className="text-sm font-medium" style={{ color: "var(--color-ink-muted)" }}>
-            No homework yet. Tap &ldquo;Add&rdquo; to create your first assignment.
+            {filterClassId || filterPriority !== "all"
+              ? "No homework matches your filters."
+              : "No homework yet. Tap \u201CAdd\u201D to create your first assignment."}
           </p>
         </div>
       ) : (
@@ -802,6 +915,47 @@ export default function HomeworkClient({
             </div>
           )}
         </>
+      )}
+
+      {/* ── Delete class confirmation modal ── */}
+      {deleteClassConfirm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 50%, transparent)" }}
+          onClick={() => setDeleteClassConfirm(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border p-5"
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: deleteClassConfirm.color }} />
+              <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                Delete &ldquo;{deleteClassConfirm.name}&rdquo;?
+              </h3>
+            </div>
+            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+              The class will be removed. Homework assigned to this class will remain but lose their class label. This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteClassConfirm(null)}
+                className="flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteClass(deleteClassConfirm)}
+                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
+              >
+                Delete class
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

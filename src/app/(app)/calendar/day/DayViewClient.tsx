@@ -514,6 +514,15 @@ export default function DayViewClient({ date }: { date: string }) {
     return `${hour}:${String(m).padStart(2, "0")} ${period}`;
   }
 
+  // Compact format for mobile prayer bar: "4:47a" instead of "4:47 AM"
+  function formatTimeCompact(time: string): string {
+    if (!time) return "—";
+    const [h, m] = time.split(":").map(Number);
+    const hour = h % 12 || 12;
+    const period = h < 12 ? "a" : "p";
+    return `${hour}:${String(m).padStart(2, "0")}${period}`;
+  }
+
   function formatHour(hour: number): string {
     if (hour === 0) return "12a";
     if (hour === 12) return "12p";
@@ -851,9 +860,9 @@ export default function DayViewClient({ date }: { date: string }) {
     setError(null);
     setShowAddForm(false);
 
-    // Fetch the count of events in this series for the "apply to all" label
+    // Fetch the count of future events in this series for the delete label
     if (event.seriesId) {
-      fetch(`/api/events/bulk?seriesId=${event.seriesId}`)
+      fetch(`/api/events/bulk?seriesId=${event.seriesId}&fromDate=${date}`)
         .then((r) => r.ok ? r.json() : null)
         .then((data) => {
           if (data?.count != null) setSeriesCount(data.count);
@@ -892,40 +901,81 @@ export default function DayViewClient({ date }: { date: string }) {
         </div>
       )}
 
-      {/* Prayer times bar */}
+      {/* Prayer times bar — compact horizontal strip on mobile, cards on desktop */}
       {prayerTimes && (
-        <div className="mb-3 flex flex-wrap gap-1.5 sm:mb-4">
-          {PRAYER_NAMES.map((prayer) => {
-            const rawTime = prayerTimes[prayer.key];
-            if (!rawTime) return null;
-            // Asr time: display API time + 1 hour
-            const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
-            const log = prayerLogs.find((l) => l.prayerName === prayer.key);
-            const isPrayed = log?.status === "prayed" || log?.status === "assumed_prayed";
-            const isClickable = prayer.isPrayer;
-            return (
-              <button
-                key={prayer.key}
-                onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
-                className="flex min-w-0 flex-1 flex-col items-center gap-0 rounded-lg border px-2 py-2 transition-colors sm:flex-none sm:px-3 sm:py-1.5"
-                style={{
-                  minHeight: 44,
-                  borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
-                  backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
-                  cursor: isClickable ? "pointer" : "default",
-                }}
-                disabled={!isClickable}
-              >
-                <span className="flex items-center gap-0.5 text-xs font-medium leading-tight" style={{ color: prayer.color }}>
-                  {prayer.label}
-                  {isPrayed && <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />}
-                </span>
-                <span className="text-xs tabular-nums leading-tight" style={{ color: "var(--color-ink-muted)" }}>
-                  {formatTime(time)}
-                </span>
-              </button>
-            );
-          })}
+        <div
+          className="mb-3 sm:mb-4"
+          role="group"
+          aria-label="Prayer times"
+        >
+          {/* Mobile: single-row scrollable strip with inline label+time */}
+          <div className="flex gap-1 overflow-x-auto lg:hidden" style={{ scrollbarWidth: "none" }}>
+            {PRAYER_NAMES.map((prayer) => {
+              const rawTime = prayerTimes[prayer.key];
+              if (!rawTime) return null;
+              const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
+              const log = prayerLogs.find((l) => l.prayerName === prayer.key);
+              const isPrayed = log?.status === "prayed" || log?.status === "assumed_prayed";
+              const isClickable = prayer.isPrayer;
+              return (
+                <button
+                  key={prayer.key}
+                  onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
+                  className="flex shrink-0 flex-col items-center justify-center rounded-lg border px-2 py-1.5 transition-colors"
+                  style={{
+                    minWidth: 52,
+                    minHeight: 44,
+                    borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
+                    backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
+                    cursor: isClickable ? "pointer" : "default",
+                  }}
+                  disabled={!isClickable}
+                >
+                  <span className="flex items-center gap-0.5 text-[10px] font-semibold leading-none" style={{ color: prayer.color }}>
+                    {prayer.label === "Sunrise" ? "Sunrise" : prayer.label}
+                    {isPrayed && <Check className="h-2.5 w-2.5" style={{ color: "var(--color-success)" }} />}
+                  </span>
+                  <span className="mt-0.5 text-[10px] tabular-nums leading-none" style={{ color: "var(--color-ink-muted)" }}>
+                    {formatTimeCompact(time)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Desktop: cards with full label and time */}
+          <div className="hidden flex-wrap gap-1.5 lg:flex">
+            {PRAYER_NAMES.map((prayer) => {
+              const rawTime = prayerTimes[prayer.key];
+              if (!rawTime) return null;
+              const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
+              const log = prayerLogs.find((l) => l.prayerName === prayer.key);
+              const isPrayed = log?.status === "prayed" || log?.status === "assumed_prayed";
+              const isClickable = prayer.isPrayer;
+              return (
+                <button
+                  key={prayer.key}
+                  onClick={isClickable ? () => setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }) : undefined}
+                  className="flex flex-col items-center gap-0 rounded-lg border px-3 py-1.5 transition-colors"
+                  style={{
+                    minHeight: 44,
+                    borderColor: isPrayed ? "var(--color-success)" : "var(--color-paper-3)",
+                    backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 8%, var(--color-paper))" : "var(--color-paper)",
+                    cursor: isClickable ? "pointer" : "default",
+                  }}
+                  disabled={!isClickable}
+                >
+                  <span className="flex items-center gap-0.5 text-xs font-medium leading-tight" style={{ color: prayer.color }}>
+                    {prayer.label}
+                    {isPrayed && <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />}
+                  </span>
+                  <span className="text-xs tabular-nums leading-tight" style={{ color: "var(--color-ink-muted)" }}>
+                    {formatTime(time)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1547,6 +1597,11 @@ export default function DayViewClient({ date }: { date: string }) {
             </p>
             <p className="mb-4 text-xs" style={{ color: "var(--color-ink-muted)" }}>
               &ldquo;{deleteConfirm.title}&rdquo; will be permanently removed.
+              {deleteConfirm.seriesId && (
+                <span className="mt-1 block" style={{ color: "var(--color-ink-muted)" }}>
+                  Past events in this series will be preserved.
+                </span>
+              )}
             </p>
             <div className="flex flex-col gap-2">
               <button
@@ -1567,7 +1622,7 @@ export default function DayViewClient({ date }: { date: string }) {
                       const res = await fetch("/api/events/bulk", {
                         method: "DELETE",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ seriesId: deleteConfirm.seriesId }),
+                        body: JSON.stringify({ seriesId: deleteConfirm.seriesId, fromDate: date }),
                       });
                       if (res.ok) {
                         const data = await res.json().catch(() => ({}));
@@ -1585,11 +1640,11 @@ export default function DayViewClient({ date }: { date: string }) {
                           });
                           setEvents(filtered);
                         }
-                        setSuccessMsg(`Deleted ${data.deleted} events in series.`);
+                        setSuccessMsg(`Deleted ${data.deleted} future events. Past events preserved.`);
                         play("delete");
                       } else {
                         const data = await res.json().catch(() => ({}));
-                        setError(data.error || "Failed to delete series.");
+                        setError(data.error || "Failed to delete future events.");
                       }
                     } catch {
                       setError("Network error.");
@@ -1600,7 +1655,7 @@ export default function DayViewClient({ date }: { date: string }) {
                   className="w-full rounded-lg border px-4 py-2.5 text-sm font-medium"
                   style={{ borderColor: "var(--color-error)", color: "var(--color-error)", minHeight: 44 }}
                 >
-                  Delete entire series{seriesCount != null ? ` (${seriesCount} events)` : ""}
+                  Delete future events{seriesCount != null ? ` (${seriesCount} events)` : ""}
                 </button>
               )}
               <button

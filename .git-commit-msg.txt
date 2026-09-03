@@ -1,17 +1,32 @@
-Fun fact popup: 3h interval, global glossary, Arabic text, card redesign, remove em-dashes
+Homework redesign with class cards, priority filter; mobile prayer bar fix; future-only series deletion
 
-- Change popup interval from 12h to 3h
-- Add GLOBAL_GLOSSARY with 80+ common terms (Hanafi, Salah, Makruh Tahrimi,
-  Radd al-Muhtar, Fatawa Darul Uloom Deoband, etc.) tappable on EVERY card
-- Merge global glossary with per-card glossary so all terms are clickable
-- Fix regex matching so multi-word and hyphenated terms actually work
-- Apply glossary highlighting to reveal, explanation, AND source text
-- Add Arabic text (arabicText field) to 18 hadith/Quran-quoting facts,
-  displayed in RTL with Amiri/Scheherazade serif font
-- Redesign card: rounded-3xl, ornamental divider with ۞ symbol between
-  sections, top accent bar with ornament, softer styling, better spacing
-- Remove all 99 em-dashes from content, replaced with colons
-- Glossary popovers now have fade-in animation and accent-colored border
+Homework tab redesign:
+- Class/subject cards displayed as color-coded folder-style grid at top
+- Each class card shows pending homework count and color bar
+- Tap a class card to filter homework by that class
+- Delete classes via hover trash button with confirmation modal
+- Deleting a class preserves homework (unassigns class label)
+- Priority filter chips: All / High / Medium / Low
+- Homework cards now show left border in class color
+- High priority badge shown on cards
+- Pending homework sorted by priority then due date
+- "Clear class filter" button appears when class filter is active
+- Expanded class color palette from 10 to 12 colors
+
+Mobile prayer times bar fix:
+- Split into separate mobile and desktop layouts
+- Mobile: horizontal scrollable strip with compact "4:47a" time format
+  and 10px font, preventing overlap and overflow
+- Desktop: unchanged card layout with full "4:47 AM" format
+- Each prayer button has minWidth 52px and shrink-0 on mobile
+
+Recurring event deletion fix:
+- DELETE /api/events/bulk now only deletes events with startAt >= fromDate
+- Past events in a recurring series are preserved permanently
+- GET /api/events/bulk accepts optional fromDate param to count future events
+- UI button renamed from "Delete entire series" to "Delete future events"
+- Delete confirmation dialog notes that past events will be preserved
+- Success message updated to mention future events and past preservation
 
 Generated with [Devin](https://devin.ai)
 
