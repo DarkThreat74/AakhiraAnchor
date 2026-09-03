@@ -62,17 +62,21 @@ export default function TodayTab({
     [homework, todayDateStr],
   );
 
-  // ── Due today ──
-  const todaysHomework = useMemo(
+  // ── Upcoming: 5 closest pending homework (today + future), sorted by due date ──
+  const upcomingHomework = useMemo(
     () => homework
-      .filter((h) => h.status === "pending" && h.dueDate && isSameDay(h.dueDate, today))
+      .filter((h) => h.status === "pending" && h.dueDate && h.dueDate >= todayDateStr)
       .sort((a, b) => {
-        const aTime = a.dueTime || "23:59";
-        const bTime = b.dueTime || "23:59";
-        return aTime.localeCompare(bTime);
+        const aDate = a.dueDate + (a.dueTime || "23:59");
+        const bDate = b.dueDate + (b.dueTime || "23:59");
+        return aDate.localeCompare(bDate);
       }),
-    [homework, today],
+    [homework, todayDateStr],
   );
+
+  const upcomingShown = upcomingHomework.slice(0, 5);
+  const upcomingRemaining = upcomingHomework.length - upcomingShown.length;
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
 
   // ── Short-term active goals (optionally with target dates) ──
   const shortTermGoals = useMemo(
@@ -130,7 +134,7 @@ export default function TodayTab({
     [homework, today],
   );
 
-  const totalDueToday = todaysHomework.length + carriedOver.length;
+  const totalDueToday = upcomingHomework.length + carriedOver.length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -170,23 +174,48 @@ export default function TodayTab({
         </Section>
       )}
 
-      {/* ── Due today ── */}
+      {/* ── Upcoming homework (5 closest due) ── */}
       <Section
         icon={<BookOpen className="h-4 w-4" />}
-        title="Due today"
-        count={todaysHomework.length}
+        title="Upcoming"
+        count={upcomingHomework.length}
         onMore={() => onNavigate("homework")}
       >
-        {todaysHomework.length === 0 ? (
-          <EmptyRow icon={<CheckCircle2 className="h-4 w-4" />} text="Nothing due today" />
+        {upcomingHomework.length === 0 ? (
+          <EmptyRow icon={<CheckCircle2 className="h-4 w-4" />} text="No upcoming homework" />
         ) : (
-          todaysHomework.map((h) => (
-            <div key={h.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
-              <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: h.priority === "high" ? "var(--color-error)" : h.priority === "medium" ? "var(--color-accent)" : "var(--color-paper-3)" }} />
-              <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>{h.title}</span>
-              {h.dueTime && <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>{h.dueTime}</span>}
-            </div>
-          ))
+          <>
+            {(showAllUpcoming ? upcomingHomework : upcomingShown).map((h) => (
+              <div key={h.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
+                <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: h.priority === "high" ? "var(--color-error)" : h.priority === "medium" ? "var(--color-accent)" : "var(--color-paper-3)" }} />
+                <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>{h.title}</span>
+                <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
+                  backgroundColor: daysUntil(h.dueDate) <= 0 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
+                  color: daysUntil(h.dueDate) <= 0 ? "var(--color-error)" : "var(--color-ink-muted)",
+                }}>
+                  {formatTargetDate(h.dueDate)}
+                </span>
+              </div>
+            ))}
+            {!showAllUpcoming && upcomingRemaining > 0 && (
+              <button
+                onClick={() => setShowAllUpcoming(true)}
+                className="text-xs pl-3 pt-1 font-medium"
+                style={{ color: "var(--color-accent)" }}
+              >
+                +{upcomingRemaining} more
+              </button>
+            )}
+            {showAllUpcoming && upcomingRemaining > 0 && (
+              <button
+                onClick={() => setShowAllUpcoming(false)}
+                className="text-xs pl-3 pt-1 font-medium"
+                style={{ color: "var(--color-ink-muted)" }}
+              >
+                Show less
+              </button>
+            )}
+          </>
         )}
       </Section>
 

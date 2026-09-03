@@ -1,24 +1,26 @@
-Add calendar list view and redesign event color picker
+Homework UX improvements: collapsible classes, confirmations, due times, upcoming in Today
 
-Calendar list view:
-- New /calendar/list route showing upcoming events for a full week
-- Week navigation (prev/next arrows, week offset tracking)
-- Events grouped by day with date card (day name + number)
-- Each event shows time range, title, type badge, notify/recurring indicators
-- Left border on each event in its color
-- Prayer times row shown on the first day of the week
-- "Today / Tomorrow / Yesterday" labels on day headers
-- Empty state with link to Day view to add events
-- Offline support via IndexedDB cache fallback
-- Day/Month/List toggle added to Day and Month view headers
+Today tab:
+- Replaced "Due today" section with "Upcoming" showing the 5 closest
+  pending homework sorted by due date+time
+- "More" button expands to show all upcoming; "Show less" collapses
+- Each item shows priority dot, title, and relative date badge
+  (today/tomorrow/in 3d/etc.)
 
-Event color picker redesign:
-- Replaced large circular buttons with compact rounded-lg grid
-- 8 columns on mobile, 12 on desktop
-- Selected color shows checkmark icon with drop shadow
-- Selected state uses scale(1.1) and outline ring in the color itself
-- Color label shown above grid ("Color" + current selection name)
-- Fixed duplicate Sage/Olive color (Sage changed to #84a98c)
+Homework tab:
+- Classes section is now a collapsible dropdown (collapsed by default)
+  so homework is the main focus
+- Class count badge and active filter chip shown in the dropdown header
+- Compact "Add" button inside the dropdown header
+- Class rows show color dot, name, pending count, and always-visible
+  delete button (works on mobile, no longer hover-only)
+- Delete homework now requires confirmation modal
+- Completing homework now requires confirmation ("Did you complete it?"
+  with "Yes, completed" / "Not yet")
+- Uncompleting (re-opening) does not require confirmation
+- Due time now shown on cards when set (e.g. "Due at 12:00 PM",
+  "Tomorrow at 9:30 AM", "In 3 days at 2:00 PM")
+- Overdue items with due time show "2d overdue - Due at 12:00 PM"
 
 Generated with [Devin](https://devin.ai)
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, FolderPlus, Filter } from "lucide-react";
+import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, ChevronRight, Filter, Layers } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { getOfflineDB } from "@/lib/offline/db";
 import {
@@ -87,20 +87,33 @@ function isOverdue(hw: HomeworkItem): boolean {
 function formatDueLabel(hw: HomeworkItem): string {
   const days = daysUntil(hw.dueDate);
   if (hw.status === "completed") return "Completed";
-  if (days < 0) return `${Math.abs(days)}d overdue`;
+  // Format time string from "HH:MM:SS" or "HH:MM"
+  const formatDueTime = (time: string): string => {
+    const [h, m] = time.split(":").map(Number);
+    const hour = h % 12 || 12;
+    const period = h < 12 ? "AM" : "PM";
+    return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+  };
+  if (days < 0) {
+    if (hw.dueTime) return `${Math.abs(days)}d overdue · Due at ${formatDueTime(hw.dueTime)}`;
+    return `${Math.abs(days)}d overdue`;
+  }
   if (days === 0) {
-    if (hw.dueTime) {
-      const [h, m] = hw.dueTime.split(":").map(Number);
-      const hour = h % 12 || 12;
-      const period = h < 12 ? "AM" : "PM";
-      return `Today at ${hour}:${String(m).padStart(2, "0")} ${period}`;
-    }
+    if (hw.dueTime) return `Due at ${formatDueTime(hw.dueTime)}`;
     return "Today";
   }
-  if (days === 1) return "Tomorrow";
-  if (days <= 6) return `In ${days} days`;
+  if (days === 1) {
+    if (hw.dueTime) return `Tomorrow at ${formatDueTime(hw.dueTime)}`;
+    return "Tomorrow";
+  }
+  if (days <= 6) {
+    if (hw.dueTime) return `In ${days} days at ${formatDueTime(hw.dueTime)}`;
+    return `In ${days} days`;
+  }
   const due = new Date(hw.dueDate + "T00:00:00");
-  return due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const dateLabel = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (hw.dueTime) return `${dateLabel} at ${formatDueTime(hw.dueTime)}`;
+  return dateLabel;
 }
 
 export default function HomeworkClient({
@@ -118,6 +131,9 @@ export default function HomeworkClient({
   const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
   const [showCompleted, setShowCompleted] = useState(false);
   const [deleteClassConfirm, setDeleteClassConfirm] = useState<ClassItem | null>(null);
+  const [deleteHwConfirm, setDeleteHwConfirm] = useState<HomeworkItem | null>(null);
+  const [completeConfirm, setCompleteConfirm] = useState<HomeworkItem | null>(null);
+  const [showClasses, setShowClasses] = useState(false);
 
   // Add form state
   const [title, setTitle] = useState("");
@@ -293,6 +309,16 @@ export default function HomeworkClient({
     }
   }
 
+  // Called when user confirms completion in the modal
+  function handleCompleteClick(hw: HomeworkItem) {
+    if (hw.status === "completed") {
+      // Already completed — just uncomplete without confirmation
+      handleToggleComplete(hw);
+    } else {
+      setCompleteConfirm(hw);
+    }
+  }
+
   async function handleDelete(id: string) {
     setHomework((prev) => prev.filter((h) => h.id !== id));
     deleteHomeworkFromCache(id);
@@ -302,6 +328,10 @@ export default function HomeworkClient({
     } catch {
       refreshHomework();
     }
+  }
+
+  function handleDeleteClick(hw: HomeworkItem) {
+    setDeleteHwConfirm(hw);
   }
 
   async function handleAddClass() {
@@ -416,7 +446,7 @@ export default function HomeworkClient({
       >
         {/* Checkbox */}
         <button
-          onClick={() => handleToggleComplete(hw)}
+          onClick={() => handleCompleteClick(hw)}
           className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
           style={{
             borderColor: hw.status === "completed" ? "var(--color-success)" : "var(--color-paper-3)",
@@ -440,7 +470,7 @@ export default function HomeworkClient({
               {hw.title}
             </h3>
             <button
-              onClick={() => handleDelete(hw.id)}
+              onClick={() => handleDeleteClick(hw)}
               className="shrink-0 rounded-lg p-1 transition-colors hover:bg-[var(--color-paper-2)]"
               style={{ color: "var(--color-ink-muted)" }}
               aria-label="Delete homework"
@@ -541,79 +571,101 @@ export default function HomeworkClient({
         </button>
       </div>
 
-      {/* ── Class cards (folder-style) ── */}
-      {activeClasses.length > 0 && (
-        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {activeClasses.map((cls) => {
-            const count = classCounts.get(cls.id) || 0;
-            const isActive = filterClassId === cls.id;
-            return (
-              <div
-                key={cls.id}
-                className="group relative overflow-hidden rounded-xl border p-3 transition-all"
-                style={{
-                  borderColor: isActive ? cls.color : `color-mix(in oklab, ${cls.color} 20%, var(--color-paper-3))`,
-                  backgroundColor: isActive ? `color-mix(in oklab, ${cls.color} 8%, var(--color-paper))` : "var(--color-paper)",
-                  cursor: "pointer",
-                }}
-                onClick={() => setFilterClassId(isActive ? null : cls.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFilterClassId(isActive ? null : cls.id); } }}
+      {/* ── Classes (collapsible dropdown so homework is the main focus) ── */}
+      <div className="mb-4">
+        <button
+          onClick={() => setShowClasses(!showClasses)}
+          className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink)" }}
+        >
+          <span className="flex items-center gap-2">
+            <Layers className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+            Classes
+            {activeClasses.length > 0 && (
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                style={{ backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-muted)" }}
               >
-                {/* Color bar at top */}
-                <div className="absolute left-0 right-0 top-0 h-1" style={{ backgroundColor: cls.color }} />
+                {activeClasses.length}
+              </span>
+            )}
+            {filterClassId && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{
+                  backgroundColor: `color-mix(in oklab, ${getClassInfo(filterClassId)?.color || "var(--color-accent)"} 12%, var(--color-paper))`,
+                  color: getClassInfo(filterClassId)?.color || "var(--color-accent)",
+                }}
+              >
+                Filtered: {getClassInfo(filterClassId)?.name || ""}
+              </span>
+            )}
+          </span>
+          <span className="flex items-center gap-2">
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); setShowAddClass(!showAddClass); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setShowAddClass(!showAddClass); } }}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors hover:bg-[var(--color-paper-3)]"
+              style={{ color: "var(--color-ink-muted)" }}
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </span>
+            {showClasses
+              ? <ChevronDown className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+              : <ChevronRight className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />}
+          </span>
+        </button>
 
-                {/* Delete button (appears on hover) */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDeleteClassConfirm(cls); }}
-                  className="absolute right-1.5 top-2 z-10 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ color: "var(--color-ink-muted)" }}
-                  aria-label={`Delete ${cls.name}`}
+        {/* Classes list — compact rows with always-visible delete */}
+        {showClasses && (
+          <div className="mt-2 flex flex-col gap-1">
+            {activeClasses.length === 0 && !showAddClass && (
+              <p className="px-3 py-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                No classes yet. Tap &ldquo;Add&rdquo; to create one.
+              </p>
+            )}
+            {activeClasses.map((cls) => {
+              const count = classCounts.get(cls.id) || 0;
+              const isActive = filterClassId === cls.id;
+              return (
+                <div
+                  key={cls.id}
+                  className="flex items-center gap-2 rounded-lg border px-3 py-2 transition-all"
+                  style={{
+                    borderColor: isActive ? cls.color : "var(--color-paper-3)",
+                    backgroundColor: isActive ? `color-mix(in oklab, ${cls.color} 8%, var(--color-paper))` : "var(--color-paper)",
+                  }}
                 >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-
-                <div className="mt-1.5">
-                  <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setFilterClassId(isActive ? null : cls.id)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cls.color }} />
-                    <span className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                    <span className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>
                       {cls.name}
                     </span>
-                  </div>
-                  <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-                    {count} pending
-                  </p>
+                    <span className="shrink-0 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                      {count} pending
+                    </span>
+                  </button>
+                  {/* Always-visible delete button — compact, works on mobile */}
+                  <button
+                    onClick={() => setDeleteClassConfirm(cls)}
+                    className="shrink-0 rounded-md p-1.5 transition-colors hover:bg-[var(--color-paper-3)]"
+                    style={{ color: "var(--color-ink-muted)" }}
+                    aria-label={`Delete ${cls.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-            );
-          })}
-
-          {/* Add class card */}
-          <button
-            onClick={() => setShowAddClass(!showAddClass)}
-            className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-3 transition-colors hover:bg-[var(--color-paper-2)]"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 80 }}
-          >
-            <FolderPlus className="h-5 w-5" />
-            <span className="text-xs font-medium">Add class</span>
-          </button>
-        </div>
-      )}
-
-      {/* Add class button when no classes exist */}
-      {activeClasses.length === 0 && !showAddClass && (
-        <div className="mb-4">
-          <button
-            onClick={() => setShowAddClass(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs font-medium transition-colors"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}
-          >
-            <FolderPlus className="h-3.5 w-3.5" />
-            Add a class (subject)
-          </button>
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Add class form */}
       {showAddClass && (
@@ -952,6 +1004,88 @@ export default function HomeworkClient({
                 style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
               >
                 Delete class
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete homework confirmation modal ── */}
+      {deleteHwConfirm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 50%, transparent)" }}
+          onClick={() => setDeleteHwConfirm(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border p-5"
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+          >
+            <h3 className="mb-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Delete homework?
+            </h3>
+            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+              &ldquo;{deleteHwConfirm.title}&rdquo; will be permanently removed. This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteHwConfirm(null)}
+                className="flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { handleDelete(deleteHwConfirm.id); setDeleteHwConfirm(null); }}
+                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Complete homework confirmation modal ── */}
+      {completeConfirm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 50%, transparent)" }}
+          onClick={() => setCompleteConfirm(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border p-5 text-center"
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+          >
+            <div
+              className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: "color-mix(in oklab, var(--color-success) 12%, var(--color-paper))" }}
+            >
+              <Check className="h-5 w-5" style={{ color: "var(--color-success)" }} />
+            </div>
+            <h3 className="mb-1 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              Did you complete it?
+            </h3>
+            <p className="mb-4 text-xs leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
+              &ldquo;{completeConfirm.title}&rdquo;
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCompleteConfirm(null)}
+                className="flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium"
+                style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+              >
+                Not yet
+              </button>
+              <button
+                onClick={() => { handleToggleComplete(completeConfirm); setCompleteConfirm(null); }}
+                className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                style={{ backgroundColor: "var(--color-success)", color: "var(--color-paper)", minHeight: 44 }}
+              >
+                Yes, completed
               </button>
             </div>
           </div>
