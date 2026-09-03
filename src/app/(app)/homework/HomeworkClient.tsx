@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, ChevronRight, Filter, Layers, ArrowDownWideNarrow, CalendarClock, CalendarDays } from "lucide-react";
+import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, ChevronRight, Filter, Layers, ArrowDownWideNarrow, CalendarClock, CalendarDays, Pencil } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { getOfflineDB } from "@/lib/offline/db";
 import {
@@ -85,6 +85,7 @@ export default function HomeworkClient({
   const [homework, setHomework] = useState<HomeworkItem[]>(initialHomework);
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddClass, setShowAddClass] = useState(false);
   const [filterClassId, setFilterClassId] = useState<string | null>(null);
   const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
@@ -207,9 +208,28 @@ export default function HomeworkClient({
     setPriority("medium");
     setKind("homework");
     setError(null);
+    setEditingId(null);
   }
 
-  async function handleAddHomework() {
+  function handleEditClick(hw: HomeworkItem) {
+    setEditingId(hw.id);
+    setTitle(hw.title);
+    setDescription(hw.description || "");
+    setClassId(hw.classId);
+    setDueDate(hw.dueDate);
+    // dueTime comes as "HH:MM:SS" — strip seconds for the time input
+    setDueTime(hw.dueTime ? hw.dueTime.slice(0, 5) : "");
+    setPriority(hw.priority);
+    setKind(hw.kind);
+    setError(null);
+    setShowAddForm(true);
+    // Scroll to top so the form is visible on mobile
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  async function handleSaveHomework() {
     const trimmed = title.trim();
     if (!trimmed) {
       setError("Title is required");
@@ -218,29 +238,55 @@ export default function HomeworkClient({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/homework", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: trimmed,
-          description: description.trim() || undefined,
-          classId: classId || undefined,
-          dueDate,
-          dueTime: dueTime ? `${dueTime}:00` : undefined,
-          priority,
-          kind,
-        }),
-      });
-      if (res.ok) {
-        const newHw = await res.json();
-        setHomework((prev) => [...prev, newHw].sort((a, b) => a.dueDate.localeCompare(b.dueDate)));
-        upsertHomeworkToCache(newHw);
-        clearApiCache();
-        resetForm();
-        setShowAddForm(false);
+      const payload = {
+        title: trimmed,
+        description: description.trim() || undefined,
+        classId: classId || undefined,
+        dueDate,
+        dueTime: dueTime ? `${dueTime}:00` : undefined,
+        priority,
+        kind,
+      };
+
+      if (editingId) {
+        // Update existing homework
+        const res = await fetch(`/api/homework/${editingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const updatedHw = await res.json();
+          setHomework((prev) =>
+            prev.map((h) => (h.id === editingId ? updatedHw : h))
+              .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+          );
+          upsertHomeworkToCache(updatedHw);
+          clearApiCache();
+          resetForm();
+          setShowAddForm(false);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || "Failed to update homework");
+        }
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to add homework");
+        // Create new homework
+        const res = await fetch("/api/homework", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const newHw = await res.json();
+          setHomework((prev) => [...prev, newHw].sort((a, b) => a.dueDate.localeCompare(b.dueDate)));
+          upsertHomeworkToCache(newHw);
+          clearApiCache();
+          resetForm();
+          setShowAddForm(false);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || "Failed to add homework");
+        }
       }
     } catch {
       setError("Network error");
@@ -447,14 +493,24 @@ export default function HomeworkClient({
             >
               {hw.title}
             </h3>
-            <button
-              onClick={() => handleDeleteClick(hw)}
-              className="shrink-0 rounded-lg p-1 transition-colors hover:bg-[var(--color-paper-2)]"
-              style={{ color: "var(--color-ink-muted)" }}
-              aria-label="Delete homework"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                onClick={() => handleEditClick(hw)}
+                className="rounded-lg p-1 transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ color: "var(--color-ink-muted)" }}
+                aria-label="Edit homework"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => handleDeleteClick(hw)}
+                className="rounded-lg p-1 transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ color: "var(--color-ink-muted)" }}
+                aria-label="Delete homework"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Meta row */}
@@ -477,6 +533,7 @@ export default function HomeworkClient({
                 backgroundColor: colors.bgColor,
                 color: colors.color,
                 fontWeight: colors.fontWeight,
+                border: `1px solid ${colors.borderColor}`,
               }}
             >
               <Clock className="h-2.5 w-2.5" />
@@ -772,8 +829,10 @@ export default function HomeworkClient({
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)" }}
         >
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>New Homework</h3>
-            <button onClick={() => setShowAddForm(false)} style={{ color: "var(--color-ink-muted)" }}>
+            <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+              {editingId ? "Edit Homework" : "New Homework"}
+            </h3>
+            <button onClick={() => { setShowAddForm(false); resetForm(); }} style={{ color: "var(--color-ink-muted)" }}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -787,7 +846,7 @@ export default function HomeworkClient({
               autoFocus
               className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
               style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddHomework(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveHomework(); } }}
             />
             <textarea
               value={description}
@@ -921,12 +980,12 @@ export default function HomeworkClient({
             )}
 
             <button
-              onClick={handleAddHomework}
+              onClick={handleSaveHomework}
               disabled={saving || !title.trim()}
               className="rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)", minHeight: 44 }}
             >
-              {saving ? "Adding..." : "Add homework"}
+              {saving ? (editingId ? "Saving..." : "Adding...") : (editingId ? "Save changes" : "Add homework")}
             </button>
           </div>
         </div>

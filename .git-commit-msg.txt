@@ -1,21 +1,31 @@
-Mobile captcha sizing, Today card wrapper, friends accept/reject, device labels, settings restructure
+Unified urgency-based due date system with compact badges
 
-- Playcaptcha: responsive CSS overrides for 375px and 320px screens so the
-  claw machine fits and stays playable on small phones
-- Today tab: wrapped all sections in the same rounded-2xl border card used
-  by Calendar, Prayer, and Settings pages for visual consistency
-- Goals tab nav: replaced the ugly full-screen dropdown with a horizontal
-  scrollable pill bar on mobile
-- Settings: moved Log out to the very bottom; renamed "Delete Account" to
-  "Advanced" with the delete button nested inside
-- Trusted devices: parse User-Agent with ua-parser-js to show real device
-  names (e.g. "Windows - Chrome", "iPhone - Safari") instead of generic
-  "Trusted device"; uses Monitor icon for desktop, Smartphone for mobile
-- Prayer friends: added pending/accepted/rejected status flow with
-  migration 0012; friend requests now require mutual acceptance before
-  either side can see the other's stats; push notifications sent on
-  request and acceptance; pending requests UI with accept/reject buttons
-  in the Prayer dashboard Friends tab
+Created a shared due-date formatter (src/lib/homework/due-format.ts) that
+replaces the inconsistent "tomorrow at 9:30 AM" / "in 3d" labels with a
+compact, urgency-driven badge system used everywhere:
+
+- Overdue: "2d OVERDUE · 9:30a" (red, bold)
+- Today: "TODAY · 9:30a" (red, bold)
+- Tomorrow: "Tomorrow · 9:30a" (amber, semibold)
+- This week (2-3d): "Wed · 9:30a" (amber, medium)
+- This week (4-6d): "Fri · 9:30a" (neutral)
+- Later: "Sep 15 · 9:30a" (muted)
+
+Key improvements:
+- Compact time format: "9:30a" / "12p" instead of "9:30 AM" / "12:00 PM"
+  keeps pill widths uniform regardless of the time value
+- Day names (Wed, Thu) instead of "in 3d" so you immediately see WHEN
+  something is due, not just how far away it is
+- Color-coded urgency: red for overdue/today, amber for tomorrow/soon,
+  neutral for later — matches patterns from Todoist, Notion, and other
+  competitors
+- Card-level tints: overdue/today/tomorrow cards get subtle background
+  tints and left-border accents for visual urgency at a glance
+- Today page header now shows urgency breakdown badges ("2 overdue",
+  "3 due today", "1 tomorrow") instead of a generic "8 items need
+  attention" that didn't convey when anything was due
+- Both TodayTab and HomeworkClient use the same formatter so labels are
+  identical across the app
 
 Generated with [Devin](https://devin.ai)
 

@@ -148,29 +148,29 @@ export function urgencyColors(urgency: UrgencyLevel): {
     case "overdue":
       return {
         color: "var(--color-error)",
-        bgColor: "color-mix(in oklab, var(--color-error) 14%, var(--color-paper))",
+        bgColor: "color-mix(in oklab, var(--color-error) 22%, var(--color-paper))",
         borderColor: "var(--color-error)",
         fontWeight: 700,
       };
     case "today":
       return {
         color: "var(--color-error)",
-        bgColor: "color-mix(in oklab, var(--color-error) 10%, var(--color-paper))",
-        borderColor: "var(--color-error)",
+        bgColor: "color-mix(in oklab, var(--color-error) 16%, var(--color-paper))",
+        borderColor: "color-mix(in oklab, var(--color-error) 40%, var(--color-paper-3))",
         fontWeight: 700,
       };
     case "tomorrow":
       return {
         color: "var(--color-warmth)",
-        bgColor: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))",
-        borderColor: "var(--color-warmth)",
+        bgColor: "color-mix(in oklab, var(--color-warmth) 18%, var(--color-paper))",
+        borderColor: "color-mix(in oklab, var(--color-warmth) 40%, var(--color-paper-3))",
         fontWeight: 600,
       };
     case "soon":
       return {
         color: "var(--color-warmth)",
-        bgColor: "color-mix(in oklab, var(--color-warmth) 8%, var(--color-paper))",
-        borderColor: "color-mix(in oklab, var(--color-warmth) 30%, var(--color-paper-3))",
+        bgColor: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))",
+        borderColor: "color-mix(in oklab, var(--color-warmth) 25%, var(--color-paper-3))",
         fontWeight: 500,
       };
     case "this_week":
@@ -183,7 +183,7 @@ export function urgencyColors(urgency: UrgencyLevel): {
     case "completed":
       return {
         color: "var(--color-success)",
-        bgColor: "color-mix(in oklab, var(--color-success) 10%, var(--color-paper))",
+        bgColor: "color-mix(in oklab, var(--color-success) 14%, var(--color-paper))",
         borderColor: "color-mix(in oklab, var(--color-success) 30%, var(--color-paper-3))",
         fontWeight: 500,
       };

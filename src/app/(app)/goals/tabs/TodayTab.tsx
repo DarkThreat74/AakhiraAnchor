@@ -275,6 +275,7 @@ export default function TodayTab({
                   backgroundColor: colors.bgColor,
                   color: colors.color,
                   fontWeight: colors.fontWeight,
+                  border: `1px solid ${colors.borderColor}`,
                 }}>
                   {badge.label}
                 </span>
@@ -332,6 +333,7 @@ export default function TodayTab({
                     backgroundColor: colors.bgColor,
                     color: colors.color,
                     fontWeight: colors.fontWeight,
+                    border: `1px solid ${colors.borderColor}`,
                   }}>
                     {badge.label}
                   </span>
@@ -341,17 +343,18 @@ export default function TodayTab({
             {!showAllUpcoming && upcomingRemaining > 0 && (
               <button
                 onClick={() => setShowAllUpcoming(true)}
-                className="text-xs pl-3 pt-1 font-medium"
-                style={{ color: "var(--color-accent)" }}
+                className="flex items-center gap-1 self-start rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 8%, transparent)" }}
               >
                 +{upcomingRemaining} more
+                <ChevronRight className="h-3 w-3" />
               </button>
             )}
             {showAllUpcoming && upcomingRemaining > 0 && (
               <button
                 onClick={() => setShowAllUpcoming(false)}
-                className="text-xs pl-3 pt-1 font-medium"
-                style={{ color: "var(--color-ink-muted)" }}
+                className="flex items-center gap-1 self-start rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: "var(--color-ink-muted)", backgroundColor: "var(--color-paper-2)" }}
               >
                 Show less
               </button>
@@ -416,6 +419,7 @@ export default function TodayTab({
                     backgroundColor: colors.bgColor,
                     color: colors.color,
                     fontWeight: colors.fontWeight,
+                    border: `1px solid ${colors.borderColor}`,
                   }}>
                     {badge.label}
                   </span>
@@ -591,6 +595,7 @@ export default function TodayTab({
                     backgroundColor: colors.bgColor,
                     color: colors.color,
                     fontWeight: colors.fontWeight,
+                    border: `1px solid ${colors.borderColor}`,
                   }}>
                     {badge.label}
                   </span>
@@ -719,8 +724,8 @@ function CollapsibleSection<T>({
             {hasMore && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1 pl-3 pt-1 text-xs transition-colors hover:opacity-70"
-                style={{ color: "var(--color-ink-muted)" }}
+                className="flex items-center gap-1 self-start rounded-full px-3 py-1 text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 8%, transparent)" }}
               >
                 {expanded ? "Show less" : `+${items.length - initialLimit} more`}
                 <ChevronRight className="h-3 w-3" style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
