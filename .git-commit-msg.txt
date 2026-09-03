@@ -1,15 +1,17 @@
-Add fun fact popup, custom selectors, 36 event colors, notepad, habits colors, collapsible Today sections
+Fun fact popup: 3h interval, global glossary, Arabic text, card redesign, remove em-dashes
 
-- Daily fun fact popup: shows every 12h, teaser then reveal, inline clickable
-  glossary terms, 60 human-curated Hanafi-focused facts (of 365 planned)
-- Replace native dropdowns in homework with custom pill-button selectors
-- Expand event color palette from 16 to 36 visually distinct colors
-- Redesign Notes tab as immersive notepad with auto-save and auto-growing textarea
-- Expand habit colors from 7 to 16, add day-of-week picker for "Other" frequency
-- Today tab: rename to "Goals for this week" / "Goals long-term", collapsible
-  sections showing 4 by default with expand option
-- Add targetDate to goals, timeOfDay/reminderTime to habits (schema + API + UI)
-- Migration 0011 for new fields + index
+- Change popup interval from 12h to 3h
+- Add GLOBAL_GLOSSARY with 80+ common terms (Hanafi, Salah, Makruh Tahrimi,
+  Radd al-Muhtar, Fatawa Darul Uloom Deoband, etc.) tappable on EVERY card
+- Merge global glossary with per-card glossary so all terms are clickable
+- Fix regex matching so multi-word and hyphenated terms actually work
+- Apply glossary highlighting to reveal, explanation, AND source text
+- Add Arabic text (arabicText field) to 18 hadith/Quran-quoting facts,
+  displayed in RTL with Amiri/Scheherazade serif font
+- Redesign card: rounded-3xl, ornamental divider with ۞ symbol between
+  sections, top accent bar with ornament, softer styling, better spacing
+- Remove all 99 em-dashes from content, replaced with colons
+- Glossary popovers now have fade-in animation and accent-colored border
 
 Generated with [Devin](https://devin.ai)
 
