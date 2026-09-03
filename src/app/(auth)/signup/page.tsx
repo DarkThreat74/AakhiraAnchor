@@ -120,7 +120,14 @@ export default function SignupForm() {
       }
 
       if (!res.ok) {
-        setError(data.message || data.error || `Request failed with status ${res.status}.`);
+        const errorMsg = data.message || data.error || `Request failed with status ${res.status}.`;
+        setError(errorMsg);
+        // If Turnstile verification failed (403), reset widget and go back to captcha step
+        if (res.status === 403) {
+          setCaptchaToken(null);
+          turnstileRef.current?.reset();
+          setStep("captcha");
+        }
         return;
       }
 
@@ -242,6 +249,11 @@ export default function SignupForm() {
               onVerify={handleCaptchaVerify}
               onExpire={() => setCaptchaToken(null)}
               onError={() => setCaptchaToken(null)}
+              onTimeout={() => {
+                setCaptchaToken(null);
+                setError("Security check timed out. Please try again.");
+                turnstileRef.current?.reset();
+              }}
               action="signup"
             />
           </div>
@@ -254,7 +266,11 @@ export default function SignupForm() {
           )}
 
           <button
-            onClick={() => setStep("email")}
+            onClick={() => {
+              setCaptchaToken(null);
+              turnstileRef.current?.reset();
+              setStep("email");
+            }}
             className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-70"
             style={{ color: "var(--color-ink-muted)" }}
           >
@@ -331,7 +347,11 @@ export default function SignupForm() {
 
           <button
             type="button"
-            onClick={() => setStep("captcha")}
+            onClick={() => {
+              setCaptchaToken(null);
+              turnstileRef.current?.reset();
+              setStep("captcha");
+            }}
             className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-70"
             style={{ color: "var(--color-ink-muted)" }}
           >

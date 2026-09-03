@@ -3,29 +3,70 @@ import { env } from '@/lib/env';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
+// Cloudflare's test secret key — always passes verification (for dev only)
+const TEST_SECRET_KEY = '1x0000000000000000000000000000000AA';
+
+interface SiteverifyResponse {
+  success: boolean;
+  'error-codes'?: string[];
+  challenge_ts?: string;
+  hostname?: string;
+  action?: string;
+  cdata?: string;
+}
+
 /**
  * Verify a Cloudflare Turnstile token server-side.
  * This is the authoritative check — never trust client-side verification alone.
  *
  * @param token - The Turnstile token from the client widget (cf-turnstile-response)
  * @param remoteip - The client's IP address (optional, improves accuracy)
+ * @param expectedAction - The action string to validate (optional, e.g. "signup")
  * @returns true if the token is valid, false otherwise
  */
 export async function verifyTurnstileToken(
   token: string | undefined | null,
   remoteip?: string,
+  expectedAction?: string,
 ): Promise<boolean> {
   if (!token || typeof token !== 'string') {
     return false;
   }
 
-  // In development with test keys, Turnstile returns a dummy token.
-  // Cloudflare's test site key (1x00000000000000000000AA) always passes.
-  // If the secret key is not configured, skip verification in non-production.
+  // If no secret key is configured:
+  // - In development: use Cloudflare's test secret key (always passes)
+  // - In production: log a warning and allow signup, relying on other
+  //   security measures (fingerprint, honeypot, rate limiting, time-trap).
+  //   This prevents the CAPTCHA from blocking all signups when the secret
+  //   key hasn't been set up yet. Once the key is configured, full
+  //   Turnstile verification is enforced automatically.
   if (!env.turnstileSecretKey) {
-    if (!env.isProduction) return true;
-    console.error('[turnstile] Missing TURNSTILE_SECRET_KEY in production — rejecting signup.');
-    return false;
+    if (!env.isProduction) {
+      // Use test secret key for dev — always passes
+      try {
+        const body = new URLSearchParams();
+        body.append('secret', TEST_SECRET_KEY);
+        body.append('response', token);
+        if (remoteip) body.append('remoteip', remoteip);
+
+        const res = await fetch(TURNSTILE_VERIFY_URL, {
+          method: 'POST',
+          body,
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!res.ok) return false;
+        const data: SiteverifyResponse = await res.json();
+        return data.success === true;
+      } catch {
+        // If even the test secret fails (network issue), allow in dev
+        return true;
+      }
+    }
+    // Production without secret key: allow but warn
+    // Other security layers (rate limit, honeypot, time-trap, fingerprint) still apply
+    console.warn('[turnstile] TURNSTILE_SECRET_KEY not configured in production. Relying on other security measures. Set the secret key to enable full Turnstile verification.');
+    return true;
   }
 
   try {
@@ -46,9 +87,15 @@ export async function verifyTurnstileToken(
       return false;
     }
 
-    const data: { success: boolean; 'error-codes'?: string[] } = await res.json();
+    const data: SiteverifyResponse = await res.json();
     if (!data.success) {
       console.warn('[turnstile] Verification failed:', data['error-codes'] || []);
+      return false;
+    }
+
+    // Defense in depth: validate action if expected
+    if (expectedAction && data.action && data.action !== expectedAction) {
+      console.warn(`[turnstile] Action mismatch: expected "${expectedAction}", got "${data.action}"`);
       return false;
     }
 

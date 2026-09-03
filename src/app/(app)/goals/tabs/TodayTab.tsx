@@ -93,6 +93,7 @@ export default function TodayTab({
   const upcomingShown = upcomingHomework.slice(0, 5);
   const upcomingRemaining = upcomingHomework.length - upcomingShown.length;
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const [showAllHabits, setShowAllHabits] = useState(false);
   // Goals currently animating out (just completed)
   const [animatingOut, setAnimatingOut] = useState<Set<string>>(new Set());
 
@@ -184,8 +185,7 @@ export default function TodayTab({
   // ── Long-term goals (separate "On the horizon" section) ──
   const longTermGoals = useMemo(
     () => goals
-      .filter((g) => g.status === "active" && g.goalType === "long_term")
-      .slice(0, 3),
+      .filter((g) => g.status === "active" && g.goalType === "long_term"),
     [goals],
   );
 
@@ -440,130 +440,143 @@ export default function TodayTab({
               </span>
             </div>
 
-            {/* Grouped by time of day */}
-            {TIME_OF_DAY_ORDER.map((timeKey) => {
-              const groupHabits = habitsByTimeOfDay.groups[timeKey];
-              if (!groupHabits || groupHabits.length === 0) return null;
-              const { label, icon: TimeIcon } = TIME_OF_DAY_LABELS[timeKey];
-              return (
-                <div key={timeKey} className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5 px-3">
-                    <TimeIcon className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
-                    <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>{label}</span>
-                  </div>
-                  {groupHabits.map((habit) => {
-                    const done = habitsCompletedToday.has(habit.id);
-                    return (
-                      <div key={habit.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-[var(--color-paper-2)] transition-colors">
-                        <div
-                          className="h-3.5 w-3.5 rounded-full shrink-0 border-2 transition-all"
-                          style={{
-                            borderColor: done ? habit.color : "var(--color-paper-3)",
-                            backgroundColor: done ? habit.color : "transparent",
-                          }}
-                        />
-                        <span className="text-sm truncate flex-1" style={{
-                          color: done ? "var(--color-ink-muted)" : "var(--color-ink)",
-                          textDecoration: done ? "line-through" : "none",
-                        }}>
-                          {habit.name}
-                        </span>
-                        {habit.reminderTime && (
-                          <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>{habit.reminderTime}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+            {/* Flatten all habits for limiting when collapsed */}
+            {(() => {
+              const allGrouped: { habit: Habit; label: string; icon: typeof Sunrise }[] = [];
+              for (const timeKey of TIME_OF_DAY_ORDER) {
+                const groupHabits = habitsByTimeOfDay.groups[timeKey];
+                if (!groupHabits || groupHabits.length === 0) continue;
+                const { label, icon: TimeIcon } = TIME_OF_DAY_LABELS[timeKey];
+                for (const habit of groupHabits) {
+                  allGrouped.push({ habit, label, icon: TimeIcon });
+                }
+              }
+              for (const habit of habitsByTimeOfDay.ungrouped) {
+                allGrouped.push({ habit, label: "", icon: Sunrise });
+              }
 
-            {/* Ungrouped habits (no time-of-day set) */}
-            {habitsByTimeOfDay.ungrouped.length > 0 && (
-              <div className="flex flex-col gap-1">
-                {habitsByTimeOfDay.ungrouped.map((habit) => {
-                  const done = habitsCompletedToday.has(habit.id);
-                  return (
-                    <div key={habit.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-[var(--color-paper-2)] transition-colors">
-                      <div
-                        className="h-3.5 w-3.5 rounded-full shrink-0 border-2 transition-all"
-                        style={{
-                          borderColor: done ? habit.color : "var(--color-paper-3)",
-                          backgroundColor: done ? habit.color : "transparent",
-                        }}
-                      />
-                      <span className="text-sm truncate flex-1" style={{
-                        color: done ? "var(--color-ink-muted)" : "var(--color-ink)",
-                        textDecoration: done ? "line-through" : "none",
-                      }}>
-                        {habit.name}
-                      </span>
+              const HABIT_LIMIT = 5;
+              const visibleHabits = showAllHabits ? allGrouped : allGrouped.slice(0, HABIT_LIMIT);
+              const hasMoreHabits = allGrouped.length > HABIT_LIMIT;
+
+              // Group visible habits by their time-of-day label for display
+              const grouped: { label: string; icon: typeof Sunrise; habits: Habit[] }[] = [];
+              for (const vh of visibleHabits) {
+                const last = grouped[grouped.length - 1];
+                if (last && last.label === vh.label) {
+                  last.habits.push(vh.habit);
+                } else {
+                  grouped.push({ label: vh.label, icon: vh.icon, habits: [vh.habit] });
+                }
+              }
+
+              return (
+                <>
+                  {grouped.map((grp, idx) => (
+                    <div key={idx} className="flex flex-col gap-1">
+                      {grp.label && (
+                        <div className="flex items-center gap-1.5 px-3">
+                          <grp.icon className="h-3 w-3" style={{ color: "var(--color-ink-muted)" }} />
+                          <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>{grp.label}</span>
+                        </div>
+                      )}
+                      {grp.habits.map((habit) => {
+                        const done = habitsCompletedToday.has(habit.id);
+                        return (
+                          <div key={habit.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-[var(--color-paper-2)] transition-colors">
+                            <div
+                              className="h-3.5 w-3.5 rounded-full shrink-0 border-2 transition-all"
+                              style={{
+                                borderColor: done ? habit.color : "var(--color-paper-3)",
+                                backgroundColor: done ? habit.color : "transparent",
+                              }}
+                            />
+                            <span className="text-sm truncate flex-1" style={{
+                              color: done ? "var(--color-ink-muted)" : "var(--color-ink)",
+                              textDecoration: done ? "line-through" : "none",
+                            }}>
+                              {habit.name}
+                            </span>
+                            {habit.reminderTime && (
+                              <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>{habit.reminderTime}</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  ))}
+                  {hasMoreHabits && (
+                    <button
+                      onClick={() => setShowAllHabits(!showAllHabits)}
+                      className="flex items-center gap-1 pl-3 pt-1 text-xs font-medium transition-colors hover:opacity-70"
+                      style={{ color: "var(--color-accent)" }}
+                    >
+                      {showAllHabits ? "Show less" : `+${allGrouped.length - HABIT_LIMIT} more`}
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </Section>
 
       {/* ── On the horizon (long-term goals) ── */}
-      <Section
+      <CollapsibleSection
         icon={<Telescope className="h-4 w-4" />}
         title="Goals long-term"
         count={longTermGoals.length}
         onMore={() => onNavigate("long-term")}
-      >
-        {longTermGoals.length === 0 ? (
-          <EmptyRow icon={<Telescope className="h-4 w-4" />} text="No long-term goals yet" />
-        ) : (
-          longTermGoals.map((g) => {
-            const isDone = g.status === "done";
-            const isAnimating = animatingOut.has(g.id);
-            const goalColor = g.color || "var(--color-ink-muted)";
-            return (
-              <div
-                key={g.id}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors"
+        initialLimit={3}
+        items={longTermGoals}
+        renderItem={(g) => {
+          const isDone = g.status === "done";
+          const isAnimating = animatingOut.has(g.id);
+          const goalColor = g.color || "var(--color-ink-muted)";
+          return (
+            <div
+              key={g.id}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors"
+              style={{
+                animation: isAnimating ? "goalCompleteSlide 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards" : undefined,
+              }}
+            >
+              <button
+                onClick={() => toggleGoal(g)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all"
                 style={{
-                  animation: isAnimating ? "goalCompleteSlide 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards" : undefined,
+                  borderColor: isDone ? goalColor : "var(--color-paper-3)",
+                  backgroundColor: isDone ? goalColor : "transparent",
                 }}
+                aria-label={isDone ? "Mark as active" : "Mark as done"}
               >
-                <button
-                  onClick={() => toggleGoal(g)}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all"
-                  style={{
-                    borderColor: isDone ? goalColor : "var(--color-paper-3)",
-                    backgroundColor: isDone ? goalColor : "transparent",
-                  }}
-                  aria-label={isDone ? "Mark as active" : "Mark as done"}
-                >
-                  {isDone && (
-                    <Check
-                      className="h-3 w-3"
-                      style={{
-                        color: "var(--color-paper)",
-                        animation: isAnimating ? "checkmarkPop 0.3s ease-out" : undefined,
-                      }}
-                    />
-                  )}
-                </button>
-                <span className="text-sm truncate flex-1" style={{
-                  color: isDone ? "var(--color-ink-muted)" : "var(--color-ink-soft)",
-                  textDecoration: isDone ? "line-through" : "none",
-                }}>
-                  {g.title}
-                </span>
-                {g.targetDate && (
-                  <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>
-                    {formatTargetDate(g.targetDate)}
-                  </span>
+                {isDone && (
+                  <Check
+                    className="h-3 w-3"
+                    style={{
+                      color: "var(--color-paper)",
+                      animation: isAnimating ? "checkmarkPop 0.3s ease-out" : undefined,
+                    }}
+                  />
                 )}
-              </div>
-            );
-          })
-        )}
-      </Section>
+              </button>
+              <span className="text-sm truncate flex-1" style={{
+                color: isDone ? "var(--color-ink-muted)" : "var(--color-ink-soft)",
+                textDecoration: isDone ? "line-through" : "none",
+              }}>
+                {g.title}
+              </span>
+              {g.targetDate && (
+                <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>
+                  {formatTargetDate(g.targetDate)}
+                </span>
+              )}
+            </div>
+          );
+        }}
+        emptyIcon={<Telescope className="h-4 w-4" />}
+        emptyText="No long-term goals yet"
+      />
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 gap-3 mt-2">

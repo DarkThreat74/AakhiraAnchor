@@ -1,29 +1,42 @@
-Remove duplicate 'Ending' sort; red/warmth tint for tomorrow due items; show due times in Today tab
+Fix Turnstile blocking signups; add show-more to goals long-term and habits in Today tab
 
-Homework sort filters:
-- Removed "Ending" sort option (was identical to "Soonest")
-- Sort options are now: Soonest, Priority, Latest
+Turnstile CAPTCHA fix — root cause: empty TURNSTILE_SECRET_KEY in .env:
+- The site key was set but the secret key was blank, so the server
+  couldn't verify tokens and rejected every signup with 403
+- Server-side (turnstile.ts): when secret key is missing in production,
+  now logs a warning and allows signup (relying on fingerprint,
+  honeypot, rate limiting, time-trap) instead of hard-blocking
+- When secret key IS set, full Turnstile verification is enforced
+- Added action validation: server now checks that the token's action
+  matches "signup" (defense against cross-action token replay)
+- Dev mode: uses Cloudflare's test secret key (1x0000000000000000000000000000000AA)
+  which always passes, instead of silently skipping verification
 
-Homework cards - tomorrow tint:
-- Items due tomorrow now have a subtle warmth-colored background tint
-  (5% mix) to visually distinguish them from regular items
-- The due label pill for tomorrow items uses warmth color instead of
-  muted ink
-- Overdue items keep their red tint and red pill
-- Today items remain neutral
+Turnstile widget (turnstile-widget.tsx) improvements:
+- Script load promise now resets on failure, allowing retry
+- Added timeout-callback support (users no longer stuck if challenge
+  never resolves)
+- Added error UI with "Retry" button when script fails to load
+- Dev fallback: uses Cloudflare test site key (1x00000000000000000000AA)
+  when NEXT_PUBLIC_TURNSTILE_SITE_KEY is not set
+- error-callback now receives and forwards the error code
 
-Today tab - due times in labels:
-- formatTargetDate now accepts an optional time parameter
-- Homework items in the Today tab now show due times:
-  - "today at 2:00 PM" (was "today")
-  - "tomorrow at 9:30 AM" (was "tomorrow")
-  - "in 3d at 4:00 PM" (was "in 3d")
-  - "Sep 15 at 10:00 AM" (was "Sep 15")
-  - "2d overdue · 11:00 AM" (was "2d overdue")
-- Items due tomorrow in the Today tab also get the warmth tint
-  background and warmth-colored pill
-- Overdue items in the Today tab keep the red tint and red pill
-- Goal target dates remain time-less (goals don't have times)
+Signup page (signup/page.tsx) improvements:
+- Added onTimeout handler: resets widget and shows error message
+- Back buttons now reset the Turnstile widget (prevents stale tokens)
+- On 403 from server: automatically resets widget and returns to
+  captcha step so user can re-verify
+- Updated .env and .env.example with helpful comments about getting
+  keys from Cloudflare dashboard
+
+Today tab — show more for goals long-term and habits:
+- Goals long-term: now uses CollapsibleSection with initialLimit=3
+  (was showing all in a plain Section with no expand/collapse)
+  Shows "+N more" / "Show less" button when there are more than 3
+- Habits: added show-more with limit of 5 visible habits
+  Flattens grouped habits, shows first 5, then "+N more" button
+  Expanding shows all habits grouped by time of day
+  Collapsing back to 5 with "Show less" button
 
 Generated with [Devin](https://devin.ai)
 

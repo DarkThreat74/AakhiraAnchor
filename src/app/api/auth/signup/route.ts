@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   };
 
   // ── Cloudflare Turnstile verification (server-side, authoritative) ──
-  const turnstileValid = await verifyTurnstileToken(turnstileToken, ip);
+  const turnstileValid = await verifyTurnstileToken(turnstileToken, ip, "signup");
   if (!turnstileValid) {
     return NextResponse.json(
       { error: "Security verification failed. Please try again." },
