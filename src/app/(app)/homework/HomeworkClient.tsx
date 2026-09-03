@@ -12,6 +12,7 @@ import {
   upsertClassToCache,
   deleteClassFromCache,
 } from "@/lib/offline/cache-writers";
+import { formatDueBadge, urgencyColors, urgencyCardTint, isTimeOverdue, daysUntilDate } from "@/lib/homework/due-format";
 
 interface HomeworkItem {
   id: string;
@@ -67,53 +68,11 @@ function tomorrowStr(): string {
 }
 
 function daysUntil(dueDate: string): number {
-  const today = new Date(todayStr() + "T00:00:00");
-  const due = new Date(dueDate + "T00:00:00");
-  return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return daysUntilDate(dueDate);
 }
 
 function isOverdue(hw: HomeworkItem): boolean {
-  if (hw.status === "completed") return false;
-  const days = daysUntil(hw.dueDate);
-  if (days < 0) return true;
-  if (days === 0 && hw.dueTime) {
-    const [h, m] = hw.dueTime.split(":").map(Number);
-    const now = new Date();
-    return now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
-  }
-  return false;
-}
-
-function formatDueLabel(hw: HomeworkItem): string {
-  const days = daysUntil(hw.dueDate);
-  if (hw.status === "completed") return "Completed";
-  // Format time string from "HH:MM:SS" or "HH:MM"
-  const formatDueTime = (time: string): string => {
-    const [h, m] = time.split(":").map(Number);
-    const hour = h % 12 || 12;
-    const period = h < 12 ? "AM" : "PM";
-    return `${hour}:${String(m).padStart(2, "0")} ${period}`;
-  };
-  if (days < 0) {
-    if (hw.dueTime) return `${Math.abs(days)}d overdue · Due at ${formatDueTime(hw.dueTime)}`;
-    return `${Math.abs(days)}d overdue`;
-  }
-  if (days === 0) {
-    if (hw.dueTime) return `Due at ${formatDueTime(hw.dueTime)}`;
-    return "Today";
-  }
-  if (days === 1) {
-    if (hw.dueTime) return `Tomorrow at ${formatDueTime(hw.dueTime)}`;
-    return "Tomorrow";
-  }
-  if (days <= 6) {
-    if (hw.dueTime) return `In ${days} days at ${formatDueTime(hw.dueTime)}`;
-    return `In ${days} days`;
-  }
-  const due = new Date(hw.dueDate + "T00:00:00");
-  const dateLabel = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  if (hw.dueTime) return `${dateLabel} at ${formatDueTime(hw.dueTime)}`;
-  return dateLabel;
+  return isTimeOverdue(hw.dueDate, hw.dueTime, hw.status);
 }
 
 export default function HomeworkClient({
@@ -450,20 +409,17 @@ export default function HomeworkClient({
 
   function renderHomeworkCard(hw: HomeworkItem) {
     const cls = getClassInfo(hw.classId);
-    const overdue_ = isOverdue(hw);
-    const dueTomorrow = !overdue_ && hw.status === "pending" && daysUntil(hw.dueDate) === 1;
+    const badge = formatDueBadge(hw.dueDate, hw.dueTime, hw.status);
+    const colors = urgencyColors(badge.urgency);
+    const tint = urgencyCardTint(badge.urgency);
     return (
       <div
         key={hw.id}
         className="flex items-start gap-3 rounded-xl border p-3 transition-colors hover:bg-[var(--color-paper-2)]"
         style={{
           borderColor: cls ? `color-mix(in oklab, ${cls.color} 20%, var(--color-paper-3))` : "var(--color-paper-3)",
-          backgroundColor: overdue_
-            ? "color-mix(in oklab, var(--color-error) 4%, transparent)"
-            : dueTomorrow
-              ? "color-mix(in oklab, var(--color-warmth) 5%, transparent)"
-              : "transparent",
-          borderLeft: cls ? `3px solid ${cls.color}` : undefined,
+          backgroundColor: tint.backgroundColor,
+          borderLeft: cls ? `3px solid ${cls.color}` : tint.borderLeftColor ? `3px solid ${tint.borderLeftColor}` : undefined,
         }}
       >
         {/* Checkbox */}
@@ -516,22 +472,15 @@ export default function HomeworkClient({
               </span>
             )}
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
               style={{
-                backgroundColor: overdue_
-                  ? "color-mix(in oklab, var(--color-error) 12%, var(--color-paper))"
-                  : dueTomorrow
-                    ? "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))"
-                    : "var(--color-paper-2)",
-                color: overdue_
-                  ? "var(--color-error)"
-                  : dueTomorrow
-                    ? "var(--color-warmth)"
-                    : "var(--color-ink-muted)",
+                backgroundColor: colors.bgColor,
+                color: colors.color,
+                fontWeight: colors.fontWeight,
               }}
             >
               <Clock className="h-2.5 w-2.5" />
-              {formatDueLabel(hw)}
+              {badge.label}
             </span>
             {hw.kind !== "homework" && (
               <span

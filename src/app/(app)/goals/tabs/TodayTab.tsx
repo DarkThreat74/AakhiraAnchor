@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { Target, BookOpen, CheckCircle2, Repeat, ChevronRight, Sunrise, Sun, Sunset, Moon, Telescope, AlertTriangle, Check } from "lucide-react";
+import { Target, BookOpen, CheckCircle2, Repeat, ChevronRight, Sunrise, Sun, Sunset, Moon, Telescope, AlertTriangle, Check, Clock, Flame } from "lucide-react";
 import type { Goal, Homework, Habit, HabitLog, Class } from "@/lib/db/schema";
 import { syncGoalsToCache } from "@/lib/offline/cache-writers";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { formatDueBadge, urgencyColors, urgencyCardTint } from "@/lib/homework/due-format";
 
 function todayStr(): string {
   const d = new Date();
@@ -14,32 +15,6 @@ function todayStr(): string {
 function isSameDay(a: Date | string, b: Date): boolean {
   const d = typeof a === "string" ? new Date(a + "T00:00:00") : a;
   return d.getFullYear() === b.getFullYear() && d.getMonth() === b.getMonth() && d.getDate() === b.getDate();
-}
-
-function daysUntil(dateStr: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr + "T00:00:00");
-  return Math.round((target.getTime() - today.getTime()) / 86400000);
-}
-
-function formatTime(time: string | null): string | null {
-  if (!time) return null;
-  const [h, m] = time.split(":").map(Number);
-  const hour = h % 12 || 12;
-  const period = h < 12 ? "AM" : "PM";
-  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function formatTargetDate(dateStr: string, time: string | null = null): string {
-  const days = daysUntil(dateStr);
-  const timeStr = formatTime(time);
-  if (days < 0) return timeStr ? `${Math.abs(days)}d overdue · ${timeStr}` : `${Math.abs(days)}d overdue`;
-  if (days === 0) return timeStr ? `today at ${timeStr}` : "today";
-  if (days === 1) return timeStr ? `tomorrow at ${timeStr}` : "tomorrow";
-  if (days <= 6) return timeStr ? `in ${days}d at ${timeStr}` : `in ${days}d`;
-  const dateLabel = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return timeStr ? `${dateLabel} at ${timeStr}` : dateLabel;
 }
 
 const TIME_OF_DAY_ORDER = ["morning", "afternoon", "evening", "night"] as const;
@@ -224,6 +199,20 @@ export default function TodayTab({
 
   const totalDueToday = upcomingHomework.length + carriedOver.length;
 
+  // Urgency breakdown for the header
+  const urgencyBreakdown = useMemo(() => {
+    const all = [...carriedOver, ...upcomingHomework];
+    let overdue = 0, todayCount = 0, tomorrow = 0, soon = 0;
+    for (const h of all) {
+      const badge = formatDueBadge(h.dueDate, h.dueTime, h.status);
+      if (badge.urgency === "overdue") overdue++;
+      else if (badge.urgency === "today") todayCount++;
+      else if (badge.urgency === "tomorrow") tomorrow++;
+      else if (badge.urgency === "soon") soon++;
+    }
+    return { overdue, todayCount, tomorrow, soon };
+  }, [carriedOver, upcomingHomework]);
+
   return (
     <div className="flex flex-col gap-5">
       {/* ── Header ── */}
@@ -231,9 +220,34 @@ export default function TodayTab({
         <h1 className="text-xl font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
           {today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
         </h1>
-        <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-          {totalDueToday === 0 ? "Nothing urgent today" : `${totalDueToday} item${totalDueToday > 1 ? "s" : ""} need attention`}
-        </p>
+        {totalDueToday === 0 ? (
+          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
+            Nothing urgent today
+          </p>
+        ) : (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {urgencyBreakdown.overdue > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "color-mix(in oklab, var(--color-error) 14%, var(--color-paper))", color: "var(--color-error)" }}>
+                <Flame className="h-3 w-3" /> {urgencyBreakdown.overdue} overdue
+              </span>
+            )}
+            {urgencyBreakdown.todayCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "color-mix(in oklab, var(--color-error) 10%, var(--color-paper))", color: "var(--color-error)" }}>
+                <Clock className="h-3 w-3" /> {urgencyBreakdown.todayCount} due today
+              </span>
+            )}
+            {urgencyBreakdown.tomorrow > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))", color: "var(--color-warmth)" }}>
+                {urgencyBreakdown.tomorrow} tomorrow
+              </span>
+            )}
+            {urgencyBreakdown.soon > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: "color-mix(in oklab, var(--color-warmth) 8%, var(--color-paper))", color: "var(--color-warmth)" }}>
+                {urgencyBreakdown.soon} this week
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Unified card wrapping all sections ── */}
@@ -249,15 +263,24 @@ export default function TodayTab({
           accent="var(--color-warmth)"
           onMore={() => onNavigate("homework")}
         >
-          {carriedOver.slice(0, 4).map((h) => (
-            <div key={h.id} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: "color-mix(in oklab, var(--color-warmth) 8%, var(--color-paper))" }}>
-              <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "var(--color-warmth)" }} />
-              <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>{h.title}</span>
-              <span className="text-xs shrink-0" style={{ color: "var(--color-warmth)" }}>
-                {formatTargetDate(h.dueDate)}
-              </span>
-            </div>
-          ))}
+          {carriedOver.slice(0, 4).map((h) => {
+            const badge = formatDueBadge(h.dueDate, h.dueTime, h.status);
+            const colors = urgencyColors(badge.urgency);
+            const tint = urgencyCardTint(badge.urgency);
+            return (
+              <div key={h.id} className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: tint.backgroundColor || "color-mix(in oklab, var(--color-warmth) 8%, var(--color-paper))" }}>
+                <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colors.color }} />
+                <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>{h.title}</span>
+                <span className="text-[11px] shrink-0 px-2 py-0.5 rounded-full font-medium tabular-nums" style={{
+                  backgroundColor: colors.bgColor,
+                  color: colors.color,
+                  fontWeight: colors.fontWeight,
+                }}>
+                  {badge.label}
+                </span>
+              </div>
+            );
+          })}
           {carriedOver.length > 4 && (
             <button onClick={() => onNavigate("homework")} className="text-xs pl-3 pt-1" style={{ color: "var(--color-ink-muted)" }}>
               +{carriedOver.length - 4} more
@@ -279,30 +302,22 @@ export default function TodayTab({
           <>
             {(showAllUpcoming ? upcomingHomework : upcomingShown).map((h) => {
               const cls = h.classId ? classMap.get(h.classId) : null;
-              const days = daysUntil(h.dueDate);
-              const isOverdueItem = days < 0;
-              const isDueTomorrow = days === 1;
+              const badge = formatDueBadge(h.dueDate, h.dueTime, h.status);
+              const colors = urgencyColors(badge.urgency);
+              const tint = urgencyCardTint(badge.urgency);
               return (
                 <div
                   key={h.id}
                   className="flex items-center gap-2 rounded-lg px-3 py-2 transition-colors"
                   style={{
-                    borderLeft: cls ? `3px solid ${cls.color}` : undefined,
-                    marginLeft: cls ? "-3px" : undefined,
-                    paddingLeft: cls ? "12px" : undefined,
-                    backgroundColor: isOverdueItem
-                      ? "color-mix(in oklab, var(--color-error) 4%, transparent)"
-                      : isDueTomorrow
-                        ? "color-mix(in oklab, var(--color-warmth) 5%, transparent)"
-                        : "transparent",
+                    borderLeft: cls ? `3px solid ${cls.color}` : tint.borderLeftColor ? `3px solid ${tint.borderLeftColor}` : undefined,
+                    marginLeft: (cls || tint.borderLeftColor) ? "-3px" : undefined,
+                    paddingLeft: (cls || tint.borderLeftColor) ? "12px" : undefined,
+                    backgroundColor: tint.backgroundColor || "transparent",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--color-paper-2)"; }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = isOverdueItem
-                      ? "color-mix(in oklab, var(--color-error) 4%, transparent)"
-                      : isDueTomorrow
-                        ? "color-mix(in oklab, var(--color-warmth) 5%, transparent)"
-                        : "transparent";
+                    e.currentTarget.style.backgroundColor = tint.backgroundColor || "transparent";
                   }}
                 >
                   <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>
@@ -313,19 +328,12 @@ export default function TodayTab({
                       </span>
                     )}
                   </span>
-                  <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
-                    backgroundColor: isOverdueItem
-                      ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))"
-                      : isDueTomorrow
-                        ? "color-mix(in oklab, var(--color-warmth) 12%, var(--color-paper))"
-                        : "var(--color-paper-2)",
-                    color: isOverdueItem
-                      ? "var(--color-error)"
-                      : isDueTomorrow
-                        ? "var(--color-warmth)"
-                        : "var(--color-ink-muted)",
+                  <span className="text-[11px] shrink-0 px-2 py-0.5 rounded-full font-medium tabular-nums" style={{
+                    backgroundColor: colors.bgColor,
+                    color: colors.color,
+                    fontWeight: colors.fontWeight,
                   }}>
-                    {formatTargetDate(h.dueDate, h.dueTime)}
+                    {badge.label}
                   </span>
                 </div>
               );
@@ -400,14 +408,19 @@ export default function TodayTab({
               >
                 {g.title}
               </span>
-              {g.targetDate && (
-                <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
-                  backgroundColor: daysUntil(g.targetDate) <= 1 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
-                  color: daysUntil(g.targetDate) <= 1 ? "var(--color-error)" : "var(--color-ink-muted)",
-                }}>
-                  {formatTargetDate(g.targetDate)}
-                </span>
-              )}
+              {g.targetDate && (() => {
+                const badge = formatDueBadge(g.targetDate);
+                const colors = urgencyColors(badge.urgency);
+                return (
+                  <span className="text-[11px] shrink-0 px-2 py-0.5 rounded-full font-medium tabular-nums" style={{
+                    backgroundColor: colors.bgColor,
+                    color: colors.color,
+                    fontWeight: colors.fontWeight,
+                  }}>
+                    {badge.label}
+                  </span>
+                );
+              })()}
             </div>
           );
         }}
@@ -570,11 +583,19 @@ export default function TodayTab({
               }}>
                 {g.title}
               </span>
-              {g.targetDate && (
-                <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>
-                  {formatTargetDate(g.targetDate)}
-                </span>
-              )}
+              {g.targetDate && (() => {
+                const badge = formatDueBadge(g.targetDate);
+                const colors = urgencyColors(badge.urgency);
+                return (
+                  <span className="text-[11px] shrink-0 px-2 py-0.5 rounded-full font-medium tabular-nums" style={{
+                    backgroundColor: colors.bgColor,
+                    color: colors.color,
+                    fontWeight: colors.fontWeight,
+                  }}>
+                    {badge.label}
+                  </span>
+                );
+              })()}
             </div>
           );
         }}

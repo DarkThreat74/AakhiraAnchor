@@ -1,31 +1,21 @@
-Add playcaptcha as fallback when Turnstile isn't configured
+Mobile captcha sizing, Today card wrapper, friends accept/reject, device labels, settings restructure
 
-When NEXT_PUBLIC_TURNSTILE_SITE_KEY is not set, the signup page now
-shows a playcaptcha claw machine challenge ("grab the right toy to
-prove you're human") instead of a broken Turnstile widget.
-
-New unified CaptchaWidget component (captcha-widget.tsx):
-- If Turnstile site key is set → renders Cloudflare Turnstile widget
-- If Turnstile site key is missing → renders playcaptcha ClawCaptcha
-- Exposes same CaptchaHandle interface (reset()) for both modes
-- onVerify callback receives a token string in both modes:
-  - Turnstile: real cf-turnstile-response token
-  - Play captcha: synthetic "playcaptcha-verified" token
-
-Server-side (turnstile.ts):
-- When TURNSTILE_SECRET_KEY is not configured in production, accepts
-  the "playcaptcha-verified" token as valid
-- Other security layers still apply (rate limit, honeypot, time-trap,
-  fingerprint)
-- When the secret key IS set, full Turnstile verification is enforced
-
-Signup page (signup/page.tsx):
-- Now imports CaptchaWidget instead of TurnstileWidget directly
-- All existing behavior preserved (timeout, back-button reset, 403 retry)
-
-Assets:
-- Copied 12 toy PNGs to public/toys/ for playcaptcha to load
-- Imported playcaptcha CSS via package export path
+- Playcaptcha: responsive CSS overrides for 375px and 320px screens so the
+  claw machine fits and stays playable on small phones
+- Today tab: wrapped all sections in the same rounded-2xl border card used
+  by Calendar, Prayer, and Settings pages for visual consistency
+- Goals tab nav: replaced the ugly full-screen dropdown with a horizontal
+  scrollable pill bar on mobile
+- Settings: moved Log out to the very bottom; renamed "Delete Account" to
+  "Advanced" with the delete button nested inside
+- Trusted devices: parse User-Agent with ua-parser-js to show real device
+  names (e.g. "Windows - Chrome", "iPhone - Safari") instead of generic
+  "Trusted device"; uses Monitor icon for desktop, Smartphone for mobile
+- Prayer friends: added pending/accepted/rejected status flow with
+  migration 0012; friend requests now require mutual acceptance before
+  either side can see the other's stats; push notifications sent on
+  request and acceptance; pending requests UI with accept/reject buttons
+  in the Prayer dashboard Friends tab
 
 Generated with [Devin](https://devin.ai)
 
