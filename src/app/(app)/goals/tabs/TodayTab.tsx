@@ -83,6 +83,8 @@ export default function TodayTab({
   const upcomingShown = upcomingHomework.slice(0, 5);
   const upcomingRemaining = upcomingHomework.length - upcomingShown.length;
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  // Goals currently animating out (just completed)
+  const [animatingOut, setAnimatingOut] = useState<Set<string>>(new Set());
 
   // ── Class lookup map for homework items ──
   const classMap = useMemo(() => {
@@ -96,16 +98,41 @@ export default function TodayTab({
     async (goal: Goal) => {
       const isDone = goal.status === "done";
       const updates = { status: isDone ? "active" : "done" as const, completedAt: isDone ? null : new Date() };
-      // Optimistic update + cache write
-      setGoals((prev) => {
-        const updated = prev.map((g) =>
-          g.id === goal.id
-            ? { ...g, ...updates, updatedAt: new Date() }
-            : g,
-        );
-        syncGoalsToCache(updated);
-        return updated;
-      });
+
+      if (!isDone) {
+        // Completing: trigger slide-through animation, then remove after it finishes
+        setAnimatingOut((prev) => new Set(prev).add(goal.id));
+        // Update goal to done immediately (shows checkmark + strikethrough during animation)
+        setGoals((prev) => {
+          const updated = prev.map((g) =>
+            g.id === goal.id
+              ? { ...g, ...updates, updatedAt: new Date() }
+              : g,
+          );
+          syncGoalsToCache(updated);
+          return updated;
+        });
+        // After animation completes, clear the animating state
+        setTimeout(() => {
+          setAnimatingOut((prev) => {
+            const next = new Set(prev);
+            next.delete(goal.id);
+            return next;
+          });
+        }, 800);
+      } else {
+        // Uncompleting: just toggle back, no animation
+        setGoals((prev) => {
+          const updated = prev.map((g) =>
+            g.id === goal.id
+              ? { ...g, ...updates, updatedAt: new Date() }
+              : g,
+          );
+          syncGoalsToCache(updated);
+          return updated;
+        });
+      }
+
       try {
         const res = await fetch("/api/goals", {
           method: "PATCH",
@@ -293,9 +320,16 @@ export default function TodayTab({
         items={shortTermGoals}
         renderItem={(g) => {
           const isDone = g.status === "done";
+          const isAnimating = animatingOut.has(g.id);
           const goalColor = g.color || "var(--color-ink-soft)";
           return (
-            <div key={g.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
+            <div
+              key={g.id}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors"
+              style={{
+                animation: isAnimating ? "goalCompleteSlide 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards" : undefined,
+              }}
+            >
               <button
                 onClick={() => toggleGoal(g)}
                 className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all"
@@ -305,12 +339,23 @@ export default function TodayTab({
                 }}
                 aria-label={isDone ? "Mark as active" : "Mark as done"}
               >
-                {isDone && <Check className="h-3 w-3" style={{ color: "var(--color-paper)" }} />}
+                {isDone && (
+                  <Check
+                    className="h-3 w-3"
+                    style={{
+                      color: "var(--color-paper)",
+                      animation: isAnimating ? "checkmarkPop 0.3s ease-out" : undefined,
+                    }}
+                  />
+                )}
               </button>
-              <span className="text-sm truncate flex-1" style={{
-                color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
-                textDecoration: isDone ? "line-through" : "none",
-              }}>
+              <span
+                className="text-sm truncate flex-1"
+                style={{
+                  color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
+                  textDecoration: isDone ? "line-through" : "none",
+                }}
+              >
                 {g.title}
               </span>
               {g.targetDate && (
@@ -436,9 +481,16 @@ export default function TodayTab({
         ) : (
           longTermGoals.map((g) => {
             const isDone = g.status === "done";
+            const isAnimating = animatingOut.has(g.id);
             const goalColor = g.color || "var(--color-ink-muted)";
             return (
-              <div key={g.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
+              <div
+                key={g.id}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors"
+                style={{
+                  animation: isAnimating ? "goalCompleteSlide 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards" : undefined,
+                }}
+              >
                 <button
                   onClick={() => toggleGoal(g)}
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all"
@@ -448,7 +500,15 @@ export default function TodayTab({
                   }}
                   aria-label={isDone ? "Mark as active" : "Mark as done"}
                 >
-                  {isDone && <Check className="h-3 w-3" style={{ color: "var(--color-paper)" }} />}
+                  {isDone && (
+                    <Check
+                      className="h-3 w-3"
+                      style={{
+                        color: "var(--color-paper)",
+                        animation: isAnimating ? "checkmarkPop 0.3s ease-out" : undefined,
+                      }}
+                    />
+                  )}
                 </button>
                 <span className="text-sm truncate flex-1" style={{
                   color: isDone ? "var(--color-ink-muted)" : "var(--color-ink-soft)",
@@ -472,6 +532,44 @@ export default function TodayTab({
         <SummaryCard label="Completed today" value={completedTodayHomework} icon={<CheckCircle2 className="h-4 w-4" />} />
         <SummaryCard label="Habits done" value={`${habitsDone}/${activeHabits.length}`} icon={<Repeat className="h-4 w-4" />} />
       </div>
+
+      <style>{`
+        @keyframes goalCompleteSlide {
+          0% {
+            opacity: 1;
+            transform: translateX(0);
+            background-color: transparent;
+          }
+          20% {
+            opacity: 1;
+            transform: translateX(0);
+            background-color: color-mix(in oklab, var(--color-success) 12%, transparent);
+          }
+          60% {
+            opacity: 1;
+            transform: translateX(8px);
+            background-color: color-mix(in oklab, var(--color-success) 8%, transparent);
+          }
+          100% {
+            opacity: 0;
+            transform: translateX(40px);
+            background-color: transparent;
+          }
+        }
+        @keyframes checkmarkPop {
+          0% {
+            transform: scale(0);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.3);
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   );
 }

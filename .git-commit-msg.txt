@@ -1,28 +1,31 @@
-Fix offline caching gaps: series events fallback, goals toggle, list view cache-first, homework optimistic
+Goal completion animation; homework sort filters with redesigned filter bar
 
-Offline caching improvements across all recently added features:
+Goal completion animation (TodayTab):
+- When a goal is checked off, a slide-through animation plays:
+  1. Row briefly highlights green (success confirmation)
+  2. Checkmark pops in with scale animation
+  3. Row slides right and fades out over 0.8s
+- Works for both short-term and long-term goals
+- Uncompleting (toggling back to active) does not animate
+- CSS keyframes: goalCompleteSlide + checkmarkPop
 
-Series events list (DayViewClient):
-- fetchSeriesEvents now falls back to IndexedDB cache when offline
-- Filters cached events by seriesId to show all occurrences even
-  without network
+Homework sort filters:
+- Added 4 sort modes: Soonest, Ending, Priority, Latest
+  - Soonest: closest due date first (default)
+  - Ending: overdue items first, then closest due date
+  - Priority: high priority first, then by due date
+  - Latest: furthest due date first
+- Sort applies to pending homework only
 
-Goals toggle (TodayTab):
-- Optimistic cache write now happens immediately on toggle, not just
-  on API success
-- Offline goal toggles are persisted to IndexedDB so they survive
-  page reloads
-- When API succeeds, cache is refreshed with server-confirmed data
-
-Calendar list view (ListViewClient):
-- Now loads from IndexedDB cache first for instant display
-- Then fetches from API to get fresh data
-- If offline, cached data remains visible (no loading spinner stuck)
-
-Homework complete toggle (HomeworkClient):
-- No longer reverts optimistic state on network error
-- Offline completions are kept in both UI and cache
-- Previously, completing homework while offline would undo the change
+Redesigned filter bar:
+- Priority and sort filters are now in separate rows
+- Each row has a labeled section header (uppercase, tracked)
+- Filter chips are grouped inside a pill-shaped container with
+  padding, giving a segmented control appearance
+- Active filter has solid background, inactive is transparent
+- Sort buttons include icons (CalendarClock, AlertCircle, etc.)
+- "Clear class" button shortened and moved to sort row
+- Overall more compact and polished than the previous flat chips
 
 Generated with [Devin](https://devin.ai)
 

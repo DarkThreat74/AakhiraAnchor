@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, ChevronRight, Filter, Layers } from "lucide-react";
+import { Plus, Check, Trash2, X, Clock, AlertCircle, BookOpen, ChevronDown, ChevronRight, Filter, Layers, ArrowDownWideNarrow, CalendarClock, CalendarDays } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { getOfflineDB } from "@/lib/offline/db";
 import {
@@ -129,6 +129,7 @@ export default function HomeworkClient({
   const [showAddClass, setShowAddClass] = useState(false);
   const [filterClassId, setFilterClassId] = useState<string | null>(null);
   const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
+  const [sortBy, setSortBy] = useState<"soonest" | "latest" | "priority" | "ending">("soonest");
   const [showCompleted, setShowCompleted] = useState(false);
   const [deleteClassConfirm, setDeleteClassConfirm] = useState<ClassItem | null>(null);
   const [deleteHwConfirm, setDeleteHwConfirm] = useState<HomeworkItem | null>(null);
@@ -394,12 +395,40 @@ export default function HomeworkClient({
   const pending = filtered.filter((h) => h.status === "pending");
   const completed = filtered.filter((h) => h.status === "completed");
 
-  // Sort pending by priority then due date
+  // Sort pending based on selected sort mode
   const sortedPending = [...pending].sort((a, b) => {
-    const pa = PRIORITY_ORDER[a.priority] ?? 1;
-    const pb = PRIORITY_ORDER[b.priority] ?? 1;
-    if (pa !== pb) return pa - pb;
-    return a.dueDate.localeCompare(b.dueDate);
+    switch (sortBy) {
+      case "soonest": {
+        // Soonest due first, then by due time
+        const dateCmp = a.dueDate.localeCompare(b.dueDate);
+        if (dateCmp !== 0) return dateCmp;
+        return (a.dueTime || "23:59").localeCompare(b.dueTime || "23:59");
+      }
+      case "latest": {
+        // Latest due date first (furthest away)
+        const dateCmp = b.dueDate.localeCompare(a.dueDate);
+        if (dateCmp !== 0) return dateCmp;
+        return (b.dueTime || "00:00").localeCompare(a.dueTime || "00:00");
+      }
+      case "ending": {
+        // Ending soonest = closest to end (overdue first, then by due date ascending)
+        // Same as soonest but prioritizes overdue items at top
+        const aOverdue = isOverdue(a) ? 0 : 1;
+        const bOverdue = isOverdue(b) ? 0 : 1;
+        if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+        const dateCmp = a.dueDate.localeCompare(b.dueDate);
+        if (dateCmp !== 0) return dateCmp;
+        return (a.dueTime || "23:59").localeCompare(b.dueTime || "23:59");
+      }
+      case "priority":
+      default: {
+        // By priority (high first), then by due date
+        const pa = PRIORITY_ORDER[a.priority] ?? 1;
+        const pb = PRIORITY_ORDER[b.priority] ?? 1;
+        if (pa !== pb) return pa - pb;
+        return a.dueDate.localeCompare(b.dueDate);
+      }
+    }
   });
 
   const overdue = sortedPending.filter(isOverdue);
@@ -714,40 +743,74 @@ export default function HomeworkClient({
         </div>
       )}
 
-      {/* ── Priority filter chips ── */}
+      {/* ── Filter & sort bar ── */}
       {(pending.length > 0 || completed.length > 0) && (
-        <div className="mb-4 flex items-center gap-1.5 flex-wrap">
-          <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
-            <Filter className="h-3 w-3" />
-            Priority:
-          </span>
-          {(["all", "high", "medium", "low"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setFilterPriority(p)}
-              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: filterPriority === p
-                  ? p === "all" ? "var(--color-ink)" : `color-mix(in oklab, ${PRIORITY_COLORS[p]} 15%, var(--color-paper))`
-                  : "var(--color-paper-2)",
-                color: filterPriority === p
-                  ? p === "all" ? "var(--color-paper)" : PRIORITY_COLORS[p]
-                  : "var(--color-ink-muted)",
-              }}
-            >
-              {p === "all" ? "All" : p.charAt(0).toUpperCase() + p.slice(1)}
-            </button>
-          ))}
-          {filterClassId && (
-            <button
-              onClick={() => setFilterClassId(null)}
-              className="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{ backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-muted)" }}
-            >
-              <X className="h-3 w-3" />
-              Clear class filter
-            </button>
-          )}
+        <div className="mb-4 flex flex-col gap-2.5">
+          {/* Priority filter row */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              <Filter className="h-3 w-3" />
+              Priority
+            </span>
+            <div className="flex items-center gap-1 rounded-full p-0.5" style={{ backgroundColor: "var(--color-paper-2)" }}>
+              {(["all", "high", "medium", "low"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setFilterPriority(p)}
+                  className="rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: filterPriority === p
+                      ? p === "all" ? "var(--color-ink)" : `color-mix(in oklab, ${PRIORITY_COLORS[p]} 15%, var(--color-paper))`
+                      : "transparent",
+                    color: filterPriority === p
+                      ? p === "all" ? "var(--color-paper)" : PRIORITY_COLORS[p]
+                      : "var(--color-ink-muted)",
+                  }}
+                >
+                  {p === "all" ? "All" : p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort row */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+              <ArrowDownWideNarrow className="h-3 w-3" />
+              Sort
+            </span>
+            <div className="flex items-center gap-1 rounded-full p-0.5" style={{ backgroundColor: "var(--color-paper-2)" }}>
+              {([
+                { key: "soonest" as const, label: "Soonest", icon: CalendarClock },
+                { key: "ending" as const, label: "Ending", icon: AlertCircle },
+                { key: "priority" as const, label: "Priority", icon: ArrowDownWideNarrow },
+                { key: "latest" as const, label: "Latest", icon: CalendarDays },
+              ]).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setSortBy(key)}
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: sortBy === key ? "var(--color-ink)" : "transparent",
+                    color: sortBy === key ? "var(--color-paper)" : "var(--color-ink-muted)",
+                  }}
+                >
+                  <Icon className="h-3 w-3" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filterClassId && (
+              <button
+                onClick={() => setFilterClassId(null)}
+                className="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+                style={{ backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-muted)" }}
+              >
+                <X className="h-3 w-3" />
+                Clear class
+              </button>
+            )}
+          </div>
         </div>
       )}
 
