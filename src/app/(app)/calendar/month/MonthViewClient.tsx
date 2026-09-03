@@ -396,15 +396,35 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                   opacity: done ? 0.6 : 1,
                 }}
               >
-                {/* Day number + all-prayed check */}
+                {/* Day number + homework squares + all-prayed check */}
                 <span
-                  className="mb-0.5 flex items-center justify-between font-medium tabular-nums"
+                  className="mb-0.5 flex items-center justify-between gap-1 font-medium tabular-nums"
                   style={{
                     color: isToday ? "var(--color-accent)" : done ? "var(--color-ink-muted)" : "var(--color-ink)",
                     fontSize: 11,
                   }}
                 >
-                  {cell.day}
+                  <span className="flex items-center gap-1">
+                    {cell.day}
+                    {/* Homework squares — next to the number, distinct from notification dots */}
+                    {cell.dateStr && homeworkByDate[cell.dateStr] && homeworkByDate[cell.dateStr].length > 0 && (
+                      <span className="flex items-center gap-0.5">
+                        {homeworkByDate[cell.dateStr].slice(0, 3).map((hw) => (
+                          <span
+                            key={hw.id}
+                            className="h-1.5 w-1.5 shrink-0 rounded-[1px]"
+                            style={{ backgroundColor: hw.classColor || "var(--color-warmth)" }}
+                            title="Homework due"
+                          />
+                        ))}
+                        {homeworkByDate[cell.dateStr].length > 3 && (
+                          <span className="text-[9px] font-semibold" style={{ color: "var(--color-ink-muted)" }}>
+                            +{homeworkByDate[cell.dateStr].length - 3}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </span>
                   {allPrayed && (
                     <Check className="h-3 w-3" style={{ color: "var(--color-success)" }} />
                   )}
@@ -464,24 +484,6 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
                     </div>
                   )}
 
-                  {/* Homework dots — class-colored dots for pending homework due this day */}
-                  {cell.dateStr && homeworkByDate[cell.dateStr] && homeworkByDate[cell.dateStr].length > 0 && (
-                    <div className="mt-0.5 flex flex-wrap items-center gap-0.5">
-                      {homeworkByDate[cell.dateStr].slice(0, 4).map((hw) => (
-                        <span
-                          key={hw.id}
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: hw.classColor || "var(--color-accent)" }}
-                          title="Homework due"
-                        />
-                      ))}
-                      {homeworkByDate[cell.dateStr].length > 4 && (
-                        <span className="text-[10px] font-medium" style={{ color: "var(--color-ink-muted)" }}>
-                          +{homeworkByDate[cell.dateStr].length - 4}
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* X overlay for done days — nice diagonal X */}

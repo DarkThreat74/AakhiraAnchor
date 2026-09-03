@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Target, BookOpen, CheckCircle2, Repeat, ChevronRight, Sunrise, Sun, Sunset, Moon, Telescope, AlertTriangle } from "lucide-react";
-import type { Goal, Homework, Habit, HabitLog } from "@/lib/db/schema";
+import { useMemo, useState, useCallback } from "react";
+import { Target, BookOpen, CheckCircle2, Repeat, ChevronRight, Sunrise, Sun, Sunset, Moon, Telescope, AlertTriangle, Check } from "lucide-react";
+import type { Goal, Homework, Habit, HabitLog, Class } from "@/lib/db/schema";
+import { syncGoalsToCache } from "@/lib/offline/cache-writers";
+import { clearApiCache } from "@/lib/sw-helpers";
 
 function todayStr(): string {
   const d = new Date();
@@ -40,13 +42,17 @@ const TIME_OF_DAY_LABELS: Record<string, { label: string; icon: typeof Sunrise }
 
 export default function TodayTab({
   goals,
+  setGoals,
   homework,
+  classes,
   habits,
   habitLogs,
   onNavigate,
 }: {
   goals: Goal[];
+  setGoals: React.Dispatch<React.SetStateAction<Goal[]>>;
   homework: Homework[];
+  classes: Class[];
   habits: Habit[];
   habitLogs: HabitLog[];
   onNavigate: (tab: string) => void;
@@ -78,6 +84,48 @@ export default function TodayTab({
   const upcomingRemaining = upcomingHomework.length - upcomingShown.length;
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
 
+  // ── Class lookup map for homework items ──
+  const classMap = useMemo(() => {
+    const m = new Map<string, Class>();
+    for (const c of classes) m.set(c.id, c);
+    return m;
+  }, [classes]);
+
+  // ── Toggle goal completion (active <-> done) ──
+  const toggleGoal = useCallback(
+    async (goal: Goal) => {
+      const isDone = goal.status === "done";
+      const updates = { status: isDone ? "active" : "done" as const, completedAt: isDone ? null : new Date() };
+      setGoals((prev) =>
+        prev.map((g) =>
+          g.id === goal.id
+            ? { ...g, ...updates, updatedAt: new Date() }
+            : g,
+        ),
+      );
+      try {
+        const res = await fetch("/api/goals", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ id: goal.id, ...updates }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.goal) {
+          setGoals((prev) => {
+            const updated = prev.map((g) => (g.id === goal.id ? data.goal : g));
+            syncGoalsToCache(updated);
+            return updated;
+          });
+          void clearApiCache();
+        }
+      } catch {
+        // keep optimistic state
+      }
+    },
+    [setGoals],
+  );
+
   // ── Short-term active goals (optionally with target dates) ──
   const shortTermGoals = useMemo(
     () => goals
@@ -89,7 +137,7 @@ export default function TodayTab({
         if (!a.targetDate && b.targetDate) return 1;
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       })
-      .slice(0, 5),
+      .slice(0, 3),
     [goals],
   );
 
@@ -185,18 +233,31 @@ export default function TodayTab({
           <EmptyRow icon={<CheckCircle2 className="h-4 w-4" />} text="No upcoming homework" />
         ) : (
           <>
-            {(showAllUpcoming ? upcomingHomework : upcomingShown).map((h) => (
-              <div key={h.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
-                <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: h.priority === "high" ? "var(--color-error)" : h.priority === "medium" ? "var(--color-accent)" : "var(--color-paper-3)" }} />
-                <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>{h.title}</span>
-                <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
-                  backgroundColor: daysUntil(h.dueDate) <= 0 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
-                  color: daysUntil(h.dueDate) <= 0 ? "var(--color-error)" : "var(--color-ink-muted)",
-                }}>
-                  {formatTargetDate(h.dueDate)}
-                </span>
-              </div>
-            ))}
+            {(showAllUpcoming ? upcomingHomework : upcomingShown).map((h) => {
+              const cls = h.classId ? classMap.get(h.classId) : null;
+              return (
+                <div
+                  key={h.id}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors"
+                  style={{ borderLeft: cls ? `3px solid ${cls.color}` : undefined, marginLeft: cls ? "-3px" : undefined, paddingLeft: cls ? "12px" : undefined }}
+                >
+                  <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>
+                    {h.title}
+                    {cls && (
+                      <span className="ml-1.5 text-[11px] font-normal" style={{ color: cls.color }}>
+                        ({cls.name})
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
+                    backgroundColor: daysUntil(h.dueDate) <= 0 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
+                    color: daysUntil(h.dueDate) <= 0 ? "var(--color-error)" : "var(--color-ink-muted)",
+                  }}>
+                    {formatTargetDate(h.dueDate)}
+                  </span>
+                </div>
+              );
+            })}
             {!showAllUpcoming && upcomingRemaining > 0 && (
               <button
                 onClick={() => setShowAllUpcoming(true)}
@@ -219,28 +280,47 @@ export default function TodayTab({
         )}
       </Section>
 
-      {/* ── Goals for this week (short-term, collapsible) ── */}
+      {/* ── Goals for this week (short-term, max 3) ── */}
       <CollapsibleSection
         icon={<Target className="h-4 w-4" />}
         title="Goals for this week"
         count={shortTermGoals.length}
         onMore={() => onNavigate("short-term")}
-        initialLimit={4}
+        initialLimit={3}
         items={shortTermGoals}
-        renderItem={(g) => (
-          <div key={g.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
-            <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: g.color || "var(--color-accent)" }} />
-            <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink)" }}>{g.title}</span>
-            {g.targetDate && (
-              <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
-                backgroundColor: daysUntil(g.targetDate) <= 1 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
-                color: daysUntil(g.targetDate) <= 1 ? "var(--color-error)" : "var(--color-ink-muted)",
+        renderItem={(g) => {
+          const isDone = g.status === "done";
+          const goalColor = g.color || "var(--color-ink-soft)";
+          return (
+            <div key={g.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
+              <button
+                onClick={() => toggleGoal(g)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all"
+                style={{
+                  borderColor: isDone ? goalColor : "var(--color-paper-3)",
+                  backgroundColor: isDone ? goalColor : "transparent",
+                }}
+                aria-label={isDone ? "Mark as active" : "Mark as done"}
+              >
+                {isDone && <Check className="h-3 w-3" style={{ color: "var(--color-paper)" }} />}
+              </button>
+              <span className="text-sm truncate flex-1" style={{
+                color: isDone ? "var(--color-ink-muted)" : "var(--color-ink)",
+                textDecoration: isDone ? "line-through" : "none",
               }}>
-                {formatTargetDate(g.targetDate)}
+                {g.title}
               </span>
-            )}
-          </div>
-        )}
+              {g.targetDate && (
+                <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style={{
+                  backgroundColor: daysUntil(g.targetDate) <= 1 ? "color-mix(in oklab, var(--color-error) 15%, var(--color-paper))" : "var(--color-paper-2)",
+                  color: daysUntil(g.targetDate) <= 1 ? "var(--color-error)" : "var(--color-ink-muted)",
+                }}>
+                  {formatTargetDate(g.targetDate)}
+                </span>
+              )}
+            </div>
+          );
+        }}
         emptyIcon={<Target className="h-4 w-4" />}
         emptyText="No goals for this week"
       />
@@ -342,26 +422,47 @@ export default function TodayTab({
       </Section>
 
       {/* ── On the horizon (long-term goals) ── */}
-      {longTermGoals.length > 0 && (
-        <Section
-          icon={<Telescope className="h-4 w-4" />}
-          title="Goals long-term"
-          count={longTermGoals.length}
-          onMore={() => onNavigate("long-term")}
-        >
-          {longTermGoals.map((g) => (
-            <div key={g.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
-              <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: g.color || "var(--color-ink-muted)", opacity: 0.6 }} />
-              <span className="text-sm truncate flex-1" style={{ color: "var(--color-ink-soft)" }}>{g.title}</span>
-              {g.targetDate && (
-                <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>
-                  {formatTargetDate(g.targetDate)}
+      <Section
+        icon={<Telescope className="h-4 w-4" />}
+        title="Goals long-term"
+        count={longTermGoals.length}
+        onMore={() => onNavigate("long-term")}
+      >
+        {longTermGoals.length === 0 ? (
+          <EmptyRow icon={<Telescope className="h-4 w-4" />} text="No long-term goals yet" />
+        ) : (
+          longTermGoals.map((g) => {
+            const isDone = g.status === "done";
+            const goalColor = g.color || "var(--color-ink-muted)";
+            return (
+              <div key={g.id} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[var(--color-paper-2)] transition-colors">
+                <button
+                  onClick={() => toggleGoal(g)}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all"
+                  style={{
+                    borderColor: isDone ? goalColor : "var(--color-paper-3)",
+                    backgroundColor: isDone ? goalColor : "transparent",
+                  }}
+                  aria-label={isDone ? "Mark as active" : "Mark as done"}
+                >
+                  {isDone && <Check className="h-3 w-3" style={{ color: "var(--color-paper)" }} />}
+                </button>
+                <span className="text-sm truncate flex-1" style={{
+                  color: isDone ? "var(--color-ink-muted)" : "var(--color-ink-soft)",
+                  textDecoration: isDone ? "line-through" : "none",
+                }}>
+                  {g.title}
                 </span>
-              )}
-            </div>
-          ))}
-        </Section>
-      )}
+                {g.targetDate && (
+                  <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>
+                    {formatTargetDate(g.targetDate)}
+                  </span>
+                )}
+              </div>
+            );
+          })
+        )}
+      </Section>
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-2 gap-3 mt-2">

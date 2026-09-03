@@ -1,26 +1,29 @@
-Homework UX improvements: collapsible classes, confirmations, due times, upcoming in Today
+Today tab: class colors on homework, clickable goal circles, long-term goals; month view homework squares
 
-Today tab:
-- Replaced "Due today" section with "Upcoming" showing the 5 closest
-  pending homework sorted by due date+time
-- "More" button expands to show all upcoming; "Show less" collapses
-- Each item shows priority dot, title, and relative date badge
-  (today/tomorrow/in 3d/etc.)
+Today tab - Upcoming homework:
+- Each item now shows a left border in the class color
+- Class name shown in parentheses in the class color, compact
+  (e.g. "Mosquito Pre-lab Quiz (AP Biology)")
+- Removed the priority dot in favor of the class color border
 
-Homework tab:
-- Classes section is now a collapsible dropdown (collapsed by default)
-  so homework is the main focus
-- Class count badge and active filter chip shown in the dropdown header
-- Compact "Add" button inside the dropdown header
-- Class rows show color dot, name, pending count, and always-visible
-  delete button (works on mobile, no longer hover-only)
-- Delete homework now requires confirmation modal
-- Completing homework now requires confirmation ("Did you complete it?"
-  with "Yes, completed" / "Not yet")
-- Uncompleting (re-opening) does not require confirmation
-- Due time now shown on cards when set (e.g. "Due at 12:00 PM",
-  "Tomorrow at 9:30 AM", "In 3 days at 2:00 PM")
-- Overdue items with due time show "2d overdue - Due at 12:00 PM"
+Today tab - Goals:
+- Short-term goals now limited to max 3 (was 5)
+- Short-term and long-term goals use clickable circle checkboxes
+  instead of static dots - tap to toggle done/active
+- Completed goals show checkmark inside circle, line-through text
+- Long-term goals section now always visible (not just when > 0)
+  with empty state "No long-term goals yet"
+- Default goal color changed from green (var(--color-accent)) to
+  var(--color-ink-soft) for short-term and var(--color-ink-muted)
+  for long-term, so goals are no longer all green by default
+- Goal toggle calls PATCH /api/goals with optimistic update
+
+Month view - Homework indicators:
+- Changed from round dots to small squares (rounded-[1px]) to
+  differentiate from notification dots
+- Moved from bottom of cell to top, next to the day number
+- Max 3 squares shown (was 4 dots), with "+N" overflow counter
+- Default color changed to var(--color-warmth) when no class color
 
 Generated with [Devin](https://devin.ai)
 
