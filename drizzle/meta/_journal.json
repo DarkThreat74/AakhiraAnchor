@@ -64,6 +64,34 @@
       "when": 1787850000000,
       "tag": "0008_user_names_prayer_code",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787950000000,
+      "tag": "0009_homework",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788050000000,
+      "tag": "0010_goals_habits_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788150000000,
+      "tag": "0011_goals_target_date_habits_time",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788250000000,
+      "tag": "0012_prayer_friends_status",
+      "breakpoints": true
     }
   ]
 }

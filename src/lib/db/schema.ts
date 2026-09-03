@@ -75,17 +75,22 @@ export const users = pgTable('users', {
   prayerCode: text('prayer_code').unique(),
 });
 
-// ─── Prayer Friends (share streak access via code) ───
+// ─── Prayer Friends (share streak access via code, with accept/reject flow) ───
+
+export const prayerFriendStatus = pgEnum('prayer_friend_status', ['pending', 'accepted', 'rejected']);
 
 export const prayerFriends = pgTable(
   'prayer_friends',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // The user who added the friend
+    // The user who sent the friend request
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    // The friend being added
+    // The user who received the request
     friendId: uuid('friend_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    status: prayerFriendStatus('status').default('pending').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    // When the request was accepted or rejected
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
   },
   (table) => [
     uniqueIndex('prayer_friends_user_friend_idx').on(table.userId, table.friendId),

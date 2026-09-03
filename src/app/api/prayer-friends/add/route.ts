@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, or, gte } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { calculateStreak } from "@/lib/prayer/checkin";
+import { sendPrayerPush } from "@/lib/notifications/push";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/prayer-friends/add — add a friend by their prayer code
+// POST /api/prayer-friends/add — send a friend request by prayer code
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -50,9 +50,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You can't add yourself." }, { status: 400 });
   }
 
-  // Check if already friends (either direction, since friendship is bidirectional)
+  // Check if a request already exists in either direction
   const [existing] = await db
-    .select()
+    .select({
+      id: schema.prayerFriends.id,
+      status: schema.prayerFriends.status,
+      userId: schema.prayerFriends.userId,
+      friendId: schema.prayerFriends.friendId,
+    })
     .from(schema.prayerFriends)
     .where(
       or(
@@ -69,65 +74,83 @@ export async function POST(request: NextRequest) {
     .limit(1);
 
   if (existing) {
-    return NextResponse.json({ error: "Already friends." }, { status: 409 });
+    if (existing.status === "accepted") {
+      return NextResponse.json({ error: "Already friends." }, { status: 409 });
+    }
+    if (existing.status === "pending") {
+      // If the OTHER person sent the request to ME, auto-accept
+      if (existing.userId === friendUser.id && existing.friendId === session.userId) {
+        await db
+          .update(schema.prayerFriends)
+          .set({ status: "accepted", respondedAt: new Date() })
+          .where(eq(schema.prayerFriends.id, existing.id));
+        // Insert the reverse row
+        await db
+          .insert(schema.prayerFriends)
+          .values({
+            userId: session.userId,
+            friendId: friendUser.id,
+            status: "accepted",
+            respondedAt: new Date(),
+          })
+          .onConflictDoNothing();
+        return NextResponse.json({ ok: true, friend: { id: friendUser.id, firstName: friendUser.firstName, displayName: friendUser.displayName } });
+      }
+      return NextResponse.json({ error: "Friend request already sent." }, { status: 409 });
+    }
+    if (existing.status === "rejected") {
+      // If it was rejected before, allow re-sending by updating to pending
+      await db
+        .update(schema.prayerFriends)
+        .set({ status: "pending", respondedAt: null })
+        .where(eq(schema.prayerFriends.id, existing.id));
+      return NextResponse.json({ ok: true, pending: true, message: "Friend request sent." });
+    }
   }
 
-  // Add bidirectional friendship — both users get access to each other's data
-  await db.insert(schema.prayerFriends).values([
-    { userId: session.userId, friendId: friendUser.id },
-    { userId: friendUser.id, friendId: session.userId },
-  ]);
+  // Create a pending friend request (one row — the target must accept)
+  await db
+    .insert(schema.prayerFriends)
+    .values({
+      userId: session.userId,
+      friendId: friendUser.id,
+      status: "pending",
+    })
+    .onConflictDoNothing();
 
-  // Get friend's streak for the response — limit to 90-day window and run
-  // both queries in parallel to avoid sequential round-trips.
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const fromStr = ninetyDaysAgo.toISOString().split("T")[0];
+  // Send push notification to the target user
+  try {
+    const [requester] = await db
+      .select({ firstName: schema.users.firstName, displayName: schema.users.displayName })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
 
-  const [friendLogs, friendSettingsRows] = await Promise.all([
-    db
-      .select({
-        date: schema.prayerLog.date,
-        status: schema.prayerLog.status,
-      })
-      .from(schema.prayerLog)
-      .where(
-        and(
-          eq(schema.prayerLog.userId, friendUser.id),
-          gte(schema.prayerLog.date, fromStr),
-        ),
-      ),
-    db
-      .select({ timezone: schema.prayerSettings.timezone })
-      .from(schema.prayerSettings)
-      .where(eq(schema.prayerSettings.userId, friendUser.id))
-      .limit(1),
-  ]);
+    const requesterName = requester?.firstName || requester?.displayName || "Someone";
+    const subs = await db
+      .select()
+      .from(schema.pushSubscriptions)
+      .where(eq(schema.pushSubscriptions.userId, friendUser.id));
 
-  const timezone = friendSettingsRows[0]?.timezone || "America/Chicago";
-  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
-
-  const logsByDate = new Map<string, Array<{ status: string }>>();
-  let completeDays = 0;
-  for (const log of friendLogs) {
-    const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-    if (!logsByDate.has(dateStr)) logsByDate.set(dateStr, []);
-    logsByDate.get(dateStr)!.push({ status: log.status });
+    for (const sub of subs) {
+      await sendPrayerPush(sub, JSON.stringify({
+        title: "New friend request",
+        body: `${requesterName} wants to connect with you on Waqt. Tap to accept or reject.`,
+        url: "/prayer",
+      }));
+    }
+  } catch {
+    // Push notification is best-effort
   }
-  for (const [, logs] of logsByDate) {
-    if (logs.filter((l) => l.status === "prayed" || l.status === "assumed_prayed").length === 5) completeDays++;
-  }
-
-  const streak = calculateStreak(logsByDate, todayStr);
 
   return NextResponse.json({
     ok: true,
+    pending: true,
+    message: "Friend request sent. They'll need to accept it.",
     friend: {
       id: friendUser.id,
       firstName: friendUser.firstName,
       displayName: friendUser.displayName,
-      streak,
-      totalCompleteDays: completeDays,
     },
   });
 }

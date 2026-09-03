@@ -5,6 +5,7 @@ import { db, schema } from "@/lib/db/client";
 import { setSessionCookie } from "@/lib/auth/session";
 import { isValidEmail, isHoneypotTripped, isTimeTrapTripped, isValidFingerprintHash } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { getDeviceLabel } from "@/lib/auth/device-label";
 
 export const dynamic = "force-dynamic";
 
@@ -121,15 +122,17 @@ export async function POST(request: NextRequest) {
   // Uses onConflictDoUpdate to upsert in a single query (no check-then-insert race)
   if (validFingerprint) {
     try {
+      const deviceLabel = getDeviceLabel(request.headers.get('user-agent'));
       await db
         .insert(schema.trustedDevices)
         .values({
           userId: user.id,
           fingerprintHash,
+          label: deviceLabel,
         })
         .onConflictDoUpdate({
           target: [schema.trustedDevices.userId, schema.trustedDevices.fingerprintHash],
-          set: { lastUsedAt: new Date() },
+          set: { lastUsedAt: new Date(), label: deviceLabel },
         });
     } catch {
       // Non-critical — device trust is a convenience, not a security requirement

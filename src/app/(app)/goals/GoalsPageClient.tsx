@@ -10,7 +10,6 @@ import {
   StickyNote,
   Inbox,
   CheckCircle2,
-  ChevronDown,
 } from "lucide-react";
 import type { Goal, Homework, Class, Habit, HabitLog, Note } from "@/lib/db/schema";
 import { getOfflineDB } from "@/lib/offline/db";
@@ -77,7 +76,6 @@ export default function GoalsPageClient({
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>(initialHabitLogs);
   const [notes, setNotes] = useState<Note[]>(initialNotes);
-  const [showTabMenu, setShowTabMenu] = useState(false);
 
   // ── Update URL hash when tab changes ──
   useEffect(() => {
@@ -178,7 +176,6 @@ export default function GoalsPageClient({
   }, [refreshAll]);
 
   // ── Tab bar (scrollable on mobile) ──
-  const activeTabDef = TABS.find((t) => t.id === activeTab) || TABS[0];
 
   return (
     <div className="flex min-h-dvh flex-col" style={{ backgroundColor: "var(--color-paper)" }}>
@@ -216,47 +213,28 @@ export default function GoalsPageClient({
           </div>
         </div>
 
-        {/* Mobile: dropdown tab selector */}
+        {/* Mobile: horizontal scrollable tab bar */}
         <div className="lg:hidden">
-          <button
-            onClick={() => setShowTabMenu(!showTabMenu)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium"
-            style={{ color: "var(--color-ink)" }}
-          >
-            <span className="flex items-center gap-2">
-              <activeTabDef.icon className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
-              {activeTabDef.label}
-            </span>
-            <ChevronDown
-              className="h-4 w-4 transition-transform"
-              style={{ color: "var(--color-ink-muted)", transform: showTabMenu ? "rotate(180deg)" : "none" }}
-            />
-          </button>
-          {showTabMenu && (
-            <div
-              className="absolute left-0 right-0 z-40 border-b"
-              style={{ backgroundColor: "var(--color-paper)", borderColor: "var(--color-paper-3)" }}
-            >
-              {TABS.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium transition-colors"
-                    style={{
-                      backgroundColor: isActive ? "var(--color-paper-2)" : "transparent",
-                      color: isActive ? "var(--color-ink)" : "var(--color-ink-muted)",
-                    }}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex items-center gap-1 overflow-x-auto px-3 py-2" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: isActive ? "var(--color-ink)" : "var(--color-paper-2)",
+                    color: isActive ? "var(--color-paper)" : "var(--color-ink-muted)",
+                  }}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

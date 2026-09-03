@@ -23,7 +23,12 @@ export async function GET(request: NextRequest) {
       friendId: schema.prayerFriends.friendId,
     })
     .from(schema.prayerFriends)
-    .where(eq(schema.prayerFriends.userId, session.userId));
+    .where(
+      and(
+        eq(schema.prayerFriends.userId, session.userId),
+        eq(schema.prayerFriends.status, "accepted"),
+      ),
+    );
 
   if (friendships.length === 0) {
     return NextResponse.json([]);

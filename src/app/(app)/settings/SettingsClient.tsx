@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone, ChevronDown, ChevronUp, Pencil, Lightbulb } from "lucide-react";
+import { MapPin, RefreshCw, Check, AlertCircle, LogOut, Link2, Copy, ExternalLink, Trash2, User, Bell, BellOff, Send, Sun, Moon, Monitor, Fingerprint, Smartphone, ChevronDown, ChevronUp, Pencil, Lightbulb, Settings2 } from "lucide-react";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { isNativeApp } from "@/lib/native-bridge";
 import { clearOfflineCache } from "@/lib/offline/db";
@@ -1698,6 +1698,8 @@ export default function SettingsClient({
                 const lastUsed = new Date(device.lastUsedAt);
                 const created = new Date(device.createdAt);
                 const daysAgo = Math.floor((Date.now() - lastUsed.getTime()) / (1000 * 60 * 60 * 24));
+                const isMobile = device.label?.includes("iPhone") || device.label?.includes("Android") || device.label?.includes("iPad");
+                const DeviceIcon = isMobile ? Smartphone : Monitor;
                 return (
                   <div
                     key={device.id}
@@ -1705,7 +1707,7 @@ export default function SettingsClient({
                     style={{ borderColor: "var(--color-paper-3)" }}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <Smartphone className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
+                      <DeviceIcon className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>
                           {device.label || "Trusted device"}
@@ -1732,21 +1734,6 @@ export default function SettingsClient({
           )}
         </CollapsibleSection>
 
-        {/* ── Logout ── */}
-        <div className="p-4 sm:p-6">
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
-            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-error)" }}
-          >
-            <LogOut className="h-4 w-4" />
-            {loggingOut ? "Logging out..." : "Log out"}
-          </button>
-        </div>
-
-        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
-
         {/* ── Learn / Knowledge cards — collapsible ── */}
         <CollapsibleSection
           icon={<Lightbulb className="h-4 w-4 shrink-0" style={{ color: "var(--color-accent)" }} />}
@@ -1762,14 +1749,14 @@ export default function SettingsClient({
 
         <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
 
-        {/* ── Delete Account — collapsible ── */}
+        {/* ── Advanced settings (delete account) — collapsible ── */}
         <CollapsibleSection
-          icon={<Trash2 className="h-4 w-4 shrink-0" style={{ color: "var(--color-error)" }} />}
-          title="Delete Account"
+          icon={<Settings2 className="h-4 w-4 shrink-0" style={{ color: "var(--color-ink-muted)" }} />}
+          title="Advanced"
           defaultOpen={false}
         >
           <p className="mb-3 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-            Permanently delete your account and remove all personal information.
+            Advanced account settings. Deleting your account permanently removes all personal information.
             Your prayer logs and calendar events will be anonymized but retained
             for aggregate analytics. This action cannot be undone.
           </p>
@@ -1808,6 +1795,21 @@ export default function SettingsClient({
             </div>
           )}
         </CollapsibleSection>
+
+        <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
+
+        {/* ── Logout — at the very bottom ── */}
+        <div className="p-4 sm:p-6">
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-error)" }}
+          >
+            <LogOut className="h-4 w-4" />
+            {loggingOut ? "Logging out..." : "Log out"}
+          </button>
+        </div>
       </div>
     </div>
   );

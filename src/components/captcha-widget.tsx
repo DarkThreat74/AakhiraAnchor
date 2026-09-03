@@ -70,7 +70,7 @@ export const CaptchaWidget = forwardRef<CaptchaHandle, CaptchaWidgetProps>(
 
     // Fallback: playcaptcha (claw machine)
     return (
-      <div className="flex flex-col items-center gap-3">
+      <div className="waqt-captcha-wrap flex flex-col items-center gap-3 w-full">
         <ClawCaptcha
           target={targetToy}
           onVerify={() => {
@@ -81,6 +81,92 @@ export const CaptchaWidget = forwardRef<CaptchaHandle, CaptchaWidgetProps>(
           title="Grab the right toy to verify"
           assetBase="/toys/"
         />
+        <style>{`
+          /* ── Mobile-responsive overrides for playcaptcha ── */
+          .waqt-captcha-wrap .clawcap {
+            width: 100%;
+            max-width: 380px;
+            padding: 16px 14px 14px;
+            border-radius: 24px;
+          }
+          .waqt-captcha-wrap .clawcap-machine {
+            width: 100%;
+            max-width: 320px;
+          }
+          .waqt-captcha-wrap .clawcap-glass {
+            height: 280px;
+          }
+          .waqt-captcha-wrap .clawcap-title {
+            font-size: 1.0625rem;
+            margin: 8px 0 4px;
+          }
+          .waqt-captcha-wrap .clawcap-sub {
+            margin-bottom: 14px;
+            font-size: 0.75rem;
+          }
+          .waqt-captcha-wrap .clawcap-steps {
+            width: 100%;
+            max-width: 240px;
+            margin-bottom: 14px;
+          }
+
+          /* ── 375px and below (iPhone SE, small phones) ── */
+          @media (max-width: 375px) {
+            .waqt-captcha-wrap .clawcap {
+              max-width: 100%;
+              padding: 12px 10px 10px;
+              border-radius: 20px;
+            }
+            .waqt-captcha-wrap .clawcap-machine {
+              max-width: 100%;
+            }
+            .waqt-captcha-wrap .clawcap-glass {
+              height: 240px;
+              border-radius: 12px;
+            }
+            .waqt-captcha-wrap .clawcap-case {
+              border-radius: 18px;
+              padding: 6px;
+            }
+            .waqt-captcha-wrap .clawcap-title {
+              font-size: 0.9375rem;
+            }
+            .waqt-captcha-wrap .clawcap-sub {
+              font-size: 0.6875rem;
+              margin-bottom: 10px;
+            }
+            .waqt-captcha-wrap .clawcap-steps {
+              max-width: 100%;
+              font-size: 0.75rem;
+            }
+            .waqt-captcha-wrap .clawcap-steps li {
+              padding: 5px 0;
+              font-size: 0.75rem;
+            }
+          }
+
+          /* ── 320px and below (very small phones) ── */
+          @media (max-width: 320px) {
+            .waqt-captcha-wrap .clawcap {
+              padding: 10px 8px 8px;
+              border-radius: 16px;
+            }
+            .waqt-captcha-wrap .clawcap-glass {
+              height: 200px;
+            }
+            .waqt-captcha-wrap .clawcap-case {
+              border-radius: 14px;
+              padding: 4px;
+            }
+            .waqt-captcha-wrap .clawcap-title {
+              font-size: 0.875rem;
+            }
+            .waqt-captcha-wrap .clawcap-sub {
+              font-size: 0.625rem;
+              margin-bottom: 8px;
+            }
+          }
+        `}</style>
       </div>
     );
   },

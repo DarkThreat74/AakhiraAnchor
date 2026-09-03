@@ -181,6 +181,12 @@ export default function PrayerDashboard() {
   const [friendSuccess, setFriendSuccess] = useState<string | null>(null);
   const [addingFriend, setAddingFriend] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<Array<{
+    id: string;
+    createdAt: string;
+    requester: { id: string; firstName: string | null; displayName: string | null };
+  }>>([]);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
   const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
   const [setupFajr, setSetupFajr] = useState(0);
   const [setupDhuhr, setSetupDhuhr] = useState(0);
@@ -318,7 +324,7 @@ export default function PrayerDashboard() {
 
       // ── Step 2: Fetch from API in background ──
       try {
-        const [analyticsRes, friendsRes, codeRes, qadaaRes, logsRes, sunnahRes, timesRes] = await Promise.all([
+        const [analyticsRes, friendsRes, codeRes, qadaaRes, logsRes, sunnahRes, timesRes, pendingRes] = await Promise.all([
           fetch(`/api/prayer-log/analytics?range=${statsRange}`).catch(() => null),
           fetch("/api/prayer-friends").catch(() => null),
           fetch("/api/prayer-friends/my-code").catch(() => null),
@@ -326,6 +332,7 @@ export default function PrayerDashboard() {
           fetch(`/api/prayer-log?date=${todayStr}`).catch(() => null),
           fetch(`/api/prayer-log/sunnah?date=${todayStr}`).catch(() => null),
           fetch(`/api/prayer-times?date=${todayStr}`).catch(() => null),
+          fetch("/api/prayer-friends/pending").catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -346,6 +353,10 @@ export default function PrayerDashboard() {
         if (codeRes?.ok) {
           const data = await codeRes.json().catch(() => ({}));
           if (data.prayerCode) setPrayerCode(data.prayerCode);
+        }
+        if (pendingRes?.ok) {
+          const data = await pendingRes.json().catch(() => ({ requests: [] }));
+          if (data?.requests && Array.isArray(data.requests)) setPendingRequests(data.requests);
         }
         if (qadaaRes?.ok) {
           const data = await qadaaRes.json().catch(() => null);
@@ -503,14 +514,20 @@ export default function PrayerDashboard() {
         body: JSON.stringify({ code: addFriendCode.trim().toUpperCase() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && !data.offline && data.friend) {
+      if (res.ok && data.pending) {
+        setFriendSuccess(data.message || "Friend request sent! They'll need to accept it.");
+        setAddFriendCode("");
+        setTimeout(() => setFriendSuccess(null), 5000);
+      } else if (res.ok && !data.offline && data.friend && !data.pending) {
+        // Auto-accepted (e.g. they had already sent us a request)
         clearApiCache();
         setFriends((prev) => {
           const updated = [...prev, data.friend];
           cacheBlob("friends", updated);
           return updated;
         });
-        setFriendSuccess(`Added ${data.friend.firstName || data.friend.displayName || "friend"}! You can now see each other's stats.`);
+        setPendingRequests((prev) => prev.filter((r) => r.requester.id !== data.friend.id));
+        setFriendSuccess(`You are now friends with ${data.friend.firstName || data.friend.displayName || "friend"}!`);
         setAddFriendCode("");
         setTimeout(() => setFriendSuccess(null), 4000);
       } else if (data.offline) {
@@ -524,6 +541,38 @@ export default function PrayerDashboard() {
       setFriendError("Network error.");
     } finally {
       setAddingFriend(false);
+    }
+  }
+
+  async function handleRespondRequest(requestId: string, action: "accept" | "reject") {
+    setRespondingId(requestId);
+    try {
+      const res = await fetch("/api/prayer-friends/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, action }),
+      });
+      if (res.ok) {
+        await res.json().catch(() => ({}));
+        setPendingRequests((prev) => prev.filter((r) => r.id !== requestId));
+        if (action === "accept") {
+          // Refresh friends list to include the new friend
+          const friendsRes = await fetch("/api/prayer-friends");
+          if (friendsRes.ok) {
+            const friendsData = await friendsRes.json().catch(() => null);
+            if (Array.isArray(friendsData)) {
+              setFriends(friendsData);
+              cacheBlob("friends", friendsData);
+            }
+          }
+          setFriendSuccess("Friend request accepted!");
+          setTimeout(() => setFriendSuccess(null), 3000);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRespondingId(null);
     }
   }
 
@@ -1475,7 +1524,7 @@ export default function PrayerDashboard() {
               <Users className="h-4 w-4" /> Friends Competition
             </h2>
             <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
-              Share your code to compete. Adding a friend gives both of you access to each other&apos;s stats.
+              Share your code to compete. When someone adds you, you&apos;ll get a notification to accept or reject. You can only see each other&apos;s stats after both sides accept.
             </p>
           </div>
           <div className="px-4 py-4 sm:px-5">
@@ -1529,6 +1578,52 @@ export default function PrayerDashboard() {
 
             {friendError && <p className="mb-3 text-xs" style={{ color: "var(--color-warmth)" }}>{friendError}</p>}
             {friendSuccess && <p className="mb-3 text-xs" style={{ color: "var(--color-success)" }}>{friendSuccess}</p>}
+
+            {/* ── Pending friend requests ── */}
+            {pendingRequests.length > 0 && (
+              <div className="mb-4 space-y-2">
+                <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                  Friend requests ({pendingRequests.length})
+                </p>
+                {pendingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center gap-3 rounded-xl border p-3"
+                    style={{ borderColor: "var(--color-accent)", backgroundColor: "color-mix(in oklab, var(--color-accent) 5%, transparent)" }}
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)" }}>
+                      {(req.requester.firstName || req.requester.displayName || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                        {req.requester.firstName || req.requester.displayName || "Someone"}
+                      </div>
+                      <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                        wants to connect with you
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => handleRespondRequest(req.id, "accept")}
+                        disabled={respondingId === req.id}
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                        style={{ backgroundColor: "var(--color-success)", color: "var(--color-paper)", minHeight: 32 }}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => handleRespondRequest(req.id, "reject")}
+                        disabled={respondingId === req.id}
+                        className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                        style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 32 }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {friends.length === 0 ? (
               <div className="rounded-lg border border-dashed py-6 text-center" style={{ borderColor: "var(--color-paper-3)" }}>

@@ -236,6 +236,10 @@ export default function TodayTab({
         </p>
       </div>
 
+      {/* ── Unified card wrapping all sections ── */}
+      <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+        <div className="flex flex-col gap-5 p-4 sm:p-6">
+
       {/* ── Carried over from previous days ── */}
       {carriedOver.length > 0 && (
         <Section
@@ -582,6 +586,9 @@ export default function TodayTab({
       <div className="grid grid-cols-2 gap-3 mt-2">
         <SummaryCard label="Completed today" value={completedTodayHomework} icon={<CheckCircle2 className="h-4 w-4" />} />
         <SummaryCard label="Habits done" value={`${habitsDone}/${activeHabits.length}`} icon={<Repeat className="h-4 w-4" />} />
+      </div>
+
+        </div>
       </div>
 
       <style>{`
