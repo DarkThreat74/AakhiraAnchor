@@ -329,10 +329,17 @@ export default function MonthViewClient({ year, month }: { year: number; month: 
               </Link>
               <Link
                 href={`/calendar/month?year=${year}&month=${month}`}
-                className="min-h-11 rounded-r-lg px-3 py-1.5 text-xs font-medium"
+                className="min-h-11 px-3 py-1.5 text-xs font-medium"
                 style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
               >
                 Month
+              </Link>
+              <Link
+                href="/calendar/list"
+                className="min-h-11 rounded-r-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ color: "var(--color-ink-soft)" }}
+              >
+                List
               </Link>
             </div>
           </div>

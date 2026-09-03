@@ -73,7 +73,7 @@ export default function DayDateHeader({ date }: { date: string }) {
             )}
           </div>
 
-          {/* Day/Month toggle */}
+          {/* Day/Month/List toggle */}
           <div
             className="flex shrink-0 rounded-lg border"
             style={{ borderColor: "var(--color-paper-3)" }}
@@ -87,10 +87,17 @@ export default function DayDateHeader({ date }: { date: string }) {
             </Link>
             <Link
               href={`/calendar/month?year=${dateObj.getFullYear()}&month=${dateObj.getMonth() + 1}`}
-              className="rounded-r-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              className="px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
               style={{ color: "var(--color-ink-soft)" }}
             >
               Month
+            </Link>
+            <Link
+              href="/calendar/list"
+              className="rounded-r-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ color: "var(--color-ink-soft)" }}
+            >
+              List
             </Link>
           </div>
         </div>

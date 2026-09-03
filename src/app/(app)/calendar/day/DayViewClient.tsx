@@ -94,7 +94,7 @@ const EVENT_COLORS = [
   { label: "Moss", value: "#3f6212" },
   { label: "Navy", value: "#1e3a8a" },
   { label: "Ruby", value: "#b91c1c" },
-  { label: "Sage", value: "#4d7c0f" },
+  { label: "Sage", value: "#84a98c" },
   { label: "Mauve", value: "#a4778e" },
   { label: "Clay", value: "#a8453b" },
   { label: "Steel", value: "#475569" },
@@ -1359,36 +1359,65 @@ export default function DayViewClient({ date }: { date: string }) {
                 </button>
               </div>
 
-              {/* Color picker */}
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setNewColor(null)}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 text-[11px] font-medium"
-                  style={{
-                    borderColor: newColor === null ? "var(--color-ink)" : "var(--color-paper-3)",
-                    backgroundColor: "var(--color-paper-2)",
-                    color: "var(--color-ink-muted)",
-                  }}
-                  aria-label="Default color"
-                  title="Default"
-                >
-                  Auto
-                </button>
-                {EVENT_COLORS.map((c) => (
+              {/* Color picker — polished grid with label and check indicator */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>
+                    Color
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                    {newColor === null ? "Auto" : EVENT_COLORS.find((c) => c.value === newColor)?.label || "Custom"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-12">
                   <button
-                    key={c.value}
                     type="button"
-                    onClick={() => setNewColor(c.value)}
-                    className="h-11 w-11 rounded-full border-2"
+                    onClick={() => setNewColor(null)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border text-[10px] font-medium transition-all"
                     style={{
-                      backgroundColor: c.value,
-                      borderColor: newColor === c.value ? "var(--color-ink)" : "transparent",
+                      borderColor: newColor === null ? "var(--color-ink)" : "var(--color-paper-3)",
+                      backgroundColor: "var(--color-paper-2)",
+                      color: "var(--color-ink-muted)",
+                      transform: newColor === null ? "scale(1.1)" : "scale(1)",
+                      outline: newColor === null ? "2px solid var(--color-ink)" : "none",
+                      outlineOffset: "1px",
                     }}
-                    aria-label={c.label}
-                    title={c.label}
-                  />
-                ))}
+                    aria-label="Default color (auto)"
+                    title="Auto"
+                  >
+                    Auto
+                  </button>
+                  {EVENT_COLORS.map((c) => {
+                    const isSelected = newColor === c.value;
+                    return (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setNewColor(c.value)}
+                        className="relative h-8 w-8 rounded-lg transition-all"
+                        style={{
+                          backgroundColor: c.value,
+                          transform: isSelected ? "scale(1.1)" : "scale(1)",
+                          outline: isSelected ? `2px solid ${c.value}` : "none",
+                          outlineOffset: "1px",
+                          boxShadow: isSelected ? `0 0 0 1px var(--color-paper)` : "none",
+                        }}
+                        aria-label={c.label}
+                        title={c.label}
+                  >
+                        {isSelected && (
+                          <Check
+                            className="absolute inset-0 m-auto h-4 w-4"
+                            style={{
+                              color: "var(--color-paper)",
+                              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
+                            }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Time inputs — hide end time for reminders */}

@@ -1,32 +1,24 @@
-Homework redesign with class cards, priority filter; mobile prayer bar fix; future-only series deletion
+Add calendar list view and redesign event color picker
 
-Homework tab redesign:
-- Class/subject cards displayed as color-coded folder-style grid at top
-- Each class card shows pending homework count and color bar
-- Tap a class card to filter homework by that class
-- Delete classes via hover trash button with confirmation modal
-- Deleting a class preserves homework (unassigns class label)
-- Priority filter chips: All / High / Medium / Low
-- Homework cards now show left border in class color
-- High priority badge shown on cards
-- Pending homework sorted by priority then due date
-- "Clear class filter" button appears when class filter is active
-- Expanded class color palette from 10 to 12 colors
+Calendar list view:
+- New /calendar/list route showing upcoming events for a full week
+- Week navigation (prev/next arrows, week offset tracking)
+- Events grouped by day with date card (day name + number)
+- Each event shows time range, title, type badge, notify/recurring indicators
+- Left border on each event in its color
+- Prayer times row shown on the first day of the week
+- "Today / Tomorrow / Yesterday" labels on day headers
+- Empty state with link to Day view to add events
+- Offline support via IndexedDB cache fallback
+- Day/Month/List toggle added to Day and Month view headers
 
-Mobile prayer times bar fix:
-- Split into separate mobile and desktop layouts
-- Mobile: horizontal scrollable strip with compact "4:47a" time format
-  and 10px font, preventing overlap and overflow
-- Desktop: unchanged card layout with full "4:47 AM" format
-- Each prayer button has minWidth 52px and shrink-0 on mobile
-
-Recurring event deletion fix:
-- DELETE /api/events/bulk now only deletes events with startAt >= fromDate
-- Past events in a recurring series are preserved permanently
-- GET /api/events/bulk accepts optional fromDate param to count future events
-- UI button renamed from "Delete entire series" to "Delete future events"
-- Delete confirmation dialog notes that past events will be preserved
-- Success message updated to mention future events and past preservation
+Event color picker redesign:
+- Replaced large circular buttons with compact rounded-lg grid
+- 8 columns on mobile, 12 on desktop
+- Selected color shows checkmark icon with drop shadow
+- Selected state uses scale(1.1) and outline ring in the color itself
+- Color label shown above grid ("Color" + current selection name)
+- Fixed duplicate Sage/Olive color (Sage changed to #84a98c)
 
 Generated with [Devin](https://devin.ai)
 
