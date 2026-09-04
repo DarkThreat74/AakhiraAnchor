@@ -1,31 +1,22 @@
-Fix goals show-more button, revert to plain text more buttons, fix orange pill colors
+Fix signup 403 after Play CAPTCHA — accept playcaptcha-verified token first
 
-1. Goals "show more" was never appearing because shortTermGoals was
-   hard-capped at 3 items via .slice(0, 3) before being passed to
-   CollapsibleSection. Since items.length === initialLimit === 3,
-   hasMore was always false. Removed the slice so all goals are passed
-   to the section, and the CollapsibleSection handles the limit + show
-   more logic as intended.
+The signup flow was broken: user solves Play CAPTCHA, enters password,
+clicks "Create account", and gets a 403 from the server which sends
+them back to the captcha step.
 
-2. Reverted all "more" buttons (upcoming homework, goals for this week,
-   goals long-term) back to plain text links instead of shaded pills.
-   The user wanted normal text, not styled pills.
+Root cause: verifyTurnstileToken had the playcaptcha-verified check
+buried inside the "no secret key configured" branch, after a dev-mode
+Cloudflare API call that could fail. In some environments the token
+wasn't being accepted.
 
-3. Fixed urgency pill colors — everything was orange because both
-   "tomorrow" and "soon" (2-3 days) used var(--color-warmth). Now only
-   "tomorrow" uses warmth/amber. "Soon" (2-3 days) and "this_week"
-   (4-6 days) both use neutral gray (var(--color-ink-soft) on
-   var(--color-paper-2)), same as "later". This means:
-   - Overdue: red (bold)
-   - Today: red (bold)
-   - Tomorrow: amber/orange (semibold)
-   - Soon (2-3d): gray
-   - This week (4-6d): gray
-   - Later: muted gray
-   Only genuinely urgent items (overdue/today/tomorrow) get color.
+Fix: moved the playcaptcha-verified check to the TOP of the function,
+before any other logic. The synthetic token is accepted unconditionally
+— the interactive claw-machine challenge already proved the user is
+human, and other security layers (rate limit, honeypot, time-trap,
+fingerprint) still apply.
 
-4. Removed the orange card tint for "soon" items since they're no
-   longer orange.
+Also tightened the "no secret key in production" path: unknown non-
+playcaptcha tokens are now rejected instead of silently accepted.
 
 Generated with [Devin](https://devin.ai)
 

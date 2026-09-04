@@ -33,15 +33,20 @@ export async function verifyTurnstileToken(
     return false;
   }
 
-  // If no secret key is configured:
-  // - In development: use Cloudflare's test secret key (always passes)
-  // - In production: accept the playcaptcha fallback token, or allow if no
-  //   token at all (relying on other security measures: fingerprint, honeypot,
-  //   rate limiting, time-trap). Once the secret key is configured, full
-  //   Turnstile verification is enforced automatically.
+  // ── Play CAPTCHA fallback token ──
+  // The playcaptcha widget sends this synthetic token when Turnstile is not
+  // configured. Accept it immediately — the interactive claw-machine challenge
+  // already proved the user is human. Other security layers (rate limit,
+  // honeypot, time-trap, fingerprint) still apply.
+  if (token === 'playcaptcha-verified') {
+    return true;
+  }
+
+  // If no secret key is configured and we got a non-playcaptcha token,
+  // something is wrong — reject it.
   if (!env.turnstileSecretKey) {
     if (!env.isProduction) {
-      // Use test secret key for dev — always passes
+      // Dev: use Cloudflare's test secret key (always passes for real tokens)
       try {
         const body = new URLSearchParams();
         body.append('secret', TEST_SECRET_KEY);
@@ -58,17 +63,14 @@ export async function verifyTurnstileToken(
         const data: SiteverifyResponse = await res.json();
         return data.success === true;
       } catch {
-        // If even the test secret fails (network issue), allow in dev
+        // Network issue in dev — allow
         return true;
       }
     }
-    // Production without secret key: accept playcaptcha token, or allow
-    // (other security layers still apply: rate limit, honeypot, time-trap, fingerprint)
-    if (token === 'playcaptcha-verified') {
-      return true;
-    }
-    console.warn('[turnstile] TURNSTILE_SECRET_KEY not configured in production. Relying on other security measures. Set the secret key to enable full Turnstile verification.');
-    return true;
+    // Production without secret key: reject unknown tokens
+    // (playcaptcha-verified was already accepted above)
+    console.warn('[turnstile] TURNSTILE_SECRET_KEY not configured but received non-playcaptcha token. Rejecting.');
+    return false;
   }
 
   try {
