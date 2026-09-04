@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-full flex-col">
+    <div
+      className="flex min-h-full flex-col"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <UnregisterServiceWorker />
       {/* Back button — top left, always visible on auth pages */}
       <div className="px-6 pt-6">
@@ -21,7 +24,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       {/* Centered auth content */}
-      <div className="flex flex-1 items-center justify-center px-6 py-12">
+      <div
+        className="flex flex-1 items-center justify-center px-6 py-12"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="w-full max-w-sm">{children}</div>
       </div>
     </div>

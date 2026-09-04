@@ -102,6 +102,26 @@ html {
   height: 100dvh;
 }
 
+/* ── iOS PWA standalone mode fixes ──
+ * When installed to the home screen, iOS renders the app full-bleed
+ * (no Safari chrome). 100dvh can be wrong on cold start in standalone;
+ * 100vh equals the full screen height. Safe-area insets are raw hardware
+ * values (~59px top for Dynamic Island, ~34px bottom for home indicator).
+ * We also kill the rubber-band overscroll bounce that makes PWAs feel cheap.
+ */
+@media (display-mode: standalone) {
+  html {
+    height: 100vh;
+    /* Prevent iOS rubber-band overscroll */
+    overscroll-behavior: none;
+  }
+  body {
+    overscroll-behavior: none;
+    /* Prevent pull-to-refresh in standalone */
+    overscroll-behavior-y: contain;
+  }
+}
+
 body {
   background: var(--color-paper);
   color: var(--color-ink);

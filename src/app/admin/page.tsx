@@ -115,6 +115,7 @@ export default function AdminPortal() {
         style={{
           borderColor: "var(--color-paper-3)",
           backgroundColor: "color-mix(in oklab, var(--color-paper) 92%, transparent)",
+          paddingTop: "calc(0.75rem + env(safe-area-inset-top))",
         }}
       >
         <div className="flex items-center gap-2">
@@ -144,7 +145,12 @@ export default function AdminPortal() {
         >
           <div
             className="absolute left-0 top-0 bottom-0 w-64 flex flex-col border-r"
-            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+            style={{
+              borderColor: "var(--color-paper-3)",
+              backgroundColor: "var(--color-paper)",
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4">

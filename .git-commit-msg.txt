@@ -1,34 +1,44 @@
-Audit login page + update landing page with all new features
+Fix iOS PWA display — safe-area insets, standalone height, overscroll bounce
 
-Login page fixes (6 issues found in audit):
-1. Trusted login failure now auto-switches to password mode instead of
-   just telling the user to click "Use password instead".
-2. Fixed misleading trusted-device indicator that showed "Trusted device
-   login available — enter your email to check" even AFTER the user had
-   already entered their email and it wasn't trusted. Now only shows
-   before the first check.
-3. Added show/hide password toggle (Eye / EyeOff icon) to the password
-   field.
-4. Fixed race condition in checkTrustedDevice: if the user blurred the
-   email field multiple times quickly, earlier fetch responses could
-   override later ones. Now uses a monotonic request ID to discard stale
-   responses.
-5. Added client-side password validation to the forgot-password reset
-   flow (length, letter, number, match) — matches signup rules. Prevents
-   a round-trip to the server for obvious errors.
-6. Removed unused honeypot inconsistency (server checks but client never
-   sent — harmless but now documented).
+On iOS, when Waqt is installed to the home screen (standalone PWA), the
+app renders full-bleed with no Safari chrome. The status bar overlays
+content, the Dynamic Island/notch eats ~59px at the top, and the home
+indicator eats ~34px at the bottom. Without safe-area insets, the top
+bar, back button, and nav links were hidden under the notch, and the
+bottom nav was under the home indicator.
 
-Landing page updates:
-- Added 6 new feature cards: Homework & classes, Goals (weekly &
-  long-term), 365-day fact bank, Calendar list view, Trusted device
-  login, Bot-proof signup (Play CAPTCHA).
-- Updated existing cards: Prayer friends now mentions pending/accept
-  requests. Recurring events now mentions per-occurrence editing.
-  Calendar now mentions list view. Offline now mentions queued edits.
-- Updated letter-close section: no longer says "being built one piece at
-  a time" — reflects the full feature set now available.
-- Total features on landing: 9 → 15.
+Research via Context7 (Next.js PWA docs) and Agent Reach/Exa (real-world
+iOS PWA issues from GitHub PRs and Ionic issues) confirmed:
+- env(safe-area-inset-top) is ~59px in standalone (vs ~8px in Safari)
+- env(safe-area-inset-bottom) is ~34px in standalone
+- 100dvh can be wrong on cold start in standalone; 100vh is correct
+- apple-mobile-web-app-status-bar-style: black-translucent is the only
+  way to get true fullscreen on iOS
+- overscroll-behavior: none prevents the rubber-band bounce
+
+Fixes:
+1. globals.css: Added @media (display-mode: standalone) block that
+   switches html height to 100vh and disables overscroll-behavior on
+   html+body (prevents iOS rubber-band bounce).
+
+2. layout.tsx: Changed appleWebApp.statusBarStyle from "default" to
+   "black-translucent" — the only mode that gives true fullscreen on
+   iOS. Content extends under the status bar, and we use
+   env(safe-area-inset-top) padding on all fixed/sticky headers to
+   keep content visible.
+
+3. (auth)/layout.tsx: Added env(safe-area-inset-top) padding to the
+   root container and env(safe-area-inset-bottom) to the centered
+   content wrapper. The Back button was hidden under the notch.
+
+4. page.tsx (marketing): Added env(safe-area-inset-top) padding to the
+   fixed nav header and env(safe-area-inset-bottom) to the footer.
+
+5. admin/page.tsx: Added env(safe-area-inset-top) to the mobile top bar
+   and safe-area insets to the mobile sidebar drawer.
+
+The app layout's mobile top bar and bottom nav already had correct
+safe-area insets — no changes needed there.
 
 Generated with [Devin](https://devin.ai)
 

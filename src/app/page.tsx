@@ -23,7 +23,10 @@ export default async function MarketingPage() {
       {/* ── Nav ── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md"
-        style={{ backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)" }}
+        style={{
+          backgroundColor: "color-mix(in oklab, var(--color-paper) 85%, transparent)",
+          paddingTop: "env(safe-area-inset-top)",
+        }}
       >
         <div className="flex items-center justify-between px-6 py-4 sm:px-10 lg:px-16">
           <div className="flex items-baseline gap-3">
@@ -426,6 +429,7 @@ export default async function MarketingPage() {
         style={{
           borderColor: "var(--color-paper-3)",
           color: "var(--color-ink-muted)",
+          paddingBottom: "calc(2rem + env(safe-area-inset-bottom))",
         }}
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between">

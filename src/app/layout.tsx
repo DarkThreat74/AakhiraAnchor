@@ -26,7 +26,10 @@ export const metadata: Metadata = {
   applicationName: "Waqt",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    // "black-translucent" is the only way to get true fullscreen on iOS.
+    // The status bar overlays the app content, so we MUST use
+    // env(safe-area-inset-top) padding on fixed/sticky headers.
+    statusBarStyle: "black-translucent",
     title: "Waqt",
   },
   // Prevent iOS from auto-linking phone numbers, dates, emails, and addresses,
