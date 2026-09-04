@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Fingerprint, Loader2 } from "lucide-react";
+import { Fingerprint, Loader2, Eye, EyeOff } from "lucide-react";
 import { getHashedFingerprint } from "@/lib/auth/fingerprint";
 import { useUISFX } from "@/components/uisfx-provider";
 
@@ -20,6 +20,8 @@ export default function LoginForm() {
   const [trustedDevice, setTrustedDevice] = useState(false);
   const [checkingDevice, setCheckingDevice] = useState(false);
   const [usePasswordInstead, setUsePasswordInstead] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const deviceCheckIdRef = useRef(0);
 
   // Time-trap timestamp — set on mount so bots that submit instantly are caught.
   // -1 = not mounted yet (treated as valid to avoid false positives).
@@ -34,8 +36,11 @@ export default function LoginForm() {
   }, []);
 
   // ── Check if this device is trusted for the entered email ──
+  // Uses a monotonic ID to discard stale responses (prevents race condition
+  // when the user blurs the email field multiple times quickly).
   const checkTrustedDevice = useCallback(async (email: string) => {
     if (!fingerprintHash || !email) return;
+    const requestId = ++deviceCheckIdRef.current;
     setCheckingDevice(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -47,13 +52,18 @@ export default function LoginForm() {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+      // Discard stale responses — a newer check may already be in flight
+      if (requestId !== deviceCheckIdRef.current) return;
       const data = await res.json().catch(() => ({ trusted: false }));
       setTrustedDevice(!!data.trusted);
     } catch {
+      if (requestId !== deviceCheckIdRef.current) return;
       setTrustedDevice(false);
     } finally {
-      clearTimeout(timeoutId);
-      setCheckingDevice(false);
+      if (requestId === deviceCheckIdRef.current) {
+        clearTimeout(timeoutId);
+        setCheckingDevice(false);
+      }
     }
   }, [fingerprintHash]);
 
@@ -87,7 +97,9 @@ export default function LoginForm() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "Login failed. Use your password instead.");
+        // Auto-switch to password mode so the user doesn't have to click
         setTrustedDevice(false);
+        setUsePasswordInstead(true);
         play("error");
         return;
       }
@@ -225,6 +237,28 @@ export default function LoginForm() {
     const formData = new FormData(form);
     const password = String(formData.get("password") || "");
     const confirm = String(formData.get("confirm") || "");
+
+    // Client-side validation (matches signup rules)
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setPending(false);
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password)) {
+      setError("Password must contain at least one letter.");
+      setPending(false);
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError("Password must contain at least one number.");
+      setPending(false);
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      setPending(false);
+      return;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -461,19 +495,31 @@ export default function LoginForm() {
           <label htmlFor="password" className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
             Password
           </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="rounded-lg border px-3 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
-            style={{
-              borderColor: "var(--color-paper-3)",
-              backgroundColor: "var(--color-paper)",
-              color: "var(--color-ink)",
-            }}
-          />
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              className="w-full rounded-lg border px-3 py-2.5 pr-10 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
+              style={{
+                borderColor: "var(--color-paper-3)",
+                backgroundColor: "var(--color-paper)",
+                color: "var(--color-ink)",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 transition-opacity hover:opacity-70"
+              style={{ color: "var(--color-ink-muted)" }}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       )}
 
@@ -512,8 +558,8 @@ export default function LoginForm() {
         </button>
       )}
 
-      {/* Trusted device indicator */}
-      {fingerprintHash && !showTrustedLogin && !checkingDevice && (
+      {/* Trusted device indicator — only show before the user has checked */}
+      {fingerprintHash && !showTrustedLogin && !checkingDevice && !trustedDevice && !usePasswordInstead && (
         <div className="flex items-center justify-center gap-1.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>
           <Fingerprint className="h-3.5 w-3.5" />
           <span>Trusted device login available — enter your email to check.</span>

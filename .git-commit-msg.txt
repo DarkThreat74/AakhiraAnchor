@@ -1,22 +1,34 @@
-Fix signup 403 after Play CAPTCHA — accept playcaptcha-verified token first
+Audit login page + update landing page with all new features
 
-The signup flow was broken: user solves Play CAPTCHA, enters password,
-clicks "Create account", and gets a 403 from the server which sends
-them back to the captcha step.
+Login page fixes (6 issues found in audit):
+1. Trusted login failure now auto-switches to password mode instead of
+   just telling the user to click "Use password instead".
+2. Fixed misleading trusted-device indicator that showed "Trusted device
+   login available — enter your email to check" even AFTER the user had
+   already entered their email and it wasn't trusted. Now only shows
+   before the first check.
+3. Added show/hide password toggle (Eye / EyeOff icon) to the password
+   field.
+4. Fixed race condition in checkTrustedDevice: if the user blurred the
+   email field multiple times quickly, earlier fetch responses could
+   override later ones. Now uses a monotonic request ID to discard stale
+   responses.
+5. Added client-side password validation to the forgot-password reset
+   flow (length, letter, number, match) — matches signup rules. Prevents
+   a round-trip to the server for obvious errors.
+6. Removed unused honeypot inconsistency (server checks but client never
+   sent — harmless but now documented).
 
-Root cause: verifyTurnstileToken had the playcaptcha-verified check
-buried inside the "no secret key configured" branch, after a dev-mode
-Cloudflare API call that could fail. In some environments the token
-wasn't being accepted.
-
-Fix: moved the playcaptcha-verified check to the TOP of the function,
-before any other logic. The synthetic token is accepted unconditionally
-— the interactive claw-machine challenge already proved the user is
-human, and other security layers (rate limit, honeypot, time-trap,
-fingerprint) still apply.
-
-Also tightened the "no secret key in production" path: unknown non-
-playcaptcha tokens are now rejected instead of silently accepted.
+Landing page updates:
+- Added 6 new feature cards: Homework & classes, Goals (weekly &
+  long-term), 365-day fact bank, Calendar list view, Trusted device
+  login, Bot-proof signup (Play CAPTCHA).
+- Updated existing cards: Prayer friends now mentions pending/accept
+  requests. Recurring events now mentions per-occurrence editing.
+  Calendar now mentions list view. Offline now mentions queued edits.
+- Updated letter-close section: no longer says "being built one piece at
+  a time" — reflects the full feature set now available.
+- Total features on landing: 9 → 15.
 
 Generated with [Devin](https://devin.ai)
 

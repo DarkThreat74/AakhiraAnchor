@@ -234,7 +234,7 @@ export default async function MarketingPage() {
             <StaggerItem>
               <Feature
                 title="Prayer-anchored calendar"
-                body="Day and month views with the five daily prayers as fixed background bands. Events, tasks, and reminders sit on top. Overlaps stack side-by-side — nothing blocks."
+                body="Day, month, and list views with the five daily prayers as fixed background bands. Events, tasks, and reminders sit on top. Overlaps stack side-by-side — nothing blocks."
               />
             </StaggerItem>
             <StaggerItem>
@@ -257,14 +257,26 @@ export default async function MarketingPage() {
             </StaggerItem>
             <StaggerItem>
               <Feature
-                title="Friend competition"
-                body="Share your six-character prayer code with friends. See your streaks side-by-side and know who's leading. Accountability through companionship."
+                title="Prayer friends"
+                body="Share your six-character prayer code. Send and accept friend requests, see your streaks side-by-side, and hold each other accountable through companionship."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Homework & classes"
+                body="Track assignments by class with due dates, times, priority, and type. Overdue and due-today items surface on the Today tab so nothing slips past you."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Goals — weekly & long-term"
+                body="Set short-term goals for this week and long-term goals with target dates. Check them off with a tap. The Today tab shows what's due and what you've completed."
               />
             </StaggerItem>
             <StaggerItem>
               <Feature
                 title="Recurring events & reminders"
-                body="Create events that repeat on selected weekdays. Set reminders that notify you 15 minutes before. Custom colors for every event type."
+                body="Create events that repeat on selected weekdays. Edit or delete a single occurrence without touching the rest. Custom colors for every event type."
               />
             </StaggerItem>
             <StaggerItem>
@@ -276,13 +288,37 @@ export default async function MarketingPage() {
             <StaggerItem>
               <Feature
                 title="Works fully offline"
-                body="Open the app, add events, log prayers, adjust qadaa — all without internet. Everything syncs automatically the moment you reconnect."
+                body="Open the app, add events, log prayers, adjust qadaa — all without internet. Edits queue locally and sync automatically the moment you reconnect."
               />
             </StaggerItem>
             <StaggerItem>
               <Feature
                 title="Prayer time notifications"
                 body="Get a notification when each prayer window opens, and a reminder 15 minutes before your scheduled events. Asr is automatically adjusted for your calculation method."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Trusted device login"
+                body="Sign in instantly on your own phone or laptop — no password needed. Your device is remembered with a fingerprint, and you can revoke access anytime."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="365-day fact bank"
+                body="A human-curated Islamic fact, glossary term, and Arabic citation for every day of the year. No AI-generated rulings — just vetted content from authentic sources."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Calendar list view"
+                body="See your upcoming events across multiple days in a single scrollable list with dates, time slots, and color tags. Filter what's in progress from what's ended."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Bot-proof signup"
+                body="A claw-machine mini-game verifies you're human — no boring checkbox, no privacy-invading tracking. Falls back automatically if the challenge doesn't load."
               />
             </StaggerItem>
           </StaggerGroup>
@@ -362,10 +398,10 @@ export default async function MarketingPage() {
               className="text-xl leading-relaxed"
               style={{ color: "var(--color-ink-soft)" }}
             >
-              Waqt is being built carefully, one piece at a time. If you want to
-              be part of the first group of users, create an account — you&apos;ll
-              get the calendar and prayer tracking first, with more arriving in
-              steady updates.
+              Waqt has grown into a full prayer-centered life tracker — calendar,
+              prayer accountability, homework, goals, friends, and a daily fact
+              bank. Prayer tracking will always be free. Create an account and
+              start building your routine around the five prayers today.
             </p>
           </FadeIn>
           <FadeIn delay={0.1} y={16} duration={0.35}>
