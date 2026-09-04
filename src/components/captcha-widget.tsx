@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useImperativeHandle, forwardRef } from "react";
+import { useState, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { publicEnv } from "@/lib/env.public";
 import { TurnstileWidget, type TurnstileWidgetHandle } from "./turnstile-widget";
 import { ClawCaptcha, type ToyId } from "playcaptcha";
@@ -27,8 +27,13 @@ function randomToy(): ToyId {
 
 /**
  * Unified captcha widget:
- * - If NEXT_PUBLIC_TURNSTILE_SITE_KEY is set, uses Cloudflare Turnstile.
- * - Otherwise, falls back to playcaptcha (claw machine slide-to-verify).
+ * - If NEXT_PUBLIC_TURNSTILE_ENABLED is "true" AND a site key is set, uses
+ *   Cloudflare Turnstile.
+ * - Otherwise, uses playcaptcha (claw machine grab-the-toy challenge).
+ *
+ * Safety net: if Turnstile is enabled but doesn't produce a token within 8
+ * seconds, the widget automatically falls back to playcaptcha so the user
+ * is never stuck on a blank/broken captcha.
  *
  * The onVerify callback receives a token string:
  * - Turnstile: the real cf-turnstile-response token
@@ -37,16 +42,33 @@ function randomToy(): ToyId {
  */
 export const CaptchaWidget = forwardRef<CaptchaHandle, CaptchaWidgetProps>(
   function CaptchaWidget(props, ref) {
-    // Use Turnstile only when explicitly enabled AND site key is set.
-    // Otherwise fall back to playcaptcha (claw machine).
-    const hasTurnstileKey = publicEnv.turnstileEnabled && Boolean(publicEnv.turnstileSiteKey);
+    const wantsTurnstile = publicEnv.turnstileEnabled && Boolean(publicEnv.turnstileSiteKey);
+    const [useTurnstile, setUseTurnstile] = useState(wantsTurnstile);
+    const [showFallbackLink, setShowFallbackLink] = useState(false);
     const turnstileRef = useRef<TurnstileWidgetHandle>(null);
     const [targetToy, setTargetToy] = useState<ToyId>(randomToy);
+    const verifiedRef = useRef(false);
+
+    // If Turnstile doesn't verify within 8s, show a fallback link
+    useEffect(() => {
+      if (!useTurnstile) return;
+      const timer = setTimeout(() => {
+        if (!verifiedRef.current) {
+          setShowFallbackLink(true);
+        }
+      }, 8000);
+      return () => clearTimeout(timer);
+    }, [useTurnstile]);
+
+    // Track when verification happens so we don't show the fallback
+    // (verifiedRef is set in handleVerify, no effect needed)
 
     useImperativeHandle(ref, () => ({
       reset: () => {
-        if (hasTurnstileKey) {
+        if (useTurnstile) {
           turnstileRef.current?.reset();
+          setShowFallbackLink(false);
+          verifiedRef.current = false;
         } else {
           // Reset play captcha by picking a new target toy (forces re-render)
           setTargetToy(randomToy());
@@ -54,17 +76,43 @@ export const CaptchaWidget = forwardRef<CaptchaHandle, CaptchaWidgetProps>(
       },
     }));
 
-    if (hasTurnstileKey) {
+    // Wrap onVerify to track that verification happened
+    const handleVerify = (token: string) => {
+      verifiedRef.current = true;
+      props.onVerify(token);
+    };
+
+    if (useTurnstile) {
       return (
-        <TurnstileWidget
-          ref={turnstileRef}
-          onVerify={props.onVerify}
-          onExpire={props.onExpire}
-          onError={props.onError}
-          onTimeout={props.onTimeout}
-          action={props.action}
-          theme={props.theme}
-        />
+        <div className="flex flex-col items-center gap-3 w-full">
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={handleVerify}
+            onExpire={props.onExpire}
+            onError={() => {
+              // On Turnstile error, immediately fall back to playcaptcha
+              setUseTurnstile(false);
+              setShowFallbackLink(false);
+            }}
+            onTimeout={() => {
+              // On Turnstile timeout, immediately fall back to playcaptcha
+              setUseTurnstile(false);
+              setShowFallbackLink(false);
+            }}
+            action={props.action}
+            theme={props.theme}
+          />
+          {showFallbackLink && (
+            <button
+              type="button"
+              onClick={() => setUseTurnstile(false)}
+              className="text-xs font-medium underline underline-offset-4 transition-opacity hover:opacity-70"
+              style={{ color: "var(--color-ink-muted)" }}
+            >
+              Having trouble? Use game verification instead
+            </button>
+          )}
+        </div>
       );
     }
 
@@ -76,7 +124,7 @@ export const CaptchaWidget = forwardRef<CaptchaHandle, CaptchaWidgetProps>(
           onVerify={() => {
             // Synthetic token so the server knows the interactive captcha was solved.
             // The server accepts this when TURNSTILE_SECRET_KEY is not configured.
-            props.onVerify("playcaptcha-verified");
+            handleVerify("playcaptcha-verified");
           }}
           title="Grab the right toy to verify"
           assetBase="/toys/"

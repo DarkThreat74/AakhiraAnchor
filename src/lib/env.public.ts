@@ -10,6 +10,8 @@ export const publicEnv = {
   vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '',
   turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '',
   // When "false", the signup page uses playcaptcha instead of Turnstile.
-  // Set to "true" only when BOTH Turnstile keys are configured.
-  turnstileEnabled: process.env.NEXT_PUBLIC_TURNSTILE_ENABLED !== 'false',
+  // Defaults to false so the app never gets stuck on a broken Turnstile config.
+  // Set to "true" ONLY when BOTH NEXT_PUBLIC_TURNSTILE_SITE_KEY and
+  // TURNSTILE_SECRET_KEY are configured.
+  turnstileEnabled: process.env.NEXT_PUBLIC_TURNSTILE_ENABLED === 'true',
 } as const;
