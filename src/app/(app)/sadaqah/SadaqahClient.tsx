@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Heart, Trash2, Plus, TrendingUp } from "lucide-react";
+import { Trash2, Plus, TrendingUp, Eye, EyeOff } from "lucide-react";
 
 interface SadaqahLog {
   id: string;
@@ -43,6 +43,13 @@ function formatCurrency(amount: number, currency: string): string {
   }
 }
 
+function formatCardNumber(total: number): string {
+  // Format the total as a pseudo card number for visual flair
+  // Use the total to generate a stable "card number" feel
+  const padded = Math.round(total * 100).toString().padStart(12, "0").slice(-12);
+  return padded.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
 }
@@ -58,6 +65,7 @@ export default function SadaqahClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<SadaqahLog | null>(null);
+  const [showBalance, setShowBalance] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -74,7 +82,6 @@ export default function SadaqahClient() {
   }, []);
 
   useEffect(() => {
-    // Defer to avoid cascading renders (react-hooks/set-state-in-effect)
     Promise.resolve().then(() => void fetchData());
   }, [fetchData]);
 
@@ -130,22 +137,24 @@ export default function SadaqahClient() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: "var(--color-accent)", borderRightColor: "var(--color-accent)" }} />
-          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>Loading sadaqah…</p>
+          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>Loading your Akhirah Card…</p>
         </div>
       </div>
     );
   }
 
   const currency = data?.currency || "USD";
+  const grandTotal = data?.grandTotal ?? 0;
+  const entryCount = data?.logs.length ?? 0;
 
   return (
     <div className="mx-auto max-w-2xl">
       {/* ── Header ── */}
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Sadaqah Tracker</h1>
+          <h1 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Akhirah Card</h1>
           <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-            Track your charitable giving
+            Your investment in the hereafter
           </p>
         </div>
         <button
@@ -158,8 +167,97 @@ export default function SadaqahClient() {
             minHeight: 40,
           }}
         >
-          {showForm ? "Cancel" : (<><Plus className="h-4 w-4" /> Log Sadaqah</>)}
+          {showForm ? "Cancel" : (<><Plus className="h-4 w-4" /> Add</>)}
         </button>
+      </div>
+
+      {/* ── The Akhirah Card (credit card design) ── */}
+      <div className="mb-6" style={{ perspective: "1000px" }}>
+        <div
+          className="relative overflow-hidden rounded-2xl p-5 sm:p-6"
+          style={{
+            aspectRatio: "1.586 / 1",
+            maxWidth: "380px",
+            margin: "0 auto",
+            background: "linear-gradient(135deg, var(--color-ink) 0%, color-mix(in oklab, var(--color-ink) 85%, var(--color-accent)) 100%)",
+            color: "var(--color-paper)",
+            boxShadow: "0 12px 40px -12px color-mix(in oklab, var(--color-ink) 50%, transparent), inset 0 1px 0 color-mix(in oklab, var(--color-paper) 15%, transparent)",
+            border: "1px solid color-mix(in oklab, var(--color-paper) 12%, transparent)",
+          }}
+        >
+          {/* Sheen effect */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: "radial-gradient(circle at 20% 0%, color-mix(in oklab, var(--color-paper) 18%, transparent), transparent 50%)",
+            }}
+          />
+
+          {/* Top row: card label + balance toggle */}
+          <div className="relative flex items-start justify-between">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em]" style={{ color: "color-mix(in oklab, var(--color-paper) 65%, transparent)" }}>
+                Akhirah Card
+              </p>
+              <p className="mt-0.5 text-[9px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+                Investment in the Hereafter
+              </p>
+            </div>
+            <button
+              onClick={() => setShowBalance(!showBalance)}
+              className="rounded-md p-1 transition-colors"
+              style={{ color: "color-mix(in oklab, var(--color-paper) 60%, transparent)" }}
+              aria-label={showBalance ? "Hide balance" : "Show balance"}
+            >
+              {showBalance ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          </div>
+
+          {/* Chip */}
+          <div
+            className="relative mt-3 h-7 w-10 rounded-md"
+            style={{
+              background: "linear-gradient(135deg, #d4a843, #f5c842, #b8860b)",
+              boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--color-paper) 25%, transparent)",
+            }}
+          >
+            <div className="absolute inset-1 rounded-sm" style={{ border: "0.5px solid color-mix(in oklab, #000 20%, transparent)" }} />
+          </div>
+
+          {/* Balance (the "card number" position) */}
+          <div className="relative mt-3">
+            {showBalance ? (
+              <p className="text-xl font-bold tabular-nums sm:text-2xl" style={{ letterSpacing: "0.02em" }}>
+                {formatCurrency(grandTotal, currency)}
+              </p>
+            ) : (
+              <p className="text-xl font-bold tabular-nums sm:text-2xl" style={{ letterSpacing: "0.15em" }}>
+                •••• ••••
+              </p>
+            )}
+            <p className="mt-0.5 text-[10px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 50%, transparent)" }}>
+              Total invested in akhirah
+            </p>
+          </div>
+
+          {/* Bottom row: entry count + card number */}
+          <div className="relative mt-auto flex items-end justify-between pt-3">
+            <div>
+              <p className="text-[9px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+                Entries
+              </p>
+              <p className="text-sm font-semibold tabular-nums">{entryCount}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+                Card No.
+              </p>
+              <p className="font-mono text-[11px] tabular-nums" style={{ color: "color-mix(in oklab, var(--color-paper) 70%, transparent)" }}>
+                {showBalance ? formatCardNumber(grandTotal) : "•••• •••• •••• ••••"}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Add form ── */}
@@ -236,30 +334,21 @@ export default function SadaqahClient() {
             className="w-full rounded-lg py-2.5 text-sm font-semibold transition-colors disabled:opacity-50"
             style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)", minHeight: 44 }}
           >
-            {submitting ? "Saving…" : "Log Sadaqah"}
+            {submitting ? "Saving…" : "Add to Akhirah Card"}
           </button>
         </form>
       )}
 
-      {/* ── Summary cards ── */}
-      {data && (
+      {/* ── Category breakdown ── */}
+      {data && entryCount > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          <div className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-            <div className="mb-1.5 flex items-center gap-1.5" style={{ color: "var(--color-accent)" }}>
-              <TrendingUp className="h-4 w-4" />
-              <span className="text-[11px] font-medium uppercase tracking-wide">Total Given</span>
-            </div>
-            <div className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-ink)" }}>
-              {formatCurrency(data.grandTotal, currency)}
-            </div>
-          </div>
           {CATEGORIES.map((cat) => {
             const s = data.summary[cat.value];
             if (!s || s.count === 0) return null;
             return (
               <div key={cat.value} className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
                 <div className="mb-1.5 flex items-center gap-1.5" style={{ color: cat.color }}>
-                  <Heart className="h-4 w-4" />
+                  <TrendingUp className="h-4 w-4" />
                   <span className="text-[11px] font-medium uppercase tracking-wide">{cat.label}</span>
                 </div>
                 <div className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-ink)" }}>
@@ -312,11 +401,8 @@ export default function SadaqahClient() {
         </div>
       ) : (
         <div className="rounded-2xl border p-6 text-center" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-paper-2)" }}>
-            <Heart className="h-6 w-6" style={{ color: "var(--color-ink-muted)" }} />
-          </div>
           <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            No sadaqah logged yet. Tap &ldquo;Log Sadaqah&rdquo; to start tracking your charitable giving.
+            No entries yet. Tap &ldquo;Add&rdquo; to start investing in your akhirah.
           </p>
         </div>
       )}
@@ -324,7 +410,8 @@ export default function SadaqahClient() {
       {/* ── Delete confirmation ── */}
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm"
+          style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 40%, transparent)" }}
           onClick={() => setDeleteConfirm(null)}
         >
           <div

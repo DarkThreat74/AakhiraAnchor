@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { RotateCcw, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { hapticImpact, hapticNotification } from "@/lib/native-bridge";
 
@@ -19,6 +19,8 @@ export default function DhikrCounterClient() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [count, setCount] = useState(0);
   const [completedSequences, setCompletedSequences] = useState<Set<number>>(new Set());
+  const [pulseKey, setPulseKey] = useState(0); // triggers tap animation
+  const tapAreaRef = useRef<HTMLButtonElement>(null);
 
   // Load dhikr sequences
   useEffect(() => {
@@ -56,17 +58,15 @@ export default function DhikrCounterClient() {
     if (!current) return;
     const newCount = count + 1;
     setCount(newCount);
+    setPulseKey((k) => k + 1);
 
     // Light haptic on each tap
     void hapticImpact("light");
-
-    // Also vibrate on web (if supported)
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       try { navigator.vibrate(15); } catch { /* no-op */ }
     }
 
     if (newCount >= current.targetCount) {
-      // Target reached — mark complete and advance
       setCompletedSequences((prev) => new Set(prev).add(currentIndex));
       void hapticNotification("success");
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -89,15 +89,11 @@ export default function DhikrCounterClient() {
   }, []);
 
   const handlePrev = useCallback(() => {
-    if (currentIndex > 0) {
-      goToSequence(currentIndex - 1);
-    }
+    if (currentIndex > 0) goToSequence(currentIndex - 1);
   }, [currentIndex, goToSequence]);
 
   const handleNext = useCallback(() => {
-    if (!isLast) {
-      goToSequence(currentIndex + 1);
-    }
+    if (!isLast) goToSequence(currentIndex + 1);
   }, [currentIndex, isLast, goToSequence]);
 
   const handleRestartAll = useCallback(() => {
@@ -119,7 +115,7 @@ export default function DhikrCounterClient() {
     );
   }
 
-  // ── Empty state (table not seeded) ──
+  // ── Empty state ──
   if (sequences.length === 0) {
     return (
       <div className="mx-auto max-w-md py-8 sm:py-12">
@@ -129,8 +125,7 @@ export default function DhikrCounterClient() {
           </div>
           <h1 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Dhikr Counter</h1>
           <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-            No dhikr sequences have been curated yet. Please check back soon —
-            authentic dhikr sequences from verified sources will be added here.
+            No dhikr sequences have been curated yet. Please check back soon.
           </p>
         </div>
       </div>
@@ -181,7 +176,7 @@ export default function DhikrCounterClient() {
           <button
             key={seq.id}
             onClick={() => goToSequence(i)}
-            className="h-2.5 rounded-full transition-all"
+            className="h-2.5 rounded-full transition-[width,background-color] duration-200"
             style={{
               width: i === currentIndex ? 24 : 10,
               backgroundColor: completedSequences.has(i)
@@ -195,107 +190,127 @@ export default function DhikrCounterClient() {
         ))}
       </div>
 
-      {/* ── Current dhikr card ── */}
+      {/* ── Current dhikr phrase ── */}
       {current && (
-        <div
-          className="overflow-hidden rounded-2xl border"
-          style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
-        >
-          {/* Arabic phrase */}
-          <div className="px-6 pt-6 text-center">
-            <p
-              className="text-2xl leading-loose sm:text-3xl"
-              style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri, serif)", direction: "rtl" }}
-            >
-              {current.phraseArabic}
-            </p>
-            <p className="mt-3 text-sm italic" style={{ color: "var(--color-ink-soft)" }}>
-              {current.phraseTransliteration}
-            </p>
-          </div>
+        <div className="mb-6 text-center">
+          <p
+            className="text-3xl leading-loose sm:text-4xl"
+            style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri, serif)", direction: "rtl" }}
+          >
+            {current.phraseArabic}
+          </p>
+          <p className="mt-2 text-sm italic" style={{ color: "var(--color-ink-soft)" }}>
+            {current.phraseTransliteration}
+          </p>
+        </div>
+      )}
 
-          {/* Count display */}
-          <div className="px-6 py-4 text-center">
-            <div className="inline-flex items-baseline gap-1.5">
-              <span className="text-4xl font-bold tabular-nums sm:text-5xl" style={{ color: isComplete ? "var(--color-success)" : "var(--color-accent)" }}>
-                {count}
-              </span>
-              <span className="text-lg tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                / {current.targetCount}
-              </span>
-            </div>
-          </div>
+      {/* ── The counter: a big beautiful tappable circle ── */}
+      <div className="mb-6 flex flex-col items-center">
+        {/* Count display above the button */}
+        <div className="mb-4 inline-flex items-baseline gap-1.5">
+          <span
+            key={pulseKey}
+            className="text-5xl font-bold tabular-nums sm:text-6xl"
+            style={{
+              color: isComplete ? "var(--color-success)" : "var(--color-accent)",
+              animation: pulseKey > 0 ? "dhikr-pulse 0.3s ease-out" : undefined,
+            }}
+          >
+            {count}
+          </span>
+          <span className="text-xl tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+            / {current?.targetCount ?? 0}
+          </span>
+        </div>
 
-          {/* Progress ring/bar */}
-          <div className="px-6 pb-4">
-            <div className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
-              <div
-                className="h-full rounded-full transition-[width] duration-200 ease-out"
-                style={{
-                  width: `${progress}%`,
-                  backgroundColor: isComplete ? "var(--color-success)" : "var(--color-accent)",
-                }}
-              />
-            </div>
-          </div>
+        {/* Progress ring around the tap button */}
+        <div className="relative" style={{ width: "min(60vw, 220px)", height: "min(60vw, 220px)" }}>
+          {/* SVG progress ring */}
+          <svg
+            className="absolute inset-0 -rotate-90"
+            viewBox="0 0 100 100"
+            style={{ width: "100%", height: "100%" }}
+          >
+            <circle
+              cx="50" cy="50" r="46"
+              fill="none"
+              strokeWidth="3"
+              stroke="var(--color-paper-3)"
+            />
+            <circle
+              cx="50" cy="50" r="46"
+              fill="none"
+              strokeWidth="3"
+              stroke={isComplete ? "var(--color-success)" : "var(--color-accent)"}
+              strokeLinecap="round"
+              strokeDasharray={`${2 * Math.PI * 46}`}
+              strokeDashoffset={`${2 * Math.PI * 46 * (1 - progress / 100)}`}
+              style={{ transition: "stroke-dashoffset 0.3s ease-out, stroke 0.3s ease" }}
+            />
+          </svg>
 
-          {/* Tap area — the main counter button */}
+          {/* The tap button — the hero of the page */}
           <button
+            ref={tapAreaRef}
             onClick={handleTap}
             disabled={isComplete}
-            className="flex w-full items-center justify-center py-8 transition-colors disabled:opacity-60"
+            className="absolute inset-3 flex items-center justify-center rounded-full transition-transform duration-100 active:scale-95 disabled:opacity-60"
             style={{
               backgroundColor: isComplete
-                ? "color-mix(in oklab, var(--color-success) 10%, transparent)"
-                : "var(--color-paper-2)",
-              borderTop: `1px solid var(--color-paper-3)`,
+                ? "color-mix(in oklab, var(--color-success) 12%, var(--color-paper))"
+                : "var(--color-paper)",
+              border: `1px solid var(--color-paper-3)`,
+              boxShadow: isComplete
+                ? "none"
+                : "0 4px 24px -8px color-mix(in oklab, var(--color-accent) 30%, transparent)",
             }}
-            aria-label={`Count dhikr (${count} of ${current.targetCount})`}
+            aria-label={`Count dhikr (${count} of ${current?.targetCount ?? 0})`}
           >
             <span
               className="text-sm font-medium uppercase tracking-wide"
               style={{ color: isComplete ? "var(--color-success)" : "var(--color-ink-soft)" }}
             >
-              {isComplete ? "✓ Complete — tap next" : "Tap to count"}
+              {isComplete ? "✓ Done" : "Tap"}
             </span>
           </button>
-
-          {/* Controls */}
-          <div className="flex items-center justify-between gap-2 border-t px-4 py-3" style={{ borderColor: "var(--color-paper-3)" }}>
-            <button
-              onClick={handlePrev}
-              disabled={currentIndex === 0}
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-30"
-              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
-              aria-label="Previous dhikr"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Prev
-            </button>
-
-            <button
-              onClick={handleReset}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
-              style={{ color: "var(--color-ink-muted)", minHeight: 36 }}
-              aria-label="Reset count"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset
-            </button>
-
-            <button
-              onClick={handleNext}
-              disabled={isLast}
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-30"
-              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
-              aria-label="Next dhikr"
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Controls ── */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={handlePrev}
+          disabled={currentIndex === 0}
+          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-30"
+          style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+          aria-label="Previous dhikr"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Prev
+        </button>
+
+        <button
+          onClick={handleReset}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+          style={{ color: "var(--color-ink-muted)", minHeight: 36 }}
+          aria-label="Reset count"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Reset
+        </button>
+
+        <button
+          onClick={handleNext}
+          disabled={isLast}
+          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-30"
+          style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+          aria-label="Next dhikr"
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
 
       {/* ── Source citation ── */}
       {current && (
@@ -303,6 +318,15 @@ export default function DhikrCounterClient() {
           Source: {current.sourceCitation}
         </p>
       )}
+
+      {/* ── Pulse animation keyframes ── */}
+      <style>{`
+        @keyframes dhikr-pulse {
+          0% { transform: scale(1); }
+          40% { transform: scale(1.15); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

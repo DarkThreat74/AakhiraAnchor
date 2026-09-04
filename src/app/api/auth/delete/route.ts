@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  *
  * Deletes the user row entirely. ON DELETE CASCADE on all foreign keys
  * cleans up prayer_settings, trusted_devices, push_subscriptions, events,
- * goals, onboarding_responses, prayer_friends, prayer_log, etc.
+ * goals, prayer_friends, prayer_log, etc.
  *
  * Requires authenticated session + body { confirm: "DELETE" } to prevent
  * accidental deletion.

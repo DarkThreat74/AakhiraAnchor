@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
-import { env } from "@/lib/env";
-import { logError } from "@/lib/logError";
 import { learnSections } from "@/lib/content/learn";
 
 export const dynamic = "force-dynamic";
 
-// Aggressive rate limiting: 10 searches per hour per user+IP.
-// This prevents abuse and controls OpenRouter costs.
-const RATE_LIMIT_MAX = 10;
+// Rate limiting: 20 searches per hour per user+IP.
+const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 
 const MAX_QUERY_LENGTH = 200;
@@ -74,68 +71,7 @@ function keywordMatch(query: string): string[] {
     .map((s) => s.id);
 }
 
-interface OpenRouterResponse {
-  choices?: Array<{
-    message?: {
-      content?: string;
-    };
-  }>;
-  error?: { message: string };
-}
-
-async function openRouterSearch(query: string): Promise<string[]> {
-  const systemPrompt = `You are a search assistant for an Islamic prayer education app. Your job is to match the user's question to the most relevant section IDs from the provided list. You MUST ONLY return section IDs from the list below — never invent IDs, never answer the question yourself, never provide religious rulings.
-
-Available sections:
-${JSON.stringify(sectionIndex, null, 2)}
-
-Return ONLY a JSON array of section IDs (maximum 3), ordered by relevance. Example: ["wudu-and-ghusl", "common-mistakes"]
-If no section is relevant, return: []`;
-
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.openRouterApiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://waqt.app",
-      "X-Title": "Waqt Learn Search",
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: query },
-      ],
-      max_tokens: 100,
-      temperature: 0,
-    }),
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${response.status}`);
-  }
-
-  const data: OpenRouterResponse = await response.json();
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) return [];
-
-  // Parse the JSON array from the response
-  // The model should return just a JSON array, but be defensive
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return [];
-
-  try {
-    const ids = JSON.parse(jsonMatch[0]) as string[];
-    // Validate that all returned IDs actually exist in our corpus
-    const validIds = new Set(sectionIndex.map((s) => s.id));
-    return ids.filter((id) => validIds.has(id)).slice(0, 3);
-  } catch {
-    return [];
-  }
-}
-
-// POST /api/learn/search — AI-assisted search of curated learn content
+// POST /api/learn/search — keyword search of curated learn content
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -178,31 +114,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // If OpenRouter key is not configured, fall back to keyword matching
-  if (!env.openRouterApiKey) {
-    const sectionIds = keywordMatch(trimmedQuery);
-    return NextResponse.json({
-      sectionIds,
-      matched: sectionIds.length > 0,
-      method: "keyword",
-    });
-  }
-
-  // Try OpenRouter AI search, fall back to keyword matching on error
-  try {
-    const sectionIds = await openRouterSearch(trimmedQuery);
-    return NextResponse.json({
-      sectionIds,
-      matched: sectionIds.length > 0,
-      method: "ai",
-    });
-  } catch (err) {
-    logError(err, { route: "learn/search" });
-    const sectionIds = keywordMatch(trimmedQuery);
-    return NextResponse.json({
-      sectionIds,
-      matched: sectionIds.length > 0,
-      method: "keyword-fallback",
-    });
-  }
+  // Keyword-based search (no AI — human-curated content only)
+  const sectionIds = keywordMatch(trimmedQuery);
+  return NextResponse.json({
+    sectionIds,
+    matched: sectionIds.length > 0,
+    method: "keyword",
+  });
 }

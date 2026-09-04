@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
           notify: validNotify,
           recurrenceRule: `WEEKLY_${daysToRepeat.join(",")}_UNTIL_${recurrenceEndDate}`,
           seriesId,
-          createdVia: "manual" as const,
+          createdVia: "manual",
         })),
       )
       .returning();
