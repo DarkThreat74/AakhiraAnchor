@@ -321,25 +321,31 @@ export default async function MarketingPage() {
             <StaggerItem>
               <Feature
                 title="Dhikr counter"
-                body="A tap-based tasbih counter with curated dhikr sequences from authenticated sources. Vibration feedback on each count, auto-advances through the sequence, and tracks your progress."
+                body="A beautiful tap-based tasbih counter with curated dhikr sequences from authenticated sources. Vibration feedback on each count, auto-advances through the sequence, and tracks your progress."
               />
             </StaggerItem>
             <StaggerItem>
               <Feature
-                title="Hijri calendar"
-                body="See the Islamic date alongside the Gregorian date everywhere — on the prayer dashboard, the calendar day view, and in your daily routine. Never lose track of where you are in the Hijri year."
+                title="Hijri calendar & converter"
+                body="See the Islamic date alongside the Gregorian date everywhere. Convert any date between Gregorian and Hijri with the built-in converter tool."
               />
             </StaggerItem>
             <StaggerItem>
               <Feature
                 title="Qibla compass"
-                body="Find the direction to the Kaaba from anywhere in the world. Live compass on mobile with device sensors, static bearing on desktop. Shows exact degrees, cardinal direction, and distance to Mecca."
+                body="Find the direction to the Kaaba from anywhere in the world. Smooth live compass on mobile with device sensors, static bearing on desktop. Shows exact degrees, cardinal direction, and distance to Mecca."
               />
             </StaggerItem>
             <StaggerItem>
               <Feature
-                title="Sadaqah tracker"
-                body="Log your charitable giving by category — sadaqah, zakat, fidyah, or general charity. See running totals, breakdown by category, and a full history of every contribution."
+                title="Akhirah Card"
+                body="Track your charitable giving on your personal Akhirah Card. Log sadaqah, zakat, fidyah, or general charity. See your balance invested in the hereafter with a full history of every contribution."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="99 Names of Allah"
+                body="Browse all 99 beautiful names of Allah (Asma ul Husna) with Arabic script, transliteration, and English meanings. Search by name or meaning."
               />
             </StaggerItem>
             <StaggerItem>

@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
     // Delete the user row — ON DELETE CASCADE cleans up ALL related PII:
     // prayer_settings (lat/lng/timezone), trusted_devices (fingerprints),
     // push_subscriptions, events (titles), goals (titles/descriptions),
-    // onboarding_responses, prayer_friends, prayer_log, sunnah_log,
-    // qadaa_ledger, qadaa_log_entries, huddle_completions, daily_lesson_views,
-    // goal_share_tokens, oath_ledger, oath_settings
+    // prayer_friends, prayer_log, sunnah_log,
+    // qadaa_ledger, qadaa_log_entries, sadaqah_logs,
+    // goal_share_tokens
     await db.delete(schema.users).where(eq(schema.users.id, session.userId));
 
     // Clear the session cookie

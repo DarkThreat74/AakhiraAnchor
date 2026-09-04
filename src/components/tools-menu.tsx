@@ -64,7 +64,7 @@ const TOOLS: Tool[] = [
   },
 ];
 
-export default function ToolsMenu() {
+export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "sidebar" }) {
   const [open, setOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -95,15 +95,26 @@ export default function ToolsMenu() {
 
   return (
     <>
-      {/* Tools icon button */}
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
-        style={{ color: "var(--color-ink-soft)", minHeight: 36, minWidth: 36 }}
-        aria-label="Open tools menu"
-      >
-        <Wrench className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
-      </button>
+      {/* Trigger button — variant controls appearance */}
+      {variant === "sidebar" ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+          style={{ color: "var(--color-ink-soft)" }}
+        >
+          <Wrench className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+          Tools
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
+          style={{ color: "var(--color-ink-soft)", minHeight: 36, minWidth: 36 }}
+          aria-label="Open tools menu"
+        >
+          <Wrench className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+        </button>
+      )}
 
       {/* Bottom sheet overlay */}
       {open && (

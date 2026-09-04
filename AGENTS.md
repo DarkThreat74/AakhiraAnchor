@@ -15,7 +15,8 @@
 **Waqt** is a prayer-centered life tracker PWA. The five daily prayers are fixed
 anchors; everything else (calendar events, tasks, reminders) is scheduled around
 them. The app provides prayer accountability (check-ins) plus surrounding
-features (Daily Huddle, lessons, dhikr counter, talks library, NL event entry).
+features (dhikr counter, Qibla compass, Akhirah Card, 99 Names of Allah, Hijri
+converter, talks library).
 
 **Stack:** Next.js 14+ App Router · TypeScript · Neon (Postgres) via Drizzle ORM ·
 Vercel (hosting + cron) · Vercel Web Push · AlAdhan API
@@ -33,18 +34,16 @@ These resolve every ambiguous decision. When in doubt, re-read these.
 
 1. **Prayer accountability is free forever.** Never gate the check-in system
    behind a paywall. Future premium features pay for depth and convenience
-   (Huddle pool size, AI tone variety, analytics depth) — never for the
-   thing that makes someone pray.
+   (analytics depth) — never for the thing that makes someone pray.
 
 2. **Never assume the worst on missing data.** Unmarked prayers auto-resolve as
    `assumed_prayed` at day's end — no silent penalty. A week-long absence
    surfaces as ONE batch catch-up screen, never a flood of backdated reminders.
 
-3. **No AI-generated religious content.** All hadith, dhikr sequences, and daily
-   lessons must come from a vetted, human-curated content bank
-   (`daily_lessons`, `dhikr_sequences` tables). The AI's job is tone variation and
-   selection from that bank — never authorship. Treat these tables as
-   empty-until-seeded; build UI to *read* from them, not generate their content.
+3. **No AI-generated religious content.** All dhikr sequences and talks must
+   come from a vetted, human-curated content bank (`dhikr_sequences`, `talks`
+   tables). Treat these tables as empty-until-seeded; build UI to *read* from
+   them, not generate their content.
 
 4. **The overlap-in-calendar rule is permissive.** Overlapping events stack
    side-by-side. No blocking, no warning modal. Prayer windows render as a
@@ -84,10 +83,9 @@ app must be in a working, deployable state.
 | 3 | Prayer times | AlAdhan monthly fetch + cache, prayer window overlay band on day view |
 | 4 | PWA shell | Manifest, service worker, offline cache of current week, install prompt, Web Push subscription |
 | 5 | Check-in state machine | Cron scheduler (every 5 min), push notifications, prayer_log writes, assumed_prayed at window close, return-after-absence catch-up |
-| 6 | Onboarding | Mandatory flow: location → virtue framing → religiosity quiz → notification setup |
-| 7 | Huddle + lesson + dhikr + talks | Content-bank-driven features (read from seeded tables, never generate) |
-| 8 | Voice/AI event entry | Web Speech API → LLM parse → confirm-before-save (never auto-commit ambiguous parse) |
-| 9 | PWA store packaging | PWABuilder (Android TWA) + Capacitor (iOS) — LAST, after real usage |
+| 6 | Onboarding | Mandatory flow: location → virtue framing → notification setup |
+| 7 | Tools (dhikr + qibla + sadaqah + names + hijri + talks) | Content-bank-driven features (read from seeded tables, never generate) |
+| 8 | PWA store packaging | PWABuilder (Android TWA) + Capacitor (iOS) — LAST, after real usage |
 
 ---
 
@@ -102,9 +100,11 @@ src/
 │   ├── (auth)/               # Login, signup
 │   ├── (app)/                # Authenticated app shell
 │   │   ├── calendar/         # Day + month views
-│   │   ├── huddle/           # Daily Huddle
-│   │   ├── lesson/           # Daily lesson
 │   │   ├── dhikr/            # Tasbih counter
+│   │   ├── qibla/            # Qibla compass
+│   │   ├── sadaqah/          # Akhirah Card (sadaqah tracker)
+│   │   ├── names/            # 99 Names of Allah
+│   │   ├── hijri/            # Hijri converter
 │   │   ├── talks/            # Talks library
 │   │   ├── settings/         # Notification prefs, prayer settings
 │   │   └── onboarding/       # Mandatory onboarding wizard
@@ -113,8 +113,9 @@ src/
 │   │   ├── prayer-times/
 │   │   ├── prayer-log/
 │   │   ├── events/
-│   │   ├── huddle/
-│   │   ├── lessons/
+│   │   ├── dhikr/
+│   │   ├── sadaqah/
+│   │   ├── qibla/
 │   │   ├── notifications/
 │   │   ├── cron/
 │   │   └── webhooks/
@@ -129,11 +130,10 @@ src/
 │   ├── prayer/               # Prayer time logic, state machine, window math
 │   ├── notifications/        # Push dispatch
 │   ├── aladhan.ts            # AlAdhan API client
-│   ├── llm.ts                # LLM parse for NL event entry
 │   ├── validation.ts         # UUID/email/phone/HTML escape helpers
 │   ├── rateLimit.ts          # IP-based rate limiting (secure IP extraction)
 │   ├── cronAuth.ts           # Bearer token verification for cron routes
-│   └── content/              # Curated content access (lessons, dhikr, talks)
+│   └── content/              # Curated content access (dhikr, talks)
 ├── components/
 └── drizzle/                  # Migrations
 ```
@@ -174,7 +174,7 @@ Request → Rate limit → Input validation → Auth check → DB policy → Res
 
 ### 5.1 Rate Limiting
 - Every public POST endpoint MUST be rate-limited by IP.
-- Auth endpoints: 5/15min. Form submissions: 5/min. AI endpoints: 15/60s.
+- Auth endpoints: 5/15min. Form submissions: 5/min.
 - Use `src/lib/rateLimit.ts` with secure IP extraction (LAST value in
   X-Forwarded-For, not first — CODEBASE_PATTERNS.md §30.1).
 
@@ -270,8 +270,7 @@ RETURN-AFTER-ABSENCE (7+ days unmarked):
 
 1. **Location capture** → geocode → save to `prayer_settings` → fetch + cache current month from AlAdhan immediately.
 2. **Virtue/framing screen** — PLACEHOLDER text block. Do NOT generate hadith text. Mark it clearly for the user to fill with vetted content.
-3. **Religiosity quiz** (~10 questions) — self-rating sliders (1-5) + timed factual recall (10-second limit). Questions from a small seeded bank — placeholder content for the user to populate/verify.
-4. **Notification setup** — three toggles (early/mid, final, other), all push-only.
+3. **Notification setup** — three toggles (early/mid, final, other), all push-only.
 
 ---
 
@@ -279,9 +278,7 @@ RETURN-AFTER-ABSENCE (7+ days unmarked):
 
 | Table | Purpose | Rule |
 |-------|---------|------|
-| `daily_lessons` | One curated teaching per day | Human-curated. UI reads from it. Cycle through, avoid repeats until exhausted. |
 | `dhikr_sequences` | Phrase, transliteration, target count, order | Human-curated from authenticated source. Counter auto-advances on target hit. |
-| `huddle_task_pool` | Daily Huddle tasks | Free tier: `is_default_free=true` only (8-10 rows). Plus: full pool (~30 rows). User seeds. |
 | `talks` | External links/embeds only | No self-hosted audio. Curation + linking only. |
 
 **Build the UI to read from these tables. If a table is empty, show a graceful
@@ -336,10 +333,9 @@ empty state — never generate content to fill it.**
   Use `after()` (CODEBASE_PATTERNS.md §7.4).
 - Verify signatures. Idempotency guards on all webhook handlers.
 
-### 11.3 External API Calls (AlAdhan, LLM)
+### 11.3 External API Calls (AlAdhan)
 - Fetch current month from AlAdhan ONCE, cache in `prayer_times_cache`. Re-fetch
   monthly via cron, not on every page load.
-- LLM: cap `max_tokens`, rate-limit by IP, never expose API keys client-side.
 - All external calls are best-effort after DB save.
 
 ### 11.4 Error Handling
@@ -378,7 +374,6 @@ These are marked TODO in the spec and require the user's input:
 
 - [ ] Exact hadith/virtue text for onboarding (needs scholarly review / cited source)
 - [ ] Exact dhikr sequences (phrases, transliteration, target counts — authenticated source)
-- [ ] Daily lesson content bank (curated, likely from existing Islamic studies content)
 - [ ] Talks library curated list (speakers/topics/links)
 - [ ] App name confirmation ("Waqt" — domain + trademark availability)
 
@@ -395,7 +390,7 @@ religious content. Do not invent pricing. Do not guess at rulings.**
 | `===` for secret comparison | `crypto.timingSafeEqual()` |
 | Fire-and-forget on serverless | Use `after()` from `next/server` |
 | Inline business logic (state machine) | Import from the single source |
-| AI-generate hadith/dhikr/lesson content | Read from seeded tables; empty state if unseeded |
+| AI-generate dhikr/talks content | Read from seeded tables; empty state if unseeded |
 | Gate prayer check-in behind paywall | Free forever — gate only depth/convenience |
 | Block overlapping events or show warning modal | Stack side-by-side silently |
 | Backdated reminder flood after absence | ONE batch catch-up screen |

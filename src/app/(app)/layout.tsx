@@ -94,19 +94,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        {/* Tools link — opens the tools menu */}
+        {/* Tools link — opens the tools menu (client component) */}
         <div className="px-3 pb-6">
-          <button
-            onClick={() => {
-              // Trigger the tools menu by dispatching a custom event
-              window.dispatchEvent(new CustomEvent("open-tools-menu"));
-            }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-            style={{ color: "var(--color-ink-soft)" }}
-          >
-            <Calendar className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
-            Tools
-          </button>
+          <ToolsMenu variant="sidebar" />
         </div>
       </aside>
 

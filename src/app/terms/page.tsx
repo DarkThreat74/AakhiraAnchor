@@ -35,21 +35,19 @@ export default function TermsPage() {
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold">3. No Payment for Religious Obligations</h2>
+        <h2 className="mb-2 text-lg font-semibold">3. Sadaqah Tracking</h2>
         <p className="text-sm leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
-          Waqt never processes payments for religious obligations. The app tracks an
-          oath ledger (owed vs. self-reported donated) but is a witness, not a
-          collector. Any donations are made outside the app.
+          Waqt never processes payments. The Akhirah Card tracks your charitable
+          giving as a personal record only. Waqt is a witness, not a collector.
+          Any donations are made outside the app.
         </p>
       </section>
 
       <section className="mb-6">
         <h2 className="mb-2 text-lg font-semibold">4. Religious Content</h2>
         <p className="text-sm leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
-          All religious content (hadith, dhikr sequences, daily lessons) is
-          human-curated from vetted sources. Waqt does not generate religious
-          content using AI. The AI&apos;s role is limited to tone variation and
-          selection from the curated bank.
+          All religious content (dhikr sequences, talks) is human-curated from
+          vetted sources. Waqt does not generate religious content using AI.
         </p>
       </section>
 

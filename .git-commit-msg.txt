@@ -1,33 +1,52 @@
-Add admin content managers, Daily Huddle page, and run sadaqah migration
+Remove dead features, add tools menu, redesign Qibla/Dhikr/Sadaqah, add new tools
 
-The audit found that admin APIs existed for dhikr, huddle tasks, and
-lessons but were not wired into the admin portal UI. The Daily Huddle
-schema existed but had no user-facing page. Both are now built.
+1. Removed dead features (per user request — these are not going to happen):
+   - onboarding_responses table (religiosity quiz)
+   - oath_settings + oath_ledger tables (charity pledge)
+   - daily_lessons + daily_lesson_views tables (unused content bank)
+   - huddle_task_pool + huddle_completions tables (Daily Huddle)
+   - voice_ai enum + OPENROUTER_API_KEY (NL event entry)
+   - Removed all related schema, API routes, admin tabs, UI references
+   - Migration 0014_drop_dead_features.sql applied to Neon
+   - Learn search now uses keyword matching only (no OpenRouter AI)
 
-1. Admin Portal — 3 new content management tabs
-   - Dhikr tab: add dhikr sequences (Arabic, transliteration, target
-     count, sequence order, source citation)
-   - Huddle Tasks tab: add tasks with category and is_default_free flag
-   - Lessons tab: add daily lessons with content, source citation,
-     and category
-   - All use the existing shared AddForm/Field/ItemList components
-   - Nav items added to sidebar + mobile drawer
+2. Tools menu (replaces individual nav links in top bar):
+   - Single wrench icon in the mobile top bar opens a bottom sheet
+   - Desktop sidebar has a Tools button that dispatches the same event
+   - Sheet shows all tools in a 2-column grid with icons and descriptions
+   - Body scroll locked when open, Escape to close, tap overlay to close
 
-2. Daily Huddle (/huddle)
-   - New GET/POST /api/huddle route (auth-protected):
-     - GET: returns today's tasks + completion status
-     - POST: toggle task completion (idempotent via unique index)
-   - New /huddle page with:
-     - Progress bar showing completed/total
-     - Tasks grouped by category
-     - Optimistic toggle on tap (with revert on failure)
-     - "All done!" celebration when everything is complete
-     - Graceful empty state when no tasks seeded
-   - Nav links in desktop sidebar + mobile top bar
+3. Qibla compass — fixed vertical glitch and smoothness:
+   - Heading stored in a ref, not React state (no re-render storms)
+   - Single requestAnimationFrame loop smooths both dial and needle
+   - Low-pass filter (alpha 0.15) for smooth but responsive movement
+   - Shortest-path angular interpolation (no 340-degree backward jumps)
+   - Removed CSS transition-transform (the rAF loop IS the smoothing)
+   - Full compass heading calculation from alpha+beta+gamma per W3C spec
+     (the old 360-alpha only worked when phone was flat, not vertical)
+   - webkitCompassHeading still used on iOS (already compensated)
 
-3. Sadaqah migration applied to Neon database
-   - Ran 0013_sadaqah.sql against production Neon
-   - Table verified with all columns and indexes
+4. Dhikr counter — redesigned as a beautiful minimal tap counter:
+   - Large tappable circle button as the hero of the page
+   - SVG progress ring around the button fills as you count
+   - Number pulses on each tap (CSS keyframe animation)
+   - active:scale-95 for tactile press feedback
+   - Arabic phrase displayed prominently above the counter
+   - Sequence dots, prev/next/reset controls below
+
+5. Sadaqah tracker — redesigned as the Akhirah Card:
+   - Credit card visual at the top (gradient, chip, sheen, card number)
+   - Balance = total sadaqah given = "investment in the hereafter"
+   - Show/hide balance toggle (eye icon)
+   - Card number generated from the total for visual flair
+   - Category breakdown and history below the card
+   - Mobile-first, fits iPhone and Android
+
+6. New tools added to the tools menu:
+   - 99 Names of Allah (/names): all 99 names with Arabic,
+     transliteration, meaning, and search
+   - Hijri Converter (/hijri): Gregorian to Hijri and Hijri to
+     Gregorian conversion using Intl.DateTimeFormat
 
 Generated with [Devin](https://devin.ai)
 

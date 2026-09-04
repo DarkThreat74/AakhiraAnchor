@@ -72,7 +72,7 @@ export default function PrivacyPolicyPage() {
       <section className="mb-6">
         <h2 className="mb-2 text-lg font-semibold">6. Religious Content</h2>
         <p className="text-sm leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
-          All religious content (daily lessons, dhikr sequences, talks) is
+          All religious content (dhikr sequences, talks) is
           human-curated from vetted sources. Waqt does not generate religious
           content using AI.
         </p>

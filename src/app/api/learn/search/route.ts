@@ -45,7 +45,7 @@ function extractKeywords(section: typeof learnSections[number]): string[] {
   return keywords.slice(0, 10); // Limit to keep the prompt small
 }
 
-// Simple keyword matching fallback (used when OpenRouter is unavailable or key is missing)
+// Simple keyword matching against curated learn sections
 function keywordMatch(query: string): string[] {
   const queryLower = query.toLowerCase();
   const queryWords = queryLower

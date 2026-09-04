@@ -212,8 +212,6 @@ export const sunnahLog = pgTable(
   ],
 );
 
-// ─── Oath Settings ───
-
 // ─── Qadaa Ledger ───
 
 export const qadaaLedger = pgTable('qadaa_ledger', {
@@ -281,8 +279,6 @@ export const events = pgTable('events', {
   // Bulk update/delete by series — find all events in a recurring series
   seriesIdIdx: index('events_series_id_idx').on(table.userId, table.seriesId),
 }));
-
-// ─── Daily Huddle ───
 
 // ─── Dhikr Sequences (curated content, NOT AI-generated) ───
 
