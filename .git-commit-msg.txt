@@ -1,25 +1,33 @@
-Add talks library, next-prayer countdown, and more landing page features
+Add admin content managers, Daily Huddle page, and run sadaqah migration
 
-Continuing the incomplete-feature audit. The talks table existed in the
-schema with an admin API but had no user-facing page — now built.
+The audit found that admin APIs existed for dhikr, huddle tasks, and
+lessons but were not wired into the admin portal UI. The Daily Huddle
+schema existed but had no user-facing page. Both are now built.
 
-1. Talks Library (/talks)
-   - New user-facing GET /api/talks route (auth-protected)
-   - New /talks page with:
-     - Curated list of external talks (links only, never self-hosted)
-     - Category filter pills
-     - Speaker and category display
-     - External link icon, opens in new tab with rel=noopener
-     - Graceful empty state when table not seeded
+1. Admin Portal — 3 new content management tabs
+   - Dhikr tab: add dhikr sequences (Arabic, transliteration, target
+     count, sequence order, source citation)
+   - Huddle Tasks tab: add tasks with category and is_default_free flag
+   - Lessons tab: add daily lessons with content, source citation,
+     and category
+   - All use the existing shared AddForm/Field/ItemList components
+   - Nav items added to sidebar + mobile drawer
+
+2. Daily Huddle (/huddle)
+   - New GET/POST /api/huddle route (auth-protected):
+     - GET: returns today's tasks + completion status
+     - POST: toggle task completion (idempotent via unique index)
+   - New /huddle page with:
+     - Progress bar showing completed/total
+     - Tasks grouped by category
+     - Optimistic toggle on tap (with revert on failure)
+     - "All done!" celebration when everything is complete
+     - Graceful empty state when no tasks seeded
    - Nav links in desktop sidebar + mobile top bar
 
-2. Next-Prayer Countdown (prayer dashboard)
-   - New countdown banner at the top of the "Today" tab
-   - Shows the next prayer name and a live countdown (Xh Xm Xs)
-   - Handles the cross-midnight case (after Isha, counts to tomorrow's Fajr)
-   - Updates every second via the existing currentTime state
-
-3. Landing page updated with talks library feature card.
+3. Sadaqah migration applied to Neon database
+   - Ran 0013_sadaqah.sql against production Neon
+   - Table verified with all columns and indexes
 
 Generated with [Devin](https://devin.ai)
 

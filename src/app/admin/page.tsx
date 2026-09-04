@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, RefreshCw, ShieldCheck, Mic, LayoutGrid, Users, ChevronRight, ArrowLeft } from "lucide-react";
+import { LogOut, RefreshCw, ShieldCheck, Mic, LayoutGrid, Users, ChevronRight, ArrowLeft, Heart, CheckSquare, BookOpen } from "lucide-react";
 
-type Tab = "overview" | "users" | "talks";
+type Tab = "overview" | "users" | "talks" | "dhikr" | "huddle" | "lessons";
 
 const NAV_ITEMS: Array<{ key: Tab; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }> = [
   { key: "overview", label: "Overview", icon: LayoutGrid },
   { key: "users", label: "Users", icon: Users },
   { key: "talks", label: "Talks", icon: Mic },
+  { key: "dhikr", label: "Dhikr", icon: Heart },
+  { key: "huddle", label: "Huddle Tasks", icon: CheckSquare },
+  { key: "lessons", label: "Lessons", icon: BookOpen },
 ];
 
 interface AdminStats {
@@ -207,6 +210,9 @@ export default function AdminPortal() {
               }
               {tab === "users" && !selectedUser && "All registered accounts. Click any user for details."}
               {tab === "talks" && "External talk links. No self-hosted audio — curation and linking only."}
+              {tab === "dhikr" && "Curated dhikr sequences for the tasbih counter. Human-curated from authenticated sources only."}
+              {tab === "huddle" && "Daily Huddle task pool. Free tier uses is_default_free tasks only."}
+              {tab === "lessons" && "Daily lessons content bank. Human-curated with source citations — never AI-generated."}
             </p>
           </div>
 
@@ -217,6 +223,9 @@ export default function AdminPortal() {
               : <UsersList onSelect={setSelectedUser} />
             )}
             {tab === "talks" && <TalksManager />}
+            {tab === "dhikr" && <DhikrManager />}
+            {tab === "huddle" && <HuddleManager />}
+            {tab === "lessons" && <LessonsManager />}
           </div>
         </main>
       </div>
@@ -480,6 +489,213 @@ function TalksManager() {
             </a>
             <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
               {item.speaker ? `${item.speaker} · ` : ""}{item.category ? `${item.category} · ` : ""}{item.externalUrl}
+            </p>
+          </div>
+        )}
+      </ItemList>
+    </div>
+  );
+}
+
+// ─── Dhikr Manager ───
+
+function DhikrManager() {
+  const [items, setItems] = useState<Array<{ id: string; phraseArabic: string; phraseTransliteration: string; targetCount: number; sequenceOrder: number; sourceCitation: string }>>([]);
+  const [arabic, setArabic] = useState("");
+  const [transliteration, setTransliteration] = useState("");
+  const [targetCount, setTargetCount] = useState("33");
+  const [order, setOrder] = useState("0");
+  const [source, setSource] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/dhikr")
+      .then(r => r.json().catch(() => []))
+      .then(setItems)
+      .catch(() => { /* ignore */ })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!arabic.trim() || !transliteration.trim() || !source.trim()) {
+      setError("Arabic phrase, transliteration, and source citation are required.");
+      return;
+    }
+    const res = await fetch("/api/admin/dhikr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phraseArabic: arabic,
+        phraseTransliteration: transliteration,
+        targetCount: parseInt(targetCount) || 1,
+        sequenceOrder: parseInt(order) || 0,
+        sourceCitation: source,
+      }),
+    });
+    if (res.ok) {
+      setArabic(""); setTransliteration(""); setTargetCount("33"); setOrder("0"); setSource("");
+      load();
+    } else {
+      setError("Failed to add dhikr sequence.");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <AddForm title="Add Dhikr Sequence" onSubmit={add} error={error}>
+        <Field label="Arabic phrase" value={arabic} onChange={setArabic} placeholder="سُبْحَانَ اللَّهِ" />
+        <Field label="Transliteration" value={transliteration} onChange={setTransliteration} placeholder="Subhanallah" />
+        <Field label="Target count" value={targetCount} onChange={setTargetCount} type="number" />
+        <Field label="Sequence order" value={order} onChange={setOrder} type="number" />
+        <Field label="Source citation" value={source} onChange={setSource} placeholder="Sahih al-Bukhari ..." textarea />
+      </AddForm>
+
+      <ItemList loading={loading} items={items} empty="No dhikr sequences yet.">
+        {(item) => (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+              <span style={{ fontFamily: "var(--font-amiri, serif)" }}>{item.phraseArabic}</span>
+              {" — "}{item.phraseTransliteration}
+            </p>
+            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              {item.targetCount}× · order {item.sequenceOrder} · {item.sourceCitation}
+            </p>
+          </div>
+        )}
+      </ItemList>
+    </div>
+  );
+}
+
+// ─── Huddle Tasks Manager ───
+
+function HuddleManager() {
+  const [items, setItems] = useState<Array<{ id: string; title: string; category: string | null; isDefaultFree: boolean }>>([]);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [isFree, setIsFree] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/huddle-tasks")
+      .then(r => r.json().catch(() => []))
+      .then(setItems)
+      .catch(() => { /* ignore */ })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!title.trim()) { setError("Title is required."); return; }
+    const res = await fetch("/api/admin/huddle-tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, category: category || undefined, isDefaultFree: isFree }),
+    });
+    if (res.ok) { setTitle(""); setCategory(""); setIsFree(false); load(); }
+    else { setError("Failed to add huddle task."); }
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <AddForm title="Add Huddle Task" onSubmit={add} error={error}>
+        <Field label="Title" value={title} onChange={setTitle} />
+        <Field label="Category (optional)" value={category} onChange={setCategory} />
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isFree}
+            onChange={(e) => setIsFree(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+            Include in free tier (is_default_free)
+          </span>
+        </label>
+      </AddForm>
+
+      <ItemList loading={loading} items={items} empty="No huddle tasks yet.">
+        {(item) => (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
+              {item.title}
+              {item.isDefaultFree && (
+                <span className="ml-2 rounded px-1.5 py-0.5 text-[10px]" style={{ backgroundColor: "var(--color-paper-2)", color: "var(--color-ink-muted)" }}>
+                  free
+                </span>
+              )}
+            </p>
+            {item.category && (
+              <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>{item.category}</p>
+            )}
+          </div>
+        )}
+      </ItemList>
+    </div>
+  );
+}
+
+// ─── Lessons Manager ───
+
+function LessonsManager() {
+  const [items, setItems] = useState<Array<{ id: string; content: string; sourceCitation: string; category: string | null }>>([]);
+  const [content, setContent] = useState("");
+  const [source, setSource] = useState("");
+  const [category, setCategory] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/lessons")
+      .then(r => r.json().catch(() => []))
+      .then(setItems)
+      .catch(() => { /* ignore */ })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!content.trim() || !source.trim()) {
+      setError("Content and source citation are required.");
+      return;
+    }
+    const res = await fetch("/api/admin/lessons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, sourceCitation: source, category: category || undefined }),
+    });
+    if (res.ok) { setContent(""); setSource(""); setCategory(""); load(); }
+    else { setError("Failed to add lesson."); }
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <AddForm title="Add Daily Lesson" onSubmit={add} error={error}>
+        <Field label="Content" value={content} onChange={setContent} textarea />
+        <Field label="Source citation" value={source} onChange={setSource} placeholder="Sahih Muslim ..." />
+        <Field label="Category (optional)" value={category} onChange={setCategory} />
+      </AddForm>
+
+      <ItemList loading={loading} items={items} empty="No lessons yet.">
+        {(item) => (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm" style={{ color: "var(--color-ink)" }}>
+              {item.content.length > 120 ? item.content.slice(0, 120) + "…" : item.content}
+            </p>
+            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+              {item.category ? `${item.category} · ` : ""}{item.sourceCitation}
             </p>
           </div>
         )}
