@@ -853,6 +853,48 @@ export default function PrayerDashboard() {
               </div>
             </div>
 
+            {/* ── Next Prayer Countdown ── */}
+            {prayerTimes && currentTime && (() => {
+              const PRAYER_LABELS: Record<string, string> = { fajr: "Fajr", dhuhr: "Dhuhr", asr: "Asr", maghrib: "Maghrib", isha: "Isha" };
+              const nowMin = currentTime.getHours() * 60 + currentTime.getMinutes() + currentTime.getSeconds() / 60;
+              let next: { name: string; minutes: number } | null = null;
+              for (const p of PRAYER_ORDER) {
+                const [h, m] = prayerTimes[p].split(" ")[0].split(":").map(Number);
+                const t = h * 60 + m;
+                if (t > nowMin) { next = { name: p, minutes: t }; break; }
+              }
+              // If all prayers passed, next is tomorrow's Fajr
+              if (!next) {
+                const [fh, fm] = prayerTimes.fajr.split(" ")[0].split(":").map(Number);
+                next = { name: "fajr", minutes: fh * 60 + fm + 1440 };
+              }
+              const diff = next.minutes - nowMin;
+              const hrs = Math.floor(diff / 60);
+              const mins = Math.floor(diff % 60);
+              const secs = Math.floor((diff * 60) % 60);
+              return (
+                <div
+                  className="flex items-center justify-between rounded-2xl border px-4 py-3 sm:px-5"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "color-mix(in oklab, var(--color-accent) 6%, var(--color-paper))" }}
+                >
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                      Next prayer
+                    </p>
+                    <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                      {PRAYER_LABELS[next.name]}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>in</p>
+                    <p className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-accent)" }}>
+                      {hrs > 0 ? `${hrs}h ` : ""}{mins}m {secs}s
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Vertical Timeline ── */}
             {prayerTimes ? (
               <div className="px-4 py-2 sm:px-5">

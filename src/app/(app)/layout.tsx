@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { Calendar, Settings, Flame, BookOpen, Sun, Heart, Compass, HandHeart } from "lucide-react";
+import { Calendar, Settings, Flame, BookOpen, Sun, Heart, Compass, HandHeart, PlayCircle } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
 import BiometricGate from "@/components/biometric-gate";
@@ -123,6 +123,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Sadaqah
           </Link>
           <Link
+            href="/talks"
+            prefetch
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            <PlayCircle className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+            Talks
+          </Link>
+          <Link
             href="/learn"
             prefetch
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
@@ -175,6 +184,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             >
               <HandHeart className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
               Sadaqah
+            </Link>
+            <Link
+              href="/talks"
+              prefetch
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+            >
+              <PlayCircle className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+              Talks
             </Link>
             <Link
               href="/learn"

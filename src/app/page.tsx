@@ -344,6 +344,12 @@ export default async function MarketingPage() {
             </StaggerItem>
             <StaggerItem>
               <Feature
+                title="Talks library"
+                body="Browse curated lectures and khutbahs from trusted speakers. External links only — no self-hosted audio. Filter by category and listen on the original platform."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
                 title="Bot-proof signup"
                 body="A claw-machine mini-game verifies you're human — no boring checkbox, no privacy-invading tracking. Falls back automatically if the challenge doesn't load."
               />
