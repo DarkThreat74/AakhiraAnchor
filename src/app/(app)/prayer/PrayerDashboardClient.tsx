@@ -821,6 +821,25 @@ export default function PrayerDashboard() {
                   <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                     {currentTime?.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                   </p>
+                  {/* Hijri date — computed client-side via Intl.DateTimeFormat (islamic calendar) */}
+                  {currentTime && (
+                    <p
+                      className="mt-0.5 text-[11px]"
+                      style={{ color: "var(--color-accent)", fontFamily: "var(--font-amiri, serif)" }}
+                    >
+                      {(() => {
+                        try {
+                          return new Intl.DateTimeFormat("en-US-u-ca-islamic", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          }).format(currentTime) + " AH";
+                        } catch {
+                          return null;
+                        }
+                      })()}
+                    </p>
+                  )}
                 </div>
                 {prayerTimes && (
                   <div className="text-right">

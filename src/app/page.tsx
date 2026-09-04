@@ -320,6 +320,18 @@ export default async function MarketingPage() {
             </StaggerItem>
             <StaggerItem>
               <Feature
+                title="Dhikr counter"
+                body="A tap-based tasbih counter with curated dhikr sequences from authenticated sources. Vibration feedback on each count, auto-advances through the sequence, and tracks your progress."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Hijri calendar"
+                body="See the Islamic date alongside the Gregorian date everywhere — on the prayer dashboard, the calendar day view, and in your daily routine. Never lose track of where you are in the Hijri year."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
                 title="Bot-proof signup"
                 body="A claw-machine mini-game verifies you're human — no boring checkbox, no privacy-invading tracking. Falls back automatically if the challenge doesn't load."
               />

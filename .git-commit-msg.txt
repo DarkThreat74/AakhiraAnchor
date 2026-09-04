@@ -1,33 +1,37 @@
-Add prayer stats: makruh zones, goal line, on-time %, best streak, day-of-week
+Add dhikr/tasbih counter, Hijri dates, and more landing page features
 
-Competitor research (Agent Reach/Exa across 7 apps: Muslim Pro, Athan,
-Pillars, Khushu, SalahStreak, Just Pray, Kerahat vakti) showed Waqt was
-missing several common prayer-stats features. This commit adds them.
+Audit found incomplete features: the dhikr_sequences table existed and
+had an admin API, but there was no user-facing UI or API. Hijri dates
+were returned by AlAdhan but never displayed. Both are now built.
 
-API changes (src/app/api/prayer-log/analytics/route.ts):
-- Added bestStreak via new calculateBestStreak() in lib/prayer/checkin.ts
-  (walks 3650 days backwards tracking longest complete-day run)
-- Added onTimeCount/lateCount/onTimePct per prayer (50% window threshold)
-- Added dayOfWeekStats: per-weekday consistency (Sun-Sat)
-- Added totalPrayedAllTime, avgPrayersPerDay
-- Added mostConsistentPrayer, mostMissedPrayer
+New features:
 
-UI changes (src/app/(app)/prayer/PrayerDashboardClient.tsx):
-- Overview cards expanded from 4 to 8:
-  Row 1: Current Streak, Best Streak, Complete Days, Masjid Rate
-  Row 2: This Week, Avg/Day, Total Prayed, Top Prayer (+ work-on hint)
-- Per-prayer breakdown now has 5 metrics (added On-Time %)
-- Prayer time bar replaced with makruh-zone visualization:
-  Green zone (0-33%): Ideal time
-  Amber zone (33-66%): Acceptable
-  Red zone (66-100%): Makruh (disliked)
-  Dashed goal line at 33% boundary with ▼ marker
-  Solid marker showing the user's average position
-  Zone labels below the bar
-- New Day-of-Week Consistency section:
-  7 bars (Sun-Sat) showing consistency %
-  Best day highlighted green, worst day highlighted red
-  Reveals patterns like "Fajr is hardest on weekends"
+1. Dhikr/Tasbih Counter (/dhikr)
+   - New user-facing GET /api/dhikr route (auth-protected)
+   - New /dhikr page with full tasbih counter UI:
+     - Arabic phrase display (Amiri font, RTL)
+     - Transliteration and source citation
+     - Large tap area for counting
+     - Progress bar showing count / target
+     - Vibration feedback (web Vibration API + Capacitor haptics)
+     - Auto-advance to next dhikr when target reached
+     - Sequence progress dots (tap to jump between dhikrs)
+     - Prev/Next/Reset controls
+     - "All complete" celebration screen with restart option
+     - Graceful empty state when table not seeded
+   - Nav links added to desktop sidebar and mobile top bar
+
+2. Hijri Date Display
+   - Prayer dashboard "Today" tab: Hijri date shown below Gregorian
+     date in Amiri font, accent color
+   - Calendar day view: Hijri date shown in DayDateHeader below the
+     Gregorian date
+   - Computed client-side via Intl.DateTimeFormat with islamic calendar
+     (no API changes needed, works offline)
+
+3. Landing page updated with 2 new feature cards:
+   - Dhikr counter
+   - Hijri calendar
 
 Generated with [Devin](https://devin.ai)
 

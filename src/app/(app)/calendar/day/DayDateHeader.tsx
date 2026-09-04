@@ -47,6 +47,18 @@ export default function DayDateHeader({ date }: { date: string }) {
     day: "numeric",
   });
 
+  // Hijri date — computed client-side via Intl.DateTimeFormat (islamic calendar)
+  let hijriDate: string | null = null;
+  try {
+    hijriDate = new Intl.DateTimeFormat("en-US-u-ca-islamic", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(dateObj) + " AH";
+  } catch {
+    hijriDate = null;
+  }
+
   const isToday = today !== null && date === today;
 
   return (
@@ -68,6 +80,14 @@ export default function DayDateHeader({ date }: { date: string }) {
             <h1 className="truncate text-sm font-semibold tracking-tight sm:text-lg" style={{ color: "var(--color-ink)" }}>
               {formattedDate}
             </h1>
+            {hijriDate && (
+              <p
+                className="mt-0.5 truncate text-xs"
+                style={{ color: "var(--color-accent)", fontFamily: "var(--font-amiri, serif)" }}
+              >
+                {hijriDate}
+              </p>
+            )}
             {isToday && (
               <p className="text-xs" style={{ color: "var(--color-accent)" }}>Today</p>
             )}

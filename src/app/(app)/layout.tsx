@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { Calendar, Settings, Flame, BookOpen, Sun } from "lucide-react";
+import { Calendar, Settings, Flame, BookOpen, Sun, Heart } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
 import BiometricGate from "@/components/biometric-gate";
@@ -93,8 +93,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        {/* Learn link — separated from main nav as an educational resource */}
-        <div className="px-3 pb-6">
+        {/* Learn + Dhikr links — separated from main nav as educational resources */}
+        <div className="space-y-1 px-3 pb-6">
+          <Link
+            href="/dhikr"
+            prefetch
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            <Heart className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+            Dhikr
+          </Link>
           <Link
             href="/learn"
             prefetch
@@ -121,15 +130,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span className="text-base font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
             Waqt
           </span>
-          <Link
-            href="/learn"
-            prefetch
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
-            style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
-          >
-            <BookOpen className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
-            Learn
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/dhikr"
+              prefetch
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+            >
+              <Heart className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+              Dhikr
+            </Link>
+            <Link
+              href="/learn"
+              prefetch
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+            >
+              <BookOpen className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+              Learn
+            </Link>
+          </div>
         </header>
 
         {/* Page content */}
