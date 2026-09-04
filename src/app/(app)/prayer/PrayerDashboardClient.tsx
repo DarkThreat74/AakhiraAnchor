@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X, WifiOff } from "lucide-react";
+import { Flame, MapPin, Users, UserPlus, Copy, Check, Calendar, X, WifiOff, Trophy, TrendingUp, Target } from "lucide-react";
 import { getSunnahsForMadhab, type SunnahDefinition } from "@/lib/prayer/sunnahs";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { shareNative, hapticNotification } from "@/lib/native-bridge";
@@ -14,6 +14,17 @@ interface PerPrayerStats {
   masjidCount: number;
   masjidPct: number;
   avgWindowPct: number | null;
+  consistencyPct: number;
+  onTimeCount: number;
+  lateCount: number;
+  onTimePct: number;
+}
+
+interface DayOfWeekStat {
+  day: string;
+  dayIndex: number;
+  totalPrayed: number;
+  activeDays: number;
   consistencyPct: number;
 }
 
@@ -28,6 +39,7 @@ interface TodayPrayerTimes {
 
 interface Analytics {
   streak: number;
+  bestStreak: number;
   range: string;
   rangeStart: string;
   totalCompleteDays: number;
@@ -40,6 +52,11 @@ interface Analytics {
   thisWeekPrayed: number;
   thisMonthPrayed: number;
   lastPrayedDate: string | null;
+  totalPrayedAllTime: number;
+  avgPrayersPerDay: number;
+  mostConsistentPrayer: string | null;
+  mostMissedPrayer: string | null;
+  dayOfWeekStats: DayOfWeekStat[];
   todayPrayerTimes: TodayPrayerTimes | null;
 }
 
@@ -1251,7 +1268,7 @@ export default function PrayerDashboard() {
           ════════════════════════════════════════════════════════════════ */}
       {activeTab === "stats" && (
         <div className="space-y-6">
-          {/* Overview metrics */}
+          {/* Overview metrics — row 1 */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             <StatCard
               icon={<Flame className="h-4 w-4" />}
@@ -1261,10 +1278,10 @@ export default function PrayerDashboard() {
               color="var(--color-warmth)"
             />
             <StatCard
-              icon={<Calendar className="h-4 w-4" />}
-              label="This Week"
-              value={`${myWeekPrayed}`}
-              sub="prayers"
+              icon={<Trophy className="h-4 w-4" />}
+              label="Best Streak"
+              value={`${analytics?.bestStreak || 0}`}
+              sub="days"
               color="var(--color-accent)"
             />
             <StatCard
@@ -1280,6 +1297,38 @@ export default function PrayerDashboard() {
               value={`${myMasjidPct}%`}
               sub={`${analytics?.totalMasjid || 0} times`}
               color="var(--color-ink-soft)"
+            />
+          </div>
+
+          {/* Overview metrics — row 2 */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+            <StatCard
+              icon={<Calendar className="h-4 w-4" />}
+              label="This Week"
+              value={`${myWeekPrayed}`}
+              sub="prayers"
+              color="var(--color-accent)"
+            />
+            <StatCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Avg / Day"
+              value={`${analytics?.avgPrayersPerDay || 0}`}
+              sub={`of 5`}
+              color="var(--color-ink-soft)"
+            />
+            <StatCard
+              icon={<Check className="h-4 w-4" />}
+              label="Total Prayed"
+              value={`${analytics?.totalPrayedAllTime || 0}`}
+              sub="all-time"
+              color="var(--color-success)"
+            />
+            <StatCard
+              icon={<Target className="h-4 w-4" />}
+              label="Top Prayer"
+              value={analytics?.mostConsistentPrayer ? PRAYER_LABELS[analytics.mostConsistentPrayer] || "—" : "—"}
+              sub={analytics?.mostMissedPrayer ? `Work on: ${PRAYER_LABELS[analytics.mostMissedPrayer] || ""}` : ""}
+              color="var(--color-warmth)"
             />
           </div>
 
@@ -1328,10 +1377,11 @@ export default function PrayerDashboard() {
                         {PRAYER_LABELS[stat.prayer] || stat.prayer}
                       </span>
                     </div>
-                    <div className="grid grid-cols-4 gap-1 text-center sm:gap-2">
+                    <div className="grid grid-cols-5 gap-1 text-center sm:gap-2">
                       <Metric label="Prayed" value={`${stat.totalPrayed}`} />
-                      <Metric label="Consistency" value={`${stat.consistencyPct}%`} />
+                      <Metric label="Consist." value={`${stat.consistencyPct}%`} />
                       <Metric label="Masjid" value={`${stat.masjidPct}%`} />
+                      <Metric label="On-Time" value={`${stat.onTimePct}%`} />
                       <div>
                         <div className="text-sm font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>
                           {stat.avgWindowPct !== null ? `${stat.avgWindowPct}%` : "—"}
@@ -1344,17 +1394,52 @@ export default function PrayerDashboard() {
                         <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Avg Time</div>
                       </div>
                     </div>
-                    {/* Avg Time line — fills based on avgWindowPct, animates smoothly */}
-                    <div className="mt-2">
+                    {/* Prayer time bar with makruh zones + goal line */}
+                    <div className="mt-3">
                       <div className="mb-1 flex items-center justify-between text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                        <span>Avg time of prayer</span>
-                        <span>{stat.avgWindowPct !== null ? `${stat.avgWindowPct}%` : "—"}</span>
+                        <span>Prayer window: early → late</span>
+                        <span>{stat.avgWindowPct !== null ? `Avg: ${stat.avgWindowPct}%` : "—"}</span>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
+                      <div className="relative h-3 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
+                        {/* Makruh zones: green (0-33%), amber (33-66%), red (66-100%) */}
+                        <div className="absolute inset-0 flex">
+                          <div className="h-full" style={{ width: "33%", backgroundColor: "color-mix(in oklab, var(--color-success) 25%, transparent)" }} />
+                          <div className="h-full" style={{ width: "34%", backgroundColor: "color-mix(in oklab, var(--color-warmth) 25%, transparent)" }} />
+                          <div className="h-full" style={{ width: "33%", backgroundColor: "color-mix(in oklab, var(--color-error) 20%, transparent)" }} />
+                        </div>
+                        {/* Goal line at 33% (end of ideal zone) */}
                         <div
-                          className="h-full rounded-full transition-[width] duration-700 ease-out"
-                          style={{ width: `${stat.avgWindowPct ?? 0}%`, backgroundColor: color }}
-                        />
+                          className="absolute top-0 bottom-0 w-0.5"
+                          style={{
+                            left: "33%",
+                            backgroundColor: "var(--color-success)",
+                            opacity: 0.7,
+                          }}
+                        >
+                          <div
+                            className="absolute -top-0.5 -translate-x-1/2 whitespace-nowrap text-[8px] font-semibold"
+                            style={{ color: "var(--color-success)", left: "50%" }}
+                          >
+                            ▼
+                          </div>
+                        </div>
+                        {/* Average position marker */}
+                        {stat.avgWindowPct !== null && (
+                          <div
+                            className="absolute top-0 bottom-0 w-1 rounded-full transition-[left] duration-700 ease-out"
+                            style={{
+                              left: `calc(${stat.avgWindowPct}% - 2px)`,
+                              backgroundColor: color,
+                              boxShadow: "0 0 0 1px var(--color-paper)",
+                            }}
+                          />
+                        )}
+                      </div>
+                      {/* Zone labels */}
+                      <div className="mt-1 flex justify-between text-[9px]" style={{ color: "var(--color-ink-muted)" }}>
+                        <span style={{ color: "var(--color-success)" }}>Ideal</span>
+                        <span style={{ color: "var(--color-warmth)" }}>Acceptable</span>
+                        <span style={{ color: "var(--color-error)" }}>Makruh</span>
                       </div>
                     </div>
                   </div>
@@ -1362,6 +1447,51 @@ export default function PrayerDashboard() {
               })}
             </div>
           </div>
+
+          {/* Day-of-week breakdown */}
+          {analytics?.dayOfWeekStats && analytics.dayOfWeekStats.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+              <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Day-of-Week Consistency</h2>
+                <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                  Which days you pray most consistently
+                </p>
+              </div>
+              <div className="space-y-2 px-4 py-3 sm:px-5">
+                {analytics.dayOfWeekStats.map((dow) => {
+                  const maxConsistency = Math.max(...analytics.dayOfWeekStats.map((d) => d.consistencyPct), 1);
+                  const barWidth = maxConsistency > 0 ? (dow.consistencyPct / maxConsistency) * 100 : 0;
+                  const isBest = dow.consistencyPct === Math.max(...analytics.dayOfWeekStats.map((d) => d.consistencyPct)) && dow.consistencyPct > 0;
+                  const isWorst = dow.consistencyPct === Math.min(...analytics.dayOfWeekStats.map((d) => d.consistencyPct)) && dow.activeDays > 0;
+                  return (
+                    <div key={dow.dayIndex} className="flex items-center gap-3">
+                      <span
+                        className="w-8 shrink-0 text-xs font-medium tabular-nums"
+                        style={{ color: isBest ? "var(--color-success)" : isWorst ? "var(--color-error)" : "var(--color-ink-soft)" }}
+                      >
+                        {dow.day}
+                      </span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }}>
+                        <div
+                          className="h-full rounded-full transition-[width] duration-500 ease-out"
+                          style={{
+                            width: `${barWidth}%`,
+                            backgroundColor: isBest ? "var(--color-success)" : isWorst ? "var(--color-error)" : "var(--color-accent)",
+                          }}
+                        />
+                      </div>
+                      <span
+                        className="w-10 shrink-0 text-right text-xs font-medium tabular-nums"
+                        style={{ color: "var(--color-ink)" }}
+                      >
+                        {dow.consistencyPct}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

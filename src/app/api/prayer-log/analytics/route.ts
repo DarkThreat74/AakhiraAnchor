@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and, gte } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
-import { calculateStreak } from "@/lib/prayer/checkin";
+import { calculateStreak, calculateBestStreak } from "@/lib/prayer/checkin";
 import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
@@ -208,6 +208,9 @@ export async function GET(request: NextRequest) {
       // windowPct = (markedMinutes - prayerStart) / (windowEnd - prayerStart) * 100
       // This is season-independent: 0% = prayed right at start, 100% = prayed at last moment.
       const windowPcts: number[] = [];
+      let onTimeCount = 0;  // prayed in first 50% of window
+      let lateCount = 0;    // prayed in last 50% of window
+
       for (const log of prayedLogs) {
         if (!log.markedAt) continue;
         const marked = new Date(log.markedAt);
@@ -267,7 +270,15 @@ export async function GET(request: NextRequest) {
           elapsed = (1440 - windowStart) + markedMinutes;
         }
         const pct = (elapsed / windowDuration) * 100;
-        windowPcts.push(Math.max(0, Math.min(100, pct)));
+        const clampedPct = Math.max(0, Math.min(100, pct));
+        windowPcts.push(clampedPct);
+
+        // Classify on-time vs late (50% threshold)
+        if (clampedPct <= 50) {
+          onTimeCount++;
+        } else {
+          lateCount++;
+        }
       }
 
       const avgWindowPct = windowPcts.length > 0
@@ -281,6 +292,9 @@ export async function GET(request: NextRequest) {
         masjidPct: totalDays > 0 ? Math.round((masjidCount / totalDays) * 100) : 0,
         avgWindowPct,
         consistencyPct: activeDays > 0 ? Math.round((totalDays / activeDays) * 100) : 0,
+        onTimeCount,
+        lateCount,
+        onTimePct: totalDays > 0 ? Math.round((onTimeCount / totalDays) * 100) : 0,
       };
     });
 
@@ -305,8 +319,68 @@ export async function GET(request: NextRequest) {
     // ── Today's prayer times for equivalent-time display ──
     const todayTimes = prayerTimesByDate.get(todayStr) || null;
 
+    // ── Best streak (historical) ──
+    const bestStreak = calculateBestStreak(logsByDate, todayStr);
+
+    // ── Day-of-week breakdown ──
+    // For each day of week (0=Sunday..6=Saturday), count how many prayers were prayed
+    // vs how many days were active, to get a consistency rate per weekday.
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayOfWeekStats = Array.from({ length: 7 }, (_, i) => ({
+      day: dayNames[i],
+      dayIndex: i,
+      totalPrayed: 0,
+      activeDays: 0,
+      consistencyPct: 0,
+    }));
+
+    // Build a set of all dates that have any logs (active days)
+    const allActiveDates = new Set<string>();
+    for (const log of allLogs) {
+      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+      allActiveDates.add(dateStr);
+    }
+
+    // Count prayed prayers per day of week
+    for (const log of allLogs) {
+      if (log.status !== "prayed" && log.status !== "assumed_prayed") continue;
+      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+      const dateObj = new Date(dateStr + "T00:00:00");
+      const dow = dateObj.getDay();
+      dayOfWeekStats[dow].totalPrayed++;
+    }
+
+    // Count active days per day of week (within the range)
+    for (const dateStr of allActiveDates) {
+      if (dateStr < rangeStart || dateStr > todayStr) continue;
+      const dateObj = new Date(dateStr + "T00:00:00");
+      const dow = dateObj.getDay();
+      dayOfWeekStats[dow].activeDays++;
+    }
+
+    // Calculate consistency per day of week
+    for (const stat of dayOfWeekStats) {
+      // Expected prayers = activeDays * 5
+      const expected = stat.activeDays * 5;
+      stat.consistencyPct = expected > 0 ? Math.round((stat.totalPrayed / expected) * 100) : 0;
+    }
+
+    // ── Total prayed all-time ──
+    const totalPrayedAllTime = allLogs.filter(
+      (l) => l.status === "prayed" || l.status === "assumed_prayed",
+    ).length;
+
+    // ── Average prayers per day (within range) ──
+    const avgPrayersPerDay = activeDays > 0 ? Math.round((totalPrayed / activeDays) * 10) / 10 : 0;
+
+    // ── Most consistent / most missed prayer ──
+    const sortedByConsistency = [...perPrayer].sort((a, b) => b.consistencyPct - a.consistencyPct);
+    const mostConsistentPrayer = sortedByConsistency[0]?.prayer || null;
+    const mostMissedPrayer = sortedByConsistency[sortedByConsistency.length - 1]?.prayer || null;
+
     return NextResponse.json({
       streak,
+      bestStreak,
       range,
       rangeStart,
       totalCompleteDays: completeDays.size,
@@ -319,6 +393,11 @@ export async function GET(request: NextRequest) {
       thisWeekPrayed,
       thisMonthPrayed,
       lastPrayedDate,
+      totalPrayedAllTime,
+      avgPrayersPerDay,
+      mostConsistentPrayer,
+      mostMissedPrayer,
+      dayOfWeekStats,
       todayPrayerTimes: todayTimes
         ? {
             fajr: todayTimes.fajr,

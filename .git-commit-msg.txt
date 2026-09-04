@@ -1,44 +1,33 @@
-Fix iOS PWA display — safe-area insets, standalone height, overscroll bounce
+Add prayer stats: makruh zones, goal line, on-time %, best streak, day-of-week
 
-On iOS, when Waqt is installed to the home screen (standalone PWA), the
-app renders full-bleed with no Safari chrome. The status bar overlays
-content, the Dynamic Island/notch eats ~59px at the top, and the home
-indicator eats ~34px at the bottom. Without safe-area insets, the top
-bar, back button, and nav links were hidden under the notch, and the
-bottom nav was under the home indicator.
+Competitor research (Agent Reach/Exa across 7 apps: Muslim Pro, Athan,
+Pillars, Khushu, SalahStreak, Just Pray, Kerahat vakti) showed Waqt was
+missing several common prayer-stats features. This commit adds them.
 
-Research via Context7 (Next.js PWA docs) and Agent Reach/Exa (real-world
-iOS PWA issues from GitHub PRs and Ionic issues) confirmed:
-- env(safe-area-inset-top) is ~59px in standalone (vs ~8px in Safari)
-- env(safe-area-inset-bottom) is ~34px in standalone
-- 100dvh can be wrong on cold start in standalone; 100vh is correct
-- apple-mobile-web-app-status-bar-style: black-translucent is the only
-  way to get true fullscreen on iOS
-- overscroll-behavior: none prevents the rubber-band bounce
+API changes (src/app/api/prayer-log/analytics/route.ts):
+- Added bestStreak via new calculateBestStreak() in lib/prayer/checkin.ts
+  (walks 3650 days backwards tracking longest complete-day run)
+- Added onTimeCount/lateCount/onTimePct per prayer (50% window threshold)
+- Added dayOfWeekStats: per-weekday consistency (Sun-Sat)
+- Added totalPrayedAllTime, avgPrayersPerDay
+- Added mostConsistentPrayer, mostMissedPrayer
 
-Fixes:
-1. globals.css: Added @media (display-mode: standalone) block that
-   switches html height to 100vh and disables overscroll-behavior on
-   html+body (prevents iOS rubber-band bounce).
-
-2. layout.tsx: Changed appleWebApp.statusBarStyle from "default" to
-   "black-translucent" — the only mode that gives true fullscreen on
-   iOS. Content extends under the status bar, and we use
-   env(safe-area-inset-top) padding on all fixed/sticky headers to
-   keep content visible.
-
-3. (auth)/layout.tsx: Added env(safe-area-inset-top) padding to the
-   root container and env(safe-area-inset-bottom) to the centered
-   content wrapper. The Back button was hidden under the notch.
-
-4. page.tsx (marketing): Added env(safe-area-inset-top) padding to the
-   fixed nav header and env(safe-area-inset-bottom) to the footer.
-
-5. admin/page.tsx: Added env(safe-area-inset-top) to the mobile top bar
-   and safe-area insets to the mobile sidebar drawer.
-
-The app layout's mobile top bar and bottom nav already had correct
-safe-area insets — no changes needed there.
+UI changes (src/app/(app)/prayer/PrayerDashboardClient.tsx):
+- Overview cards expanded from 4 to 8:
+  Row 1: Current Streak, Best Streak, Complete Days, Masjid Rate
+  Row 2: This Week, Avg/Day, Total Prayed, Top Prayer (+ work-on hint)
+- Per-prayer breakdown now has 5 metrics (added On-Time %)
+- Prayer time bar replaced with makruh-zone visualization:
+  Green zone (0-33%): Ideal time
+  Amber zone (33-66%): Acceptable
+  Red zone (66-100%): Makruh (disliked)
+  Dashed goal line at 33% boundary with ▼ marker
+  Solid marker showing the user's average position
+  Zone labels below the bar
+- New Day-of-Week Consistency section:
+  7 bars (Sun-Sat) showing consistency %
+  Best day highlighted green, worst day highlighted red
+  Reveals patterns like "Fajr is hardest on weekends"
 
 Generated with [Devin](https://devin.ai)
 

@@ -293,3 +293,39 @@ export function calculateStreak(
 
   return streak;
 }
+
+/**
+ * Calculate the best (longest) streak of consecutive complete days (all 5 prayed).
+ * Scans the full log history backwards from today.
+ */
+export function calculateBestStreak(
+  prayerLogsByDate: Map<string, Array<{ status: string }>>,
+  todayStr: string,
+): number {
+  let best = 0;
+  let current = 0;
+
+  // Walk backwards from today, checking each date for a complete day
+  const today = new Date(todayStr + "T00:00:00");
+  for (let i = 0; i < 3650; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(checkDate.getDate() - i);
+    const dateStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, "0")}-${String(checkDate.getDate()).padStart(2, "0")}`;
+
+    const logs = prayerLogsByDate.get(dateStr) || [];
+    const prayedCount = logs.filter(
+      (l) => l.status === "prayed" || l.status === "assumed_prayed",
+    ).length;
+
+    if (prayedCount === 5) {
+      current++;
+      if (current > best) best = current;
+    } else {
+      // Skip today if no logs yet (don't break the streak)
+      if (i === 0 && prayedCount === 0) continue;
+      current = 0;
+    }
+  }
+
+  return best;
+}
