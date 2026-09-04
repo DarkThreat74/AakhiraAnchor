@@ -332,6 +332,18 @@ export default async function MarketingPage() {
             </StaggerItem>
             <StaggerItem>
               <Feature
+                title="Qibla compass"
+                body="Find the direction to the Kaaba from anywhere in the world. Live compass on mobile with device sensors, static bearing on desktop. Shows exact degrees, cardinal direction, and distance to Mecca."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
+                title="Sadaqah tracker"
+                body="Log your charitable giving by category — sadaqah, zakat, fidyah, or general charity. See running totals, breakdown by category, and a full history of every contribution."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <Feature
                 title="Bot-proof signup"
                 body="A claw-machine mini-game verifies you're human — no boring checkbox, no privacy-invading tracking. Falls back automatically if the challenge doesn't load."
               />

@@ -57,6 +57,7 @@ interface Analytics {
   mostConsistentPrayer: string | null;
   mostMissedPrayer: string | null;
   dayOfWeekStats: DayOfWeekStat[];
+  heatmapData: Record<string, number>;
   todayPrayerTimes: TodayPrayerTimes | null;
 }
 
@@ -1511,6 +1512,11 @@ export default function PrayerDashboard() {
               </div>
             </div>
           )}
+
+          {/* Prayer consistency heatmap (GitHub-style, last 365 days) */}
+          {analytics?.heatmapData && (
+            <PrayerHeatmap heatmapData={analytics.heatmapData} />
+          )}
         </div>
       )}
 
@@ -2083,6 +2089,144 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-sm font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>{value}</div>
       <div className="text-[11px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>{label}</div>
+    </div>
+  );
+}
+
+// ── Prayer Heatmap (GitHub-style, last 365 days) ──
+// Shows daily prayer completion: green = all 5, amber = partial, red = none.
+function PrayerHeatmap({ heatmapData }: { heatmapData: Record<string, number> }) {
+  // Build the last 365 days, grouped into weeks (columns of 7 days)
+  const today = new Date();
+  const days: { date: string; count: number; dayOfWeek: number }[] = [];
+
+  for (let i = 364; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    days.push({
+      date: dateStr,
+      count: heatmapData[dateStr] || 0,
+      dayOfWeek: d.getDay(),
+    });
+  }
+
+  // Group into weeks (columns). Align so the first column starts on Sunday.
+  const weeks: typeof days[] = [];
+  let currentWeek: typeof days = [];
+
+  // Pad the start so the first day aligns to the correct day-of-week
+  const firstDow = days[0].dayOfWeek;
+  for (let p = 0; p < firstDow; p++) {
+    currentWeek.push({ date: "", count: -1, dayOfWeek: p }); // -1 = padding (no cell)
+  }
+
+  for (const day of days) {
+    currentWeek.push(day);
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+  if (currentWeek.length > 0) weeks.push(currentWeek);
+
+  function cellColor(count: number): string {
+    if (count < 0) return "transparent"; // padding
+    if (count === 0) return "var(--color-paper-3)"; // no prayers
+    if (count <= 2) return "color-mix(in oklab, var(--color-error) 35%, var(--color-paper-3))"; // 1-2 prayers
+    if (count <= 4) return "color-mix(in oklab, var(--color-warmth) 50%, var(--color-paper-3))"; // 3-4 prayers
+    return "var(--color-success)"; // all 5
+  }
+
+  function cellLabel(day: { date: string; count: number }): string {
+    if (!day.date) return "";
+    if (day.count === 0) return "No prayers";
+    if (day.count === 5) return "All 5 prayed";
+    return `${day.count}/5 prayed`;
+  }
+
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  // Determine which weeks have a month boundary for labels
+  const monthBoundaries: { weekIndex: number; label: string }[] = [];
+  let lastMonth = -1;
+  weeks.forEach((week, wi) => {
+    const firstRealDay = week.find((d) => d.date);
+    if (firstRealDay) {
+      const month = parseInt(firstRealDay.date.split("-")[1]) - 1;
+      if (month !== lastMonth) {
+        monthBoundaries.push({ weekIndex: wi, label: monthLabels[month] });
+        lastMonth = month;
+      }
+    }
+  });
+
+  return (
+    <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+      <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Prayer Consistency</h2>
+        <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+          Last 365 days — each cell is one day
+        </p>
+      </div>
+      <div className="overflow-x-auto px-4 py-4 sm:px-5">
+        <div className="inline-block">
+          {/* Month labels row */}
+          <div className="mb-1 flex gap-[3px] pl-[20px]">
+            {weeks.map((_, wi) => {
+              const boundary = monthBoundaries.find((b) => b.weekIndex === wi);
+              return (
+                <div
+                  key={wi}
+                  className="w-[11px] text-[8px]"
+                  style={{ color: "var(--color-ink-muted)", minWidth: boundary ? 24 : 11 }}
+                >
+                  {boundary?.label || ""}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Heatmap grid: day labels + weeks */}
+          <div className="flex gap-[3px]">
+            {/* Day labels (Mon, Wed, Fri) */}
+            <div className="flex flex-col gap-[3px] pr-1">
+              {["", "Mon", "", "Wed", "", "Fri", ""].map((label, i) => (
+                <div key={i} className="h-[11px] text-[8px] leading-[11px]" style={{ color: "var(--color-ink-muted)", width: 20 }}>
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            {/* Weeks (columns) */}
+            {weeks.map((week, wi) => (
+              <div key={wi} className="flex flex-col gap-[3px]">
+                {week.map((day, di) => (
+                  <div
+                    key={di}
+                    className="h-[11px] w-[11px] rounded-[2px] transition-colors"
+                    style={{
+                      backgroundColor: cellColor(day.count),
+                      outline: day.count >= 0 ? "0.5px solid color-mix(in oklab, var(--color-ink) 8%, transparent)" : "none",
+                    }}
+                    title={day.date ? `${day.date}: ${cellLabel(day)}` : ""}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="mt-3 flex items-center gap-1.5 text-[9px]" style={{ color: "var(--color-ink-muted)" }}>
+            <span>Less</span>
+            <div className="h-[11px] w-[11px] rounded-[2px]" style={{ backgroundColor: "var(--color-paper-3)" }} />
+            <div className="h-[11px] w-[11px] rounded-[2px]" style={{ backgroundColor: "color-mix(in oklab, var(--color-error) 35%, var(--color-paper-3))" }} />
+            <div className="h-[11px] w-[11px] rounded-[2px]" style={{ backgroundColor: "color-mix(in oklab, var(--color-warmth) 50%, var(--color-paper-3))" }} />
+            <div className="h-[11px] w-[11px] rounded-[2px]" style={{ backgroundColor: "var(--color-success)" }} />
+            <span>More</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { Calendar, Settings, Flame, BookOpen, Sun, Heart } from "lucide-react";
+import { Calendar, Settings, Flame, BookOpen, Sun, Heart, Compass, HandHeart } from "lucide-react";
 import ServiceWorkerRegister from "@/components/sw-register";
 import NotificationScheduler from "@/components/notification-scheduler";
 import BiometricGate from "@/components/biometric-gate";
@@ -93,8 +93,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        {/* Learn + Dhikr links — separated from main nav as educational resources */}
+        {/* Qibla + Dhikr + Sadaqah + Learn links — separated from main nav */}
         <div className="space-y-1 px-3 pb-6">
+          <Link
+            href="/qibla"
+            prefetch
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            <Compass className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+            Qibla
+          </Link>
           <Link
             href="/dhikr"
             prefetch
@@ -103,6 +112,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
             <Heart className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
             Dhikr
+          </Link>
+          <Link
+            href="/sadaqah"
+            prefetch
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+            style={{ color: "var(--color-ink-soft)" }}
+          >
+            <HandHeart className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
+            Sadaqah
           </Link>
           <Link
             href="/learn"
@@ -132,6 +150,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
           <div className="flex items-center gap-1">
             <Link
+              href="/qibla"
+              prefetch
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+            >
+              <Compass className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+              Qibla
+            </Link>
+            <Link
               href="/dhikr"
               prefetch
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
@@ -139,6 +166,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             >
               <Heart className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
               Dhikr
+            </Link>
+            <Link
+              href="/sadaqah"
+              prefetch
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+              style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
+            >
+              <HandHeart className="h-3.5 w-3.5" style={{ color: "var(--color-ink-muted)" }} />
+              Sadaqah
             </Link>
             <Link
               href="/learn"

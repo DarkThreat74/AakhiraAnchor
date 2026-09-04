@@ -69,12 +69,18 @@ export async function GET(request: NextRequest) {
     // ── Fetch logs ──
     // For streak calculation we always need 90 days of data regardless of range.
     // For per-prayer analytics we filter to the selected range.
+    // For the heatmap we need 365 days.
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const streakFromDate = ninetyDaysAgo.toISOString().split("T")[0];
 
-    // Use the earlier of (rangeStart, streakFromDate) for the DB query
-    const dbFromDate = rangeStart < streakFromDate ? rangeStart : streakFromDate;
+    // For the heatmap, fetch a full year of data
+    const yearAgo = new Date();
+    yearAgo.setDate(yearAgo.getDate() - 365);
+    const heatmapFromDate = yearAgo.toISOString().split("T")[0];
+
+    // Use the earliest of all date filters for the DB query
+    const dbFromDate = [rangeStart, streakFromDate, heatmapFromDate].sort()[0];
 
     const allLogs = await db
       .select({
@@ -378,6 +384,15 @@ export async function GET(request: NextRequest) {
     const mostConsistentPrayer = sortedByConsistency[0]?.prayer || null;
     const mostMissedPrayer = sortedByConsistency[sortedByConsistency.length - 1]?.prayer || null;
 
+    // ── Heatmap data: daily prayer counts for the last 365 days ──
+    // Map: dateStr -> number of prayers prayed (0-5)
+    const heatmapData: Record<string, number> = {};
+    for (const log of allLogs) {
+      if (log.status !== "prayed" && log.status !== "assumed_prayed") continue;
+      const dateStr = typeof log.date === "string" ? log.date : String(log.date);
+      heatmapData[dateStr] = (heatmapData[dateStr] || 0) + 1;
+    }
+
     return NextResponse.json({
       streak,
       bestStreak,
@@ -398,6 +413,7 @@ export async function GET(request: NextRequest) {
       mostConsistentPrayer,
       mostMissedPrayer,
       dayOfWeekStats,
+      heatmapData,
       todayPrayerTimes: todayTimes
         ? {
             fajr: todayTimes.fajr,

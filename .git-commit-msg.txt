@@ -1,37 +1,56 @@
-Add dhikr/tasbih counter, Hijri dates, and more landing page features
+Add Qibla compass, Sadaqah tracker, and GitHub-style prayer heatmap
 
-Audit found incomplete features: the dhikr_sequences table existed and
-had an admin API, but there was no user-facing UI or API. Hijri dates
-were returned by AlAdhan but never displayed. Both are now built.
+Three new features built based on competitor research.
 
-New features:
+1. Qibla Compass (/qibla)
+   - New lib/prayer/qibla.ts with great-circle bearing formula:
+     θ = atan2(sin(Δλ)·cos(φ₂), cos(φ₁)·sin(φ₂) − sin(φ₁)·cos(φ₂)·cos(Δλ))
+   - Haversine distance calculation to Kaaba (21.4225°N, 39.8262°E)
+   - Cardinal direction conversion (N, NNE, NE, ... NNW)
+   - New GET /api/qibla route (auth-protected, uses saved prayer location)
+   - New /qibla page with:
+     - Rotating compass dial with cardinal directions + tick marks
+     - Kaaba 🕋 icon at the needle tip
+     - Live compass via DeviceOrientationEvent (mobile only):
+       - iOS 13+ permission request via requestPermission(true)
+       - webkitCompassHeading on iOS, 360-alpha on Android
+       - Desktop fallback: static bearing from North
+     - Info panel: bearing°, cardinal, distance to Kaaba, user coordinates
+     - "Enable live compass" button (requires user gesture on iOS)
+   - Nav links in desktop sidebar + mobile top bar
 
-1. Dhikr/Tasbih Counter (/dhikr)
-   - New user-facing GET /api/dhikr route (auth-protected)
-   - New /dhikr page with full tasbih counter UI:
-     - Arabic phrase display (Amiri font, RTL)
-     - Transliteration and source citation
-     - Large tap area for counting
-     - Progress bar showing count / target
-     - Vibration feedback (web Vibration API + Capacitor haptics)
-     - Auto-advance to next dhikr when target reached
-     - Sequence progress dots (tap to jump between dhikrs)
-     - Prev/Next/Reset controls
-     - "All complete" celebration screen with restart option
-     - Graceful empty state when table not seeded
-   - Nav links added to desktop sidebar and mobile top bar
+2. Sadaqah Tracker (/sadaqah)
+   - New sadaqah_logs table (migration 0013):
+     id, user_id, amount (numeric 10,2), currency, category, note, date
+   - Categories: sadaqah, zakat, fidyah, charity
+   - New CRUD API (/api/sadaqah):
+     - GET: returns logs + summary by category + grand total
+     - POST: create with validation (positive amount, valid category,
+       valid date, note max 500 chars, rate limited 20/min)
+     - DELETE: with IDOR protection (user can only delete own logs)
+   - New /sadaqah page with:
+     - Summary cards: Total Given + per-category breakdown
+     - Add form: amount, date, category pills, optional note
+     - History list with color-coded categories, delete confirmation
+     - Empty state with CTA
+   - Nav links in desktop sidebar + mobile top bar
 
-2. Hijri Date Display
-   - Prayer dashboard "Today" tab: Hijri date shown below Gregorian
-     date in Amiri font, accent color
-   - Calendar day view: Hijri date shown in DayDateHeader below the
-     Gregorian date
-   - Computed client-side via Intl.DateTimeFormat with islamic calendar
-     (no API changes needed, works offline)
+3. GitHub-style Prayer Heatmap (in Stats tab)
+   - Analytics API now fetches 365 days and returns heatmapData
+     (map of date -> prayer count 0-5)
+   - New PrayerHeatmap component in PrayerDashboardClient:
+     - 365-day grid grouped into weeks (columns of 7 days)
+     - Color levels: gray=none, red=1-2, amber=3-4, green=all 5
+     - Month labels above the grid
+     - Day labels (Mon, Wed, Fri) on the left
+     - Legend (Less → More)
+     - Horizontal scroll on mobile
+     - Tooltips showing date + prayer count
 
-3. Landing page updated with 2 new feature cards:
-   - Dhikr counter
-   - Hijri calendar
+Landing page updated with 2 new feature cards (Qibla compass, Sadaqah tracker).
+
+Note: The sadaqah_logs migration (0013) needs to be run against the
+Neon database before the sadaqah tracker will work.
 
 Generated with [Devin](https://devin.ai)
 
