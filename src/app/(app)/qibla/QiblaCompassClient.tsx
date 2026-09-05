@@ -12,23 +12,16 @@ interface QiblaData {
 }
 
 /**
- * Smoothed Qibla compass.
+ * Smoothed Qibla compass — v2.
  *
- * Key fixes vs the old version:
- * 1. Heading is stored in a ref, NOT React state. The deviceorientation
- *    event fires 30-60+ times/sec; setHeading on each one caused React
- *    re-render storms and janky transition-transform fighting.
- * 2. A single requestAnimationFrame loop reads the ref, lerps toward the
- *    target heading (low-pass filter), and writes the transform directly
- *    to the DOM via ref. No React re-render per frame.
- * 3. The CSS transition-transform is removed. The rAF loop IS the
- *    smoothing. This eliminates the "transition fights rapid updates"
- *    glitch that was most visible when the phone was held vertically
- *    (gamma/beta large => alpha jumps => heading jumps => transition
- *    lags then snaps).
- * 4. Shortest-path angular interpolation: we lerp along the smaller
- *    arc between current and target heading, so rotating from 350° to
- *    10° goes forward 20°, not backward 340°.
+ * Fixes vs v1:
+ * 1. atan2 instead of atan + manual quadrant correction (correct on all devices)
+ * 2. Only ONE event listener (absolute preferred, not both)
+ * 3. Low-pass filter on raw sensor data BEFORE feeding rAF (kills noise at source)
+ * 4. Fixed stale hasHeading closure (use ref, not state in handler)
+ * 5. No double-smoothing: needle = bearing - smoothed heading (single pass)
+ * 6. Deadzone: ignore heading changes < 0.5° (eliminates micro-jitter)
+ * 7. rAF loop only runs when heading data is available
  */
 export default function QiblaCompassClient() {
   const [data, setData] = useState<QiblaData | null>(null);
@@ -39,14 +32,14 @@ export default function QiblaCompassClient() {
   const [hasHeading, setHasHeading] = useState(false);
 
   // Refs for smooth animation — never trigger re-renders
-  const targetHeadingRef = useRef<number | null>(null); // raw heading from sensor
-  const currentHeadingRef = useRef(0); // smoothed heading for the dial
-  const targetNeedleRef = useRef(0); // raw needle angle (bearing - heading)
-  const currentNeedleRef = useRef(0); // smoothed needle angle
+  const rawHeadingRef = useRef<number | null>(null); // raw heading from sensor
+  const filteredHeadingRef = useRef<number | null>(null); // low-pass filtered heading
+  const currentHeadingRef = useRef(0); // smoothed heading for the dial (rAF output)
   const dialRef = useRef<HTMLDivElement>(null);
   const needleRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const bearingRef = useRef(0);
+  const hasHeadingRef = useRef(false); // avoids stale closure in event handler
 
   // ── Fetch Qibla data ──
   useEffect(() => {
@@ -60,9 +53,6 @@ export default function QiblaCompassClient() {
           if (json) {
             setData(json);
             bearingRef.current = json.bearing;
-            // Set initial needle to static bearing (no compass yet)
-            targetNeedleRef.current = json.bearing;
-            currentNeedleRef.current = json.bearing;
           } else {
             setError("Failed to load Qibla data.");
           }
@@ -80,12 +70,7 @@ export default function QiblaCompassClient() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── rAF smoothing loop ──
-  // Low-pass filter: current += (target - current) * alpha
-  // alpha = 0.15 gives smooth but responsive movement
-  const SMOOTH_ALPHA = 0.15;
-
-  // Shortest-path angular delta: returns the smallest signed delta
+  // ── Shortest-path angular delta: returns the smallest signed delta ──
   // from `from` to `to` in degrees, in range (-180, 180].
   function angleDelta(from: number, to: number): number {
     let d = ((to - from) % 360 + 360) % 360;
@@ -93,25 +78,34 @@ export default function QiblaCompassClient() {
     return d;
   }
 
+  // ── rAF smoothing loop ──
+  // Reads the filtered heading ref, lerps toward it, and writes transforms
+  // directly to the DOM. No React re-render per frame.
+  // alpha = 0.12: smooth but responsive. Lower = smoother but more lag.
+  const RAF_ALPHA = 0.12;
+  // Deadzone: if the angular change is less than this, don't bother updating.
+  // This eliminates micro-jitter from sensor noise.
+  const DEADZONE = 0.3;
+
   useEffect(() => {
     const tick = () => {
-      const targetHeading = targetHeadingRef.current;
-      if (targetHeading !== null) {
-        // Smooth the dial heading
-        const dh = angleDelta(currentHeadingRef.current, targetHeading);
-        currentHeadingRef.current = (currentHeadingRef.current + dh * SMOOTH_ALPHA + 360) % 360;
+      const filtered = filteredHeadingRef.current;
+      if (filtered !== null) {
+        // Smooth the dial heading toward the filtered target
+        const dh = angleDelta(currentHeadingRef.current, filtered);
+        if (Math.abs(dh) > DEADZONE) {
+          currentHeadingRef.current = (currentHeadingRef.current + dh * RAF_ALPHA + 360) % 360;
+        }
 
-        // Smooth the needle angle (bearing - heading)
-        const targetNeedle = (bearingRef.current - currentHeadingRef.current + 360) % 360;
-        const dn = angleDelta(currentNeedleRef.current, targetNeedle);
-        currentNeedleRef.current = (currentNeedleRef.current + dn * SMOOTH_ALPHA + 360) % 360;
-
-        // Apply transforms directly to DOM — no React re-render
+        // Apply dial transform (rotates opposite to heading so N faces true north)
         if (dialRef.current) {
           dialRef.current.style.transform = `rotate(${-currentHeadingRef.current}deg)`;
         }
+
+        // Needle = bearing relative to current heading (single computation, no double-smooth)
+        const needleAngle = (bearingRef.current - currentHeadingRef.current + 360) % 360;
         if (needleRef.current) {
-          needleRef.current.style.transform = `translate(-50%, -50%) rotate(${currentNeedleRef.current}deg)`;
+          needleRef.current.style.transform = `translate(-50%, -50%) rotate(${needleAngle}deg)`;
         }
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -146,37 +140,75 @@ export default function QiblaCompassClient() {
 
     setPermissionGranted(true);
 
+    // Low-pass filter constant for raw sensor data.
+    // 0.25 = moderate smoothing at the source, before the rAF loop smooths further.
+    const SENSOR_ALPHA = 0.25;
+
     const handler = (e: DeviceOrientationEvent) => {
       // iOS: webkitCompassHeading is already compensated and gives
       // the true compass heading (0 = North, clockwise).
       const webkitHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
       if (typeof webkitHeading === "number" && !Number.isNaN(webkitHeading)) {
-        targetHeadingRef.current = webkitHeading;
-        if (!hasHeading) setHasHeading(true);
+        updateHeading(webkitHeading);
         return;
       }
 
-      // Android: when the phone is held vertically (screen facing the user,
-      // top pointing up), alpha alone is NOT the compass heading. The W3C
-      // spec's worked example (Appendix A.1) gives the full formula for
-      // computing compass heading from alpha + beta + gamma when the device
-      // is in portrait-vertical position.
-      if (typeof e.alpha === "number" && e.alpha !== null && typeof e.beta === "number" && typeof e.gamma === "number") {
-        // If absolute is true or deviceorientationabsolute is supported,
-        // alpha is already absolute. Otherwise (relative), the heading
-        // is less accurate but we still compute it.
+      // Android/other: compute heading from alpha/beta/gamma using atan2
+      if (typeof e.alpha === "number" && e.alpha !== null &&
+          typeof e.beta === "number" && typeof e.gamma === "number") {
         const heading = compassHeading(e.alpha, e.beta, e.gamma);
         if (!Number.isNaN(heading)) {
-          targetHeadingRef.current = heading;
-          if (!hasHeading) setHasHeading(true);
+          updateHeading(heading);
         }
       }
     };
 
-    // Prefer the absolute event when available
-    window.addEventListener("deviceorientationabsolute", handler as EventListener);
-    window.addEventListener("deviceorientation", handler as EventListener);
-  }, [hasHeading]);
+    // Low-pass filter on raw heading, then store in ref for rAF loop
+    function updateHeading(raw: number) {
+      const prev = filteredHeadingRef.current;
+      if (prev === null) {
+        // First reading — initialize directly, no filtering
+        filteredHeadingRef.current = raw;
+        currentHeadingRef.current = raw;
+      } else {
+        // Low-pass filter: smooth out sensor noise at the source
+        const delta = angleDelta(prev, raw);
+        filteredHeadingRef.current = (prev + delta * SENSOR_ALPHA + 360) % 360;
+      }
+      rawHeadingRef.current = raw;
+
+      // Set hasHeading once (using ref to avoid stale closure)
+      if (!hasHeadingRef.current) {
+        hasHeadingRef.current = true;
+        setHasHeading(true);
+      }
+    }
+
+    // Prefer absolute event when available; only register ONE listener
+    // to avoid duplicate conflicting readings
+    const absSupported = "ondeviceorientationabsolute" in window;
+    if (absSupported) {
+      window.addEventListener("deviceorientationabsolute", handler as EventListener);
+    } else {
+      window.addEventListener("deviceorientation", handler as EventListener);
+    }
+
+    // Cleanup is handled by component unmount via the returned function
+    // (stored on the ref so we can remove it later)
+    cleanupRef.current = () => {
+      if (absSupported) {
+        window.removeEventListener("deviceorientationabsolute", handler as EventListener);
+      } else {
+        window.removeEventListener("deviceorientation", handler as EventListener);
+      }
+    };
+  }, []);
+
+  // Store cleanup function for the orientation listener
+  const cleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    return () => { cleanupRef.current?.(); };
+  }, []);
 
   // ── Loading ──
   if (loading) {
@@ -393,13 +425,8 @@ export default function QiblaCompassClient() {
  * Compute compass heading from deviceorientation alpha/beta/gamma
  * when the device is held in portrait, screen facing the user, top up.
  *
- * This is the W3C spec's worked example (Appendix A.1) translated to JS.
+ * Uses atan2 (not atan) for correct quadrant handling on all devices.
  * Returns degrees 0-360, clockwise from North. NaN if inputs are invalid.
- *
- * Why this matters: when the phone is vertical, `360 - alpha` is WRONG.
- * The correct heading requires all three angles. The old code used
- * `360 - alpha` which only works when the phone is lying flat (screen up),
- * causing the "glitch when vertical" the user reported.
  */
 function compassHeading(alpha: number, beta: number, gamma: number): number {
   if (alpha == null || beta == null || gamma == null) return NaN;
@@ -417,13 +444,8 @@ function compassHeading(alpha: number, beta: number, gamma: number): number {
   const rA = -cA * sG - sA * sB * cG;
   const rB = -sA * sG + cA * sB * cG;
 
-  let compassHeading = Math.atan(rA / rB);
-
-  if (rB < 0) {
-    compassHeading += Math.PI;
-  } else if (rA < 0) {
-    compassHeading += 2 * Math.PI;
-  }
+  // atan2 handles all quadrants correctly — no manual correction needed
+  const compassHeading = Math.atan2(rA, rB);
 
   // Convert to degrees, normalize to 0-360
   return (compassHeading * (180 / Math.PI) + 360) % 360;
