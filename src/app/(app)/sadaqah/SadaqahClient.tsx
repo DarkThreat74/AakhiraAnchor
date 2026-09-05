@@ -174,10 +174,10 @@ export default function SadaqahClient() {
       {/* ── The Akhirah Card (credit card design) ── */}
       <div className="mb-6" style={{ perspective: "1000px" }}>
         <div
-          className="relative overflow-hidden rounded-2xl p-5 sm:p-6"
+          className="relative overflow-hidden rounded-2xl p-4 sm:p-5"
           style={{
             aspectRatio: "1.586 / 1",
-            maxWidth: "380px",
+            maxWidth: "320px",
             margin: "0 auto",
             background: "linear-gradient(135deg, var(--color-ink) 0%, color-mix(in oklab, var(--color-ink) 85%, var(--color-accent)) 100%)",
             color: "var(--color-paper)",
@@ -196,10 +196,10 @@ export default function SadaqahClient() {
           {/* Top row: card label + balance toggle */}
           <div className="relative flex items-start justify-between">
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-[0.18em]" style={{ color: "color-mix(in oklab, var(--color-paper) 65%, transparent)" }}>
+              <p className="text-[9px] font-medium uppercase tracking-[0.15em] sm:text-[10px]" style={{ color: "color-mix(in oklab, var(--color-paper) 65%, transparent)" }}>
                 Akhirah Card
               </p>
-              <p className="mt-0.5 text-[9px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+              <p className="mt-0.5 text-[8px] uppercase tracking-wide sm:text-[9px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
                 Investment in the Hereafter
               </p>
             </div>
@@ -209,13 +209,13 @@ export default function SadaqahClient() {
               style={{ color: "color-mix(in oklab, var(--color-paper) 60%, transparent)" }}
               aria-label={showBalance ? "Hide balance" : "Show balance"}
             >
-              {showBalance ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              {showBalance ? <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
             </button>
           </div>
 
           {/* Chip */}
           <div
-            className="relative mt-3 h-7 w-10 rounded-md"
+            className="relative mt-2 h-5 w-8 rounded-md sm:mt-3 sm:h-6 sm:w-9"
             style={{
               background: "linear-gradient(135deg, #d4a843, #f5c842, #b8860b)",
               boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--color-paper) 25%, transparent)",
@@ -225,34 +225,34 @@ export default function SadaqahClient() {
           </div>
 
           {/* Balance (the "card number" position) */}
-          <div className="relative mt-3">
+          <div className="relative mt-2 sm:mt-3">
             {showBalance ? (
-              <p className="text-xl font-bold tabular-nums sm:text-2xl" style={{ letterSpacing: "0.02em" }}>
+              <p className="text-lg font-bold tabular-nums sm:text-xl" style={{ letterSpacing: "0.02em" }}>
                 {formatCurrency(grandTotal, currency)}
               </p>
             ) : (
-              <p className="text-xl font-bold tabular-nums sm:text-2xl" style={{ letterSpacing: "0.15em" }}>
+              <p className="text-lg font-bold tabular-nums sm:text-xl" style={{ letterSpacing: "0.15em" }}>
                 •••• ••••
               </p>
             )}
-            <p className="mt-0.5 text-[10px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 50%, transparent)" }}>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wide sm:text-[10px]" style={{ color: "color-mix(in oklab, var(--color-paper) 50%, transparent)" }}>
               Total invested in akhirah
             </p>
           </div>
 
           {/* Bottom row: entry count + card number */}
-          <div className="relative mt-auto flex items-end justify-between pt-3">
+          <div className="relative mt-auto flex items-end justify-between pt-2 sm:pt-3">
             <div>
-              <p className="text-[9px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+              <p className="text-[8px] uppercase tracking-wide sm:text-[9px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
                 Entries
               </p>
-              <p className="text-sm font-semibold tabular-nums">{entryCount}</p>
+              <p className="text-xs font-semibold tabular-nums sm:text-sm">{entryCount}</p>
             </div>
             <div className="text-right">
-              <p className="text-[9px] uppercase tracking-wide" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+              <p className="text-[8px] uppercase tracking-wide sm:text-[9px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
                 Card No.
               </p>
-              <p className="font-mono text-[11px] tabular-nums" style={{ color: "color-mix(in oklab, var(--color-paper) 70%, transparent)" }}>
+              <p className="font-mono text-[10px] tabular-nums sm:text-[11px]" style={{ color: "color-mix(in oklab, var(--color-paper) 70%, transparent)" }}>
                 {showBalance ? formatCardNumber(grandTotal) : "•••• •••• •••• ••••"}
               </p>
             </div>

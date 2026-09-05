@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { RotateCcw, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { RotateCcw, ChevronRight, ChevronLeft, Check, X } from "lucide-react";
 import { hapticImpact, hapticNotification } from "@/lib/native-bridge";
 
 interface DhikrSequence {
@@ -19,8 +19,10 @@ export default function DhikrCounterClient() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [count, setCount] = useState(0);
   const [completedSequences, setCompletedSequences] = useState<Set<number>>(new Set());
-  const [pulseKey, setPulseKey] = useState(0); // triggers tap animation
-  const tapAreaRef = useRef<HTMLButtonElement>(null);
+  const [pulseKey, setPulseKey] = useState(0);
+  const [showOverlay, setShowOverlay] = useState(false); // controls/settings overlay
+  const ringRef = useRef<SVGCircleElement>(null);
+  const countRef = useRef<HTMLSpanElement>(null);
 
   // Load dhikr sequences
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function DhikrCounterClient() {
   }, []);
 
   const handleTap = useCallback(() => {
-    if (!current) return;
+    if (!current || showOverlay) return;
     const newCount = count + 1;
     setCount(newCount);
     setPulseKey((k) => k + 1);
@@ -63,14 +65,14 @@ export default function DhikrCounterClient() {
     // Light haptic on each tap
     void hapticImpact("light");
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      try { navigator.vibrate(15); } catch { /* no-op */ }
+      try { navigator.vibrate(12); } catch { /* no-op */ }
     }
 
     if (newCount >= current.targetCount) {
       setCompletedSequences((prev) => new Set(prev).add(currentIndex));
       void hapticNotification("success");
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        try { navigator.vibrate([50, 30, 50]); } catch { /* no-op */ }
+        try { navigator.vibrate([40, 20, 60]); } catch { /* no-op */ }
       }
 
       // Auto-advance after a brief pause
@@ -79,9 +81,9 @@ export default function DhikrCounterClient() {
           setCurrentIndex((i) => i + 1);
           setCount(0);
         }
-      }, 600);
+      }, 700);
     }
-  }, [count, current, currentIndex, isLast]);
+  }, [count, current, currentIndex, isLast, showOverlay]);
 
   const handleReset = useCallback(() => {
     setCount(0);
@@ -159,172 +161,254 @@ export default function DhikrCounterClient() {
 
   const progress = current ? (count / current.targetCount) * 100 : 0;
   const isComplete = count >= (current?.targetCount ?? 0);
+  const ringCircumference = 2 * Math.PI * 48;
 
   return (
     <div className="mx-auto max-w-md">
-      {/* ── Header ── */}
-      <div className="mb-4">
-        <h1 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Dhikr Counter</h1>
-        <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-          {currentIndex + 1} of {sequences.length} · {completedSequences.size} completed
-        </p>
-      </div>
-
-      {/* ── Sequence progress dots ── */}
-      <div className="mb-6 flex flex-wrap items-center gap-1.5">
-        {sequences.map((seq, i) => (
+      {/* ── Full-screen tap area ── */}
+      {/* The entire area below the header is the tap target.
+          The count IS the interface — huge, centered, with a progress ring. */}
+      <button
+        onClick={handleTap}
+        disabled={isComplete}
+        className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-3xl border transition-colors active:scale-[0.99] disabled:cursor-default"
+        style={{
+          minHeight: "min(70vh, 480px)",
+          backgroundColor: isComplete
+            ? "color-mix(in oklab, var(--color-success) 6%, var(--color-paper))"
+            : "var(--color-paper)",
+          borderColor: "var(--color-paper-3)",
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
+        aria-label={`Count dhikr (${count} of ${current?.targetCount ?? 0})`}
+      >
+        {/* ── Top bar: sequence indicator + overlay toggle ── */}
+        <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-4 py-3">
+          <span className="text-[11px] font-medium tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+            {currentIndex + 1} / {sequences.length}
+          </span>
           <button
-            key={seq.id}
-            onClick={() => goToSequence(i)}
-            className="h-2.5 rounded-full transition-[width,background-color] duration-200"
-            style={{
-              width: i === currentIndex ? 24 : 10,
-              backgroundColor: completedSequences.has(i)
-                ? "var(--color-success)"
-                : i === currentIndex
-                  ? "var(--color-accent)"
-                  : "var(--color-paper-3)",
-            }}
-            aria-label={`Go to sequence ${i + 1}: ${seq.phraseTransliteration}`}
-          />
-        ))}
-      </div>
-
-      {/* ── Current dhikr phrase ── */}
-      {current && (
-        <div className="mb-6 text-center">
-          <p
-            className="text-3xl leading-loose sm:text-4xl"
-            style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri, serif)", direction: "rtl" }}
+            onClick={(e) => { e.stopPropagation(); setShowOverlay(!showOverlay); }}
+            className="rounded-lg p-1.5 transition-colors"
+            style={{ color: "var(--color-ink-muted)" }}
+            aria-label="Show controls"
           >
-            {current.phraseArabic}
-          </p>
-          <p className="mt-2 text-sm italic" style={{ color: "var(--color-ink-soft)" }}>
-            {current.phraseTransliteration}
-          </p>
-        </div>
-      )}
-
-      {/* ── The counter: a big beautiful tappable circle ── */}
-      <div className="mb-6 flex flex-col items-center">
-        {/* Count display above the button */}
-        <div className="mb-4 inline-flex items-baseline gap-1.5">
-          <span
-            key={pulseKey}
-            className="text-5xl font-bold tabular-nums sm:text-6xl"
-            style={{
-              color: isComplete ? "var(--color-success)" : "var(--color-accent)",
-              animation: pulseKey > 0 ? "dhikr-pulse 0.3s ease-out" : undefined,
-            }}
-          >
-            {count}
-          </span>
-          <span className="text-xl tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-            / {current?.targetCount ?? 0}
-          </span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+              <circle cx="5" cy="12" r="1" />
+            </svg>
+          </button>
         </div>
 
-        {/* Progress ring around the tap button */}
-        <div className="relative" style={{ width: "min(60vw, 220px)", height: "min(60vw, 220px)" }}>
-          {/* SVG progress ring */}
+        {/* ── Arabic phrase ── */}
+        {current && (
+          <div className="mb-8 px-6 text-center">
+            <p
+              className="text-3xl leading-loose sm:text-4xl"
+              style={{ color: "var(--color-ink)", fontFamily: "var(--font-amiri, serif)", direction: "rtl" }}
+            >
+              {current.phraseArabic}
+            </p>
+            <p className="mt-1.5 text-sm italic" style={{ color: "var(--color-ink-soft)" }}>
+              {current.phraseTransliteration}
+            </p>
+          </div>
+        )}
+
+        {/* ── Progress ring + count (the hero) ── */}
+        <div className="relative flex items-center justify-center" style={{ width: "min(55vw, 200px)", height: "min(55vw, 200px)" }}>
           <svg
             className="absolute inset-0 -rotate-90"
             viewBox="0 0 100 100"
             style={{ width: "100%", height: "100%" }}
           >
             <circle
-              cx="50" cy="50" r="46"
+              cx="50" cy="50" r="48"
               fill="none"
-              strokeWidth="3"
+              strokeWidth="2"
               stroke="var(--color-paper-3)"
             />
             <circle
-              cx="50" cy="50" r="46"
+              ref={ringRef}
+              cx="50" cy="50" r="48"
               fill="none"
               strokeWidth="3"
               stroke={isComplete ? "var(--color-success)" : "var(--color-accent)"}
               strokeLinecap="round"
-              strokeDasharray={`${2 * Math.PI * 46}`}
-              strokeDashoffset={`${2 * Math.PI * 46 * (1 - progress / 100)}`}
-              style={{ transition: "stroke-dashoffset 0.3s ease-out, stroke 0.3s ease" }}
+              strokeDasharray={ringCircumference}
+              strokeDashoffset={ringCircumference * (1 - progress / 100)}
+              style={{ transition: "stroke-dashoffset 0.25s ease-out, stroke 0.3s ease" }}
             />
           </svg>
 
-          {/* The tap button — the hero of the page */}
-          <button
-            ref={tapAreaRef}
-            onClick={handleTap}
-            disabled={isComplete}
-            className="absolute inset-3 flex items-center justify-center rounded-full transition-transform duration-100 active:scale-95 disabled:opacity-60"
-            style={{
-              backgroundColor: isComplete
-                ? "color-mix(in oklab, var(--color-success) 12%, var(--color-paper))"
-                : "var(--color-paper)",
-              border: `1px solid var(--color-paper-3)`,
-              boxShadow: isComplete
-                ? "none"
-                : "0 4px 24px -8px color-mix(in oklab, var(--color-accent) 30%, transparent)",
-            }}
-            aria-label={`Count dhikr (${count} of ${current?.targetCount ?? 0})`}
-          >
+          {/* Count number — the hero of the page */}
+          <div className="relative flex flex-col items-center">
             <span
-              className="text-sm font-medium uppercase tracking-wide"
-              style={{ color: isComplete ? "var(--color-success)" : "var(--color-ink-soft)" }}
+              key={pulseKey}
+              ref={countRef}
+              className="text-6xl font-bold tabular-nums sm:text-7xl"
+              style={{
+                color: isComplete ? "var(--color-success)" : "var(--color-ink)",
+                animation: pulseKey > 0 ? "dhikr-pulse 0.25s ease-out" : undefined,
+                lineHeight: 1,
+              }}
             >
-              {isComplete ? "✓ Done" : "Tap"}
+              {count}
             </span>
-          </button>
+            <span className="mt-1 text-sm tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+              / {current?.targetCount ?? 0}
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* ── Controls ── */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={handlePrev}
-          disabled={currentIndex === 0}
-          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-30"
-          style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
-          aria-label="Previous dhikr"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Prev
-        </button>
+        {/* ── Tap hint / completion state ── */}
+        <div className="mt-8 text-center">
+          {isComplete ? (
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: "var(--color-success)" }}>
+              <Check className="h-4 w-4" />
+              Complete
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium uppercase tracking-[0.15em]" style={{ color: "var(--color-ink-muted)" }}>
+              Tap anywhere to count
+            </span>
+          )}
+        </div>
 
-        <button
-          onClick={handleReset}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
-          style={{ color: "var(--color-ink-muted)", minHeight: 36 }}
-          aria-label="Reset count"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Reset
-        </button>
+        {/* ── Sequence progress dots ── */}
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
+          {sequences.map((seq, i) => (
+            <div
+              key={seq.id}
+              className="h-1.5 rounded-full transition-all duration-200"
+              style={{
+                width: i === currentIndex ? 16 : 6,
+                backgroundColor: completedSequences.has(i)
+                  ? "var(--color-success)"
+                  : i === currentIndex
+                    ? "var(--color-accent)"
+                    : "var(--color-paper-3)",
+              }}
+            />
+          ))}
+        </div>
 
-        <button
-          onClick={handleNext}
-          disabled={isLast}
-          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-30"
-          style={{ color: "var(--color-ink-soft)", minHeight: 36 }}
-          aria-label="Next dhikr"
-        >
-          Next
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
+        {/* ── Ripple effect on tap ── */}
+        {pulseKey > 0 && !isComplete && (
+          <span
+            key={`ripple-${pulseKey}`}
+            className="pointer-events-none absolute left-1/2 top-1/2 rounded-full"
+            style={{
+              width: "min(55vw, 200px)",
+              height: "min(55vw, 200px)",
+              transform: "translate(-50%, -50%)",
+              border: "2px solid var(--color-accent)",
+              animation: "dhikr-ripple 0.4s ease-out forwards",
+            }}
+          />
+        )}
+      </button>
 
-      {/* ── Source citation ── */}
-      {current && (
-        <p className="mt-4 text-center text-[11px] italic" style={{ color: "var(--color-ink-muted)" }}>
-          Source: {current.sourceCitation}
-        </p>
+      {/* ── Controls overlay (slides up when toggled) ── */}
+      {showOverlay && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 30%, transparent)" }}
+            onClick={() => setShowOverlay(false)}
+          />
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl border-t p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
+            style={{
+              borderColor: "var(--color-paper-3)",
+              backgroundColor: "var(--color-paper)",
+            }}
+          >
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }} />
+            <div className="mx-auto max-w-md">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Controls</h3>
+                <button
+                  onClick={() => setShowOverlay(false)}
+                  className="rounded-lg p-1.5 transition-colors"
+                  style={{ color: "var(--color-ink-muted)" }}
+                  aria-label="Close controls"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Sequence navigation */}
+              <div className="mb-4 flex items-center gap-2">
+                <button
+                  onClick={handlePrev}
+                  disabled={currentIndex === 0}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors disabled:opacity-30"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)", minHeight: 44 }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset count
+                </button>
+                <button
+                  onClick={handleNext}
+                  disabled={isLast}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors disabled:opacity-30"
+                  style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", minHeight: 44 }}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Sequence picker */}
+              <div className="flex flex-wrap gap-1.5">
+                {sequences.map((seq, i) => (
+                  <button
+                    key={seq.id}
+                    onClick={() => { goToSequence(i); setShowOverlay(false); }}
+                    className="rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
+                    style={{
+                      borderColor: i === currentIndex ? "var(--color-accent)" : "var(--color-paper-3)",
+                      color: i === currentIndex ? "var(--color-accent)" : completedSequences.has(i) ? "var(--color-success)" : "var(--color-ink-muted)",
+                      backgroundColor: i === currentIndex ? "color-mix(in oklab, var(--color-accent) 8%, transparent)" : "transparent",
+                    }}
+                  >
+                    {completedSequences.has(i) && "✓ "}{seq.phraseTransliteration.slice(0, 20)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Source citation */}
+              {current && (
+                <p className="mt-4 text-center text-[11px] italic" style={{ color: "var(--color-ink-muted)" }}>
+                  Source: {current.sourceCitation}
+                </p>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
-      {/* ── Pulse animation keyframes ── */}
+      {/* ── Animations ── */}
       <style>{`
         @keyframes dhikr-pulse {
           0% { transform: scale(1); }
-          40% { transform: scale(1.15); }
+          35% { transform: scale(1.12); }
           100% { transform: scale(1); }
+        }
+        @keyframes dhikr-ripple {
+          0% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.85); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); }
         }
       `}</style>
     </div>
