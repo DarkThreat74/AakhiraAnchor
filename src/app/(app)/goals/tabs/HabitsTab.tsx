@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
-import { Repeat, Plus, Check, Trash2, Flame } from "lucide-react";
+import { useState, useCallback, useMemo, useRef } from "react";
+import { Repeat, Plus, Check, Trash2, Flame, GripVertical } from "lucide-react";
 import type { Habit, HabitLog } from "@/lib/db/schema";
 import { clearApiCache } from "@/lib/sw-helpers";
 import { upsertHabitToCache, deleteHabitFromCache, toggleHabitLogInCache } from "@/lib/offline/cache-writers";
@@ -61,8 +61,53 @@ export default function HabitsTab({
   const [reminderTime, setReminderTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const dragCooldownRef = useRef(false);
 
-  const activeHabits = useMemo(() => habits.filter((h) => !h.archived), [habits]);
+  const activeHabits = useMemo(
+    () => habits
+      .filter((h) => !h.archived)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [habits],
+  );
+
+  const handleReorder = useCallback(
+    (draggedHabitId: string, targetHabitId: string) => {
+      const ids = activeHabits.map((h) => h.id);
+      const fromIdx = ids.indexOf(draggedHabitId);
+      const toIdx = ids.indexOf(targetHabitId);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+
+      const newOrder = [...ids];
+      const [moved] = newOrder.splice(fromIdx, 1);
+      newOrder.splice(toIdx, 0, moved);
+
+      setHabits((prev) => {
+        const updated = prev.map((h) => {
+          const newIdx = newOrder.indexOf(h.id);
+          if (newIdx === -1) return h;
+          if ((h.sortOrder || 0) === newIdx) return h;
+          return { ...h, sortOrder: newIdx };
+        });
+        return updated;
+      });
+
+      // Persist changed sortOrders
+      for (const id of newOrder) {
+        const newIdx = newOrder.indexOf(id);
+        const habit = activeHabits.find((h) => h.id === id);
+        if (habit && (habit.sortOrder || 0) !== newIdx) {
+          fetch("/api/habits", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, sortOrder: newIdx }),
+          }).catch(() => {});
+        }
+      }
+    },
+    [activeHabits, setHabits],
+  );
   const last7Days = useMemo(() => getLast7Days(), []);
   const today = todayStr();
 
@@ -339,10 +384,27 @@ export default function HabitsTab({
             return (
               <div
                 key={habit.id}
+                draggable
+                onDragStart={() => setDraggedId(habit.id)}
+                onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+                onDragOver={(e) => { e.preventDefault(); if (draggedId && draggedId !== habit.id && !dragCooldownRef.current) { setDragOverId(habit.id); dragCooldownRef.current = true; setTimeout(() => { dragCooldownRef.current = false; }, 150); } }}
+                onDrop={() => { if (draggedId && draggedId !== habit.id) handleReorder(draggedId, habit.id); setDraggedId(null); setDragOverId(null); }}
                 className="flex flex-col gap-2 rounded-xl border p-3"
-                style={{ borderColor: "var(--color-paper-3)" }}
+                style={{
+                  borderColor: dragOverId === habit.id ? "var(--color-accent)" : "var(--color-paper-3)",
+                  opacity: draggedId === habit.id ? 0.4 : 1,
+                  borderTop: dragOverId === habit.id ? "2px solid var(--color-accent)" : undefined,
+                }}
               >
                 <div className="flex items-center gap-3">
+                  {/* Drag handle */}
+                  <div
+                    className="shrink-0 cursor-grab touch-none"
+                    style={{ color: "var(--color-ink-muted)", opacity: 0.4 }}
+                    title="Drag to reorder"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </div>
                   <button
                     onClick={() => handleToggle(habit.id)}
                     className="shrink-0"

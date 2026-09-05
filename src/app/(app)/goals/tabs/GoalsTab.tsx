@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
-import { Target, Plus, Check, ChevronRight, ChevronDown, Trash2, Loader2, List, GitBranch } from "lucide-react";
+import { useState, useCallback, useMemo, useRef } from "react";
+import { Target, Plus, Check, ChevronRight, ChevronDown, Trash2, Loader2, List, GitBranch, GripVertical } from "lucide-react";
 import type { Goal } from "@/lib/db/schema";
 import { buildGoalTree, countCompleted, type GoalNode } from "@/lib/goals/tree";
 import { clearApiCache } from "@/lib/sw-helpers";
@@ -29,6 +29,9 @@ export default function GoalsTab({
   const [editDescription, setEditDescription] = useState("");
   const [editTargetDate, setEditTargetDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const dragCooldownRef = useRef(false);
 
   // Filter goals by type
   const filteredGoals = useMemo(
@@ -37,6 +40,56 @@ export default function GoalsTab({
   );
   const tree = useMemo(() => buildGoalTree(filteredGoals), [filteredGoals]);
   const { total, done } = useMemo(() => countCompleted(tree), [tree]);
+
+  // Sort goals by sortOrder for display
+  const sortedGoals = useMemo(
+    () => [...filteredGoals].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [filteredGoals],
+  );
+
+  // Reorder: move dragged goal to the position of the target goal
+  const handleReorder = useCallback(
+    (draggedGoalId: string, targetGoalId: string) => {
+      const ids = sortedGoals.map((g) => g.id);
+      const fromIdx = ids.indexOf(draggedGoalId);
+      const toIdx = ids.indexOf(targetGoalId);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+
+      // Build new order
+      const newOrder = [...ids];
+      const [moved] = newOrder.splice(fromIdx, 1);
+      newOrder.splice(toIdx, 0, moved);
+
+      // Assign sortOrder = index, update state + API for changed items
+      setGoals((prev) => {
+        const updated = prev.map((g) => {
+          if ((g.goalType || "short_term") !== goalType) return g;
+          const newIdx = newOrder.indexOf(g.id);
+          if (newIdx === -1) return g;
+          const newSort = newIdx;
+          if ((g.sortOrder || 0) === newSort) return g;
+          return { ...g, sortOrder: newSort };
+        });
+        syncGoalsToCache(updated);
+        return updated;
+      });
+
+      // Persist changed sortOrders to API (batch, best-effort)
+      for (const id of newOrder) {
+        const newIdx = newOrder.indexOf(id);
+        const goal = sortedGoals.find((g) => g.id === id);
+        if (goal && (goal.sortOrder || 0) !== newIdx) {
+          fetch("/api/goals", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ id, sortOrder: newIdx }),
+          }).catch(() => {});
+        }
+      }
+    },
+    [sortedGoals, setGoals, goalType],
+  );
 
   const createGoal = useCallback(
     async (title: string, parentId?: string | null, description?: string, targetDate?: string) => {
@@ -245,7 +298,7 @@ export default function GoalsTab({
         </div>
       ) : view === "list" ? (
         <div className="flex flex-col gap-1">
-          {filteredGoals.map((goal) => (
+          {sortedGoals.map((goal) => (
             <GoalRow
               key={goal.id}
               goal={goal}
@@ -259,6 +312,12 @@ export default function GoalsTab({
               onDelete={deleteGoal}
               editTargetDate={editTargetDate}
               setEditTargetDate={setEditTargetDate}
+              isDragged={draggedId === goal.id}
+              isDragOver={dragOverId === goal.id && draggedId !== goal.id}
+              onDragStart={() => setDraggedId(goal.id)}
+              onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+              onDragOver={(e) => { e.preventDefault(); if (draggedId && draggedId !== goal.id && !dragCooldownRef.current) { setDragOverId(goal.id); dragCooldownRef.current = true; setTimeout(() => { dragCooldownRef.current = false; }, 150); } }}
+              onDrop={() => { if (draggedId && draggedId !== goal.id) handleReorder(draggedId, goal.id); setDraggedId(null); setDragOverId(null); }}
             />
           ))}
         </div>
@@ -290,6 +349,7 @@ export default function GoalsTab({
 // ─── Goal Row (list view) ───
 function GoalRow({
   goal, editingId, setEditingId, editTitle, setEditTitle, editDescription, setEditDescription, editTargetDate, setEditTargetDate, onUpdate, onDelete,
+  isDragged, isDragOver, onDragStart, onDragEnd, onDragOver, onDrop,
 }: {
   goal: Goal;
   editingId: string | null;
@@ -302,15 +362,38 @@ function GoalRow({
   setEditTargetDate: (s: string) => void;
   onUpdate: (id: string, updates: Partial<Goal>) => void;
   onDelete: (id: string) => void;
+  isDragged?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: () => void;
 }) {
   const isDone = goal.status === "done";
   const isEditing = editingId === goal.id;
 
   return (
     <div
+      draggable={!isEditing}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className="flex items-start gap-2 rounded-lg px-3 py-2.5 transition-colors hover:bg-[var(--color-paper-2)]"
-      style={{ borderLeft: goal.color ? `3px solid ${goal.color}` : "3px solid transparent" }}
+      style={{
+        borderLeft: goal.color ? `3px solid ${goal.color}` : "3px solid transparent",
+        opacity: isDragged ? 0.4 : 1,
+        borderTop: isDragOver ? "2px solid var(--color-accent)" : "2px solid transparent",
+      }}
     >
+      {/* Drag handle */}
+      <div
+        className="mt-0.5 shrink-0 cursor-grab touch-none"
+        style={{ color: "var(--color-ink-muted)", opacity: 0.4 }}
+        title="Drag to reorder"
+      >
+        <GripVertical className="h-4 w-4" />
+      </div>
       <button
         onClick={() => onUpdate(goal.id, { status: isDone ? "active" : "done", completedAt: isDone ? null : new Date() })}
         className="mt-0.5 shrink-0"

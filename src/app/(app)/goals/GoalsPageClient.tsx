@@ -252,7 +252,7 @@ export default function GoalsPageClient({
       {/* ── Tab content ── */}
       <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8">
         {activeTab === "today" && (
-          <TodayTab goals={goals} setGoals={setGoals} homework={homework} classes={classes} habits={habits} habitLogs={habitLogs} onNavigate={(t) => setActiveTab(t as TabId)} />
+          <TodayTab goals={goals} setGoals={setGoals} homework={homework} classes={classes} habits={habits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} onNavigate={(t) => setActiveTab(t as TabId)} />
         )}
         {activeTab === "long-term" && (
           <GoalsTab goals={goals} setGoals={setGoals} goalType="long_term" />

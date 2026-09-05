@@ -1,44 +1,20 @@
-Fix desktop Tools button, clean up stale references, update docs
+Fix Today animations, habit checkboxes, drag reordering, charts, compass
 
-1. Fixed a critical bug: the desktop sidebar Tools button was using
-   onClick/window inside a server component, which would fail at runtime.
-   Extracted it into the ToolsMenu client component with a variant="sidebar"
-   prop so the sidebar renders a proper client-side button.
-
-2. Cleaned up all stale references to removed features:
-   - Removed dead "Oath Settings" and "Daily Huddle" section comments
-     from src/lib/db/schema.ts
-   - Updated the account-deletion cascade comment in
-     src/app/api/auth/delete/route.ts to list only existing tables
-     (removed onboarding_responses, huddle_completions, daily_lesson_views,
-     oath_ledger, oath_settings; added sadaqah_logs)
-   - Removed the stale "OpenRouter fallback" comment from
-     src/app/api/learn/search/route.ts
-   - Rewrote terms/page.tsx section 3 from "oath ledger" to "Akhirah Card"
-     and removed "daily lessons" and "AI tone variation" from section 4
-   - Removed "daily lessons" from privacy/page.tsx religious content section
-
-3. Updated the landing page (src/app/page.tsx) to reflect the new tools:
-   - Renamed "Sadaqah tracker" to "Akhirah Card"
-   - Renamed "Hijri calendar" to "Hijri calendar & converter"
-   - Added "99 Names of Allah" feature card
-   - Updated Dhikr and Qibla copy to mention the redesigns
-
-4. Updated AGENTS.md to remove all dead-feature references:
-   - Project description now lists the actual shipped tools
-   - Removed "Huddle pool size" and "AI tone variety" from premium examples
-   - Removed daily_lessons from the no-AI-content principle
-   - Build order: removed step 8 (Voice/AI event entry), merged step 7
-     into "Tools (dhikr + qibla + sadaqah + names + hijri + talks)"
-   - Directory structure: removed huddle/, lesson/, lessons/, llm.ts;
-     added qibla/, sadaqah/, names/, hijri/
-   - Removed "AI endpoints: 15/60s" from rate limiting rules
-   - Onboarding: removed the religiosity quiz step
-   - Content tables: removed daily_lessons and huddle_task_pool
-   - External API calls: removed LLM section
-   - Open decisions: removed "Daily lesson content bank"
-   - Anti-patterns: updated "AI-generate hadith/dhikr/lesson" to
-     "AI-generate dhikr/talks"
+- Today goal animation: include done goals during 800ms exit animation window
+  so strike-through + fade plays before removal (was filtered out instantly)
+- Today habit checkboxes: make habit dots clickable buttons that toggle
+  habit-logs API + optimistic state (was display-only div with no onClick)
+- Goal reordering: add GripVertical drag handle to GoalsTab list view,
+  persist sortOrder via PATCH /api/goals (already supported server-side)
+- Habit reordering: add drag handle to HabitsTab, persist via PATCH /api/habits
+  (added sortOrder support to habits PATCH route)
+- Day-of-Week Consistency chart: fix >100% values by counting totalPrayed
+  and activeDays from the SAME date range (was all-time vs range mismatch)
+- Clamp perPrayer consistencyPct to 100
+- Qibla compass: register BOTH deviceorientationabsolute and deviceorientation
+  events (was either/or — many Android devices report absolute support but
+  never fire the event, leaving compass with zero data)
+- Bump SW cache version v29 -> v30
 
 Generated with [Devin](https://devin.ai)
 

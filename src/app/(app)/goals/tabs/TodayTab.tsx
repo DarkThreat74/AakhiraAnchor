@@ -5,6 +5,7 @@ import { Target, BookOpen, CheckCircle2, Repeat, ChevronRight, Sunrise, Sun, Sun
 import type { Goal, Homework, Habit, HabitLog, Class } from "@/lib/db/schema";
 import { syncGoalsToCache } from "@/lib/offline/cache-writers";
 import { clearApiCache } from "@/lib/sw-helpers";
+import { toggleHabitLogInCache } from "@/lib/offline/cache-writers";
 import { formatDueBadge, urgencyColors, urgencyCardTint } from "@/lib/homework/due-format";
 
 function todayStr(): string {
@@ -32,6 +33,7 @@ export default function TodayTab({
   classes,
   habits,
   habitLogs,
+  setHabitLogs,
   onNavigate,
 }: {
   goals: Goal[];
@@ -40,6 +42,7 @@ export default function TodayTab({
   classes: Class[];
   habits: Habit[];
   habitLogs: HabitLog[];
+  setHabitLogs: React.Dispatch<React.SetStateAction<HabitLog[]>>;
   onNavigate: (tab: string) => void;
 }) {
   const today = useMemo(() => new Date(), []);
@@ -143,9 +146,14 @@ export default function TodayTab({
   );
 
   // ── Short-term active goals (optionally with target dates) ──
+  // Include goals that are currently animating out (just completed) so the
+  // strike-through + fade animation can play before they disappear.
   const shortTermGoals = useMemo(
     () => goals
-      .filter((g) => g.status === "active" && (g.goalType || "short_term") === "short_term")
+      .filter((g) =>
+        (g.goalType || "short_term") === "short_term" &&
+        (g.status === "active" || animatingOut.has(g.id)),
+      )
       .sort((a, b) => {
         // Goals with target dates first, sorted by closest date
         if (a.targetDate && b.targetDate) return a.targetDate.localeCompare(b.targetDate);
@@ -153,14 +161,17 @@ export default function TodayTab({
         if (!a.targetDate && b.targetDate) return 1;
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }),
-    [goals],
+    [goals, animatingOut],
   );
 
   // ── Long-term goals (separate "On the horizon" section) ──
   const longTermGoals = useMemo(
     () => goals
-      .filter((g) => g.status === "active" && g.goalType === "long_term"),
-    [goals],
+      .filter((g) =>
+        g.goalType === "long_term" &&
+        (g.status === "active" || animatingOut.has(g.id)),
+      ),
+    [goals, animatingOut],
   );
 
   // ── Habits grouped by time of day ──
@@ -187,6 +198,45 @@ export default function TodayTab({
     }
     return map;
   }, [habitLogs, todayDateStr]);
+
+  // ── Toggle habit completion (from Today tab) ──
+  const toggleHabit = useCallback(
+    async (habitId: string) => {
+      const wasCompleted = habitsCompletedToday.has(habitId);
+      // Optimistic update
+      if (wasCompleted) {
+        setHabitLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayDateStr)));
+      } else {
+        setHabitLogs((prev) => [...prev, {
+          id: `temp_${habitId}_${todayDateStr}`,
+          userId: "",
+          habitId,
+          date: todayDateStr,
+          count: 1,
+          completedAt: new Date(),
+        }]);
+      }
+      toggleHabitLogInCache(habitId, todayDateStr, !wasCompleted);
+      try {
+        await fetch("/api/habit-logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ habitId, date: todayDateStr }),
+        });
+        void clearApiCache();
+      } catch {
+        // revert on failure
+        if (wasCompleted) {
+          setHabitLogs((prev) => [...prev, {
+            id: `temp_${habitId}_${todayDateStr}`, userId: "", habitId, date: todayDateStr, count: 1, completedAt: new Date(),
+          }]);
+        } else {
+          setHabitLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayDateStr)));
+        }
+      }
+    },
+    [habitsCompletedToday, setHabitLogs, todayDateStr],
+  );
 
   const activeHabits = useMemo(() => habits.filter((h) => !h.archived), [habits]);
   const habitsDone = activeHabits.filter((h) => habitsCompletedToday.has(h.id)).length;
@@ -502,15 +552,23 @@ export default function TodayTab({
                       {grp.habits.map((habit) => {
                         const done = habitsCompletedToday.has(habit.id);
                         return (
-                          <div key={habit.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-[var(--color-paper-2)] transition-colors">
+                          <button
+                            key={habit.id}
+                            onClick={() => toggleHabit(habit.id)}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-[var(--color-paper-2)] transition-colors"
+                            style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                            aria-label={done ? `Uncheck ${habit.name}` : `Check ${habit.name}`}
+                          >
                             <div
-                              className="h-3.5 w-3.5 rounded-full shrink-0 border-2 transition-all"
+                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-all"
                               style={{
                                 borderColor: done ? habit.color : "var(--color-paper-3)",
                                 backgroundColor: done ? habit.color : "transparent",
                               }}
-                            />
-                            <span className="text-sm truncate flex-1" style={{
+                            >
+                              {done && <Check className="h-2.5 w-2.5" style={{ color: "var(--color-paper)" }} />}
+                            </div>
+                            <span className="text-sm truncate flex-1 text-left" style={{
                               color: done ? "var(--color-ink-muted)" : "var(--color-ink)",
                               textDecoration: done ? "line-through" : "none",
                             }}>
@@ -519,7 +577,7 @@ export default function TodayTab({
                             {habit.reminderTime && (
                               <span className="text-xs shrink-0" style={{ color: "var(--color-ink-muted)" }}>{habit.reminderTime}</span>
                             )}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

@@ -297,7 +297,7 @@ export async function GET(request: NextRequest) {
         masjidCount,
         masjidPct: totalDays > 0 ? Math.round((masjidCount / totalDays) * 100) : 0,
         avgWindowPct,
-        consistencyPct: activeDays > 0 ? Math.round((totalDays / activeDays) * 100) : 0,
+        consistencyPct: activeDays > 0 ? Math.min(100, Math.round((totalDays / activeDays) * 100)) : 0,
         onTimeCount,
         lateCount,
         onTimePct: totalDays > 0 ? Math.round((onTimeCount / totalDays) * 100) : 0,
@@ -330,7 +330,9 @@ export async function GET(request: NextRequest) {
 
     // ── Day-of-week breakdown ──
     // For each day of week (0=Sunday..6=Saturday), count how many prayers were prayed
-    // vs how many days were active, to get a consistency rate per weekday.
+    // vs how many prayers were expected (activeDays * 5), to get a consistency rate per weekday.
+    // IMPORTANT: both counts use the SAME date range (rangeStart to today) to avoid
+    // the >100% bug where totalPrayed spanned all-time but activeDays only spanned the range.
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dayOfWeekStats = Array.from({ length: 7 }, (_, i) => ({
       day: dayNames[i],
@@ -340,15 +342,15 @@ export async function GET(request: NextRequest) {
       consistencyPct: 0,
     }));
 
-    // Build a set of all dates that have any logs (active days)
-    const allActiveDates = new Set<string>();
-    for (const log of allLogs) {
+    // Build a set of all dates within the range that have any logs (active days)
+    const rangeActiveDates = new Set<string>();
+    for (const log of rangeLogs) {
       const dateStr = typeof log.date === "string" ? log.date : String(log.date);
-      allActiveDates.add(dateStr);
+      rangeActiveDates.add(dateStr);
     }
 
-    // Count prayed prayers per day of week
-    for (const log of allLogs) {
+    // Count prayed prayers per day of week (within the selected range only)
+    for (const log of rangeLogs) {
       if (log.status !== "prayed" && log.status !== "assumed_prayed") continue;
       const dateStr = typeof log.date === "string" ? log.date : String(log.date);
       const dateObj = new Date(dateStr + "T00:00:00");
@@ -357,18 +359,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Count active days per day of week (within the range)
-    for (const dateStr of allActiveDates) {
-      if (dateStr < rangeStart || dateStr > todayStr) continue;
+    for (const dateStr of rangeActiveDates) {
       const dateObj = new Date(dateStr + "T00:00:00");
       const dow = dateObj.getDay();
       dayOfWeekStats[dow].activeDays++;
     }
 
     // Calculate consistency per day of week
+    // consistencyPct = prayed prayers / (activeDays * 5) * 100, clamped to 100
     for (const stat of dayOfWeekStats) {
-      // Expected prayers = activeDays * 5
       const expected = stat.activeDays * 5;
-      stat.consistencyPct = expected > 0 ? Math.round((stat.totalPrayed / expected) * 100) : 0;
+      const rawPct = expected > 0 ? Math.round((stat.totalPrayed / expected) * 100) : 0;
+      stat.consistencyPct = Math.min(100, Math.max(0, rawPct));
     }
 
     // ── Total prayed all-time ──

@@ -40,6 +40,7 @@ export default function QiblaCompassClient() {
   const rafRef = useRef<number | null>(null);
   const bearingRef = useRef(0);
   const hasHeadingRef = useRef(false); // avoids stale closure in event handler
+  const hasAbsoluteDataRef = useRef(false); // tracks if we've received absolute sensor data
 
   // ── Fetch Qibla data ──
   useEffect(() => {
@@ -141,24 +142,44 @@ export default function QiblaCompassClient() {
     setPermissionGranted(true);
 
     // Low-pass filter constant for raw sensor data.
-    // 0.25 = moderate smoothing at the source, before the rAF loop smooths further.
     const SENSOR_ALPHA = 0.25;
 
+    // Track whether we've received absolute data — used to prefer absolute
+    // over relative when both events fire.
+    const hasAbsoluteRef = hasAbsoluteDataRef;
+    let lastEventTime = 0;
+
     const handler = (e: DeviceOrientationEvent) => {
+      // Deduplicate: if both deviceorientation and deviceorientationabsolute fire,
+      // only process the most recent one (within 80ms window).
+      const now = Date.now();
+      if (now - lastEventTime < 30) return;
+      lastEventTime = now;
+
       // iOS: webkitCompassHeading is already compensated and gives
       // the true compass heading (0 = North, clockwise).
       const webkitHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
       if (typeof webkitHeading === "number" && !Number.isNaN(webkitHeading)) {
+        hasAbsoluteRef.current = true;
         updateHeading(webkitHeading);
         return;
       }
 
-      // Android/other: compute heading from alpha/beta/gamma using atan2
+      // Android/other: check if alpha is absolute
       if (typeof e.alpha === "number" && e.alpha !== null &&
           typeof e.beta === "number" && typeof e.gamma === "number") {
-        const heading = compassHeading(e.alpha, e.beta, e.gamma);
-        if (!Number.isNaN(heading)) {
-          updateHeading(heading);
+        // If the event provides absolute data, use it
+        if (e.absolute === true) {
+          hasAbsoluteRef.current = true;
+          const heading = compassHeading(e.alpha, e.beta, e.gamma);
+          if (!Number.isNaN(heading)) updateHeading(heading);
+          return;
+        }
+        // If we haven't received any absolute data yet, try using relative alpha
+        // as a fallback (better than nothing — user can still get approximate direction)
+        if (!hasAbsoluteRef.current) {
+          const heading = compassHeading(e.alpha, e.beta, e.gamma);
+          if (!Number.isNaN(heading)) updateHeading(heading);
         }
       }
     };
@@ -184,23 +205,23 @@ export default function QiblaCompassClient() {
       }
     }
 
-    // Prefer absolute event when available; only register ONE listener
-    // to avoid duplicate conflicting readings
+    // ── Register BOTH events for maximum compatibility ──
+    // deviceorientationabsolute: Android Chrome (preferred, gives true north)
+    // deviceorientation: iOS (provides webkitCompassHeading) + Android fallback
+    // Registering both ensures we get data regardless of which one fires.
     const absSupported = "ondeviceorientationabsolute" in window;
     if (absSupported) {
       window.addEventListener("deviceorientationabsolute", handler as EventListener);
-    } else {
-      window.addEventListener("deviceorientation", handler as EventListener);
     }
+    // Always also register deviceorientation — on iOS this is the only event,
+    // and on some Android devices deviceorientationabsolute never fires.
+    window.addEventListener("deviceorientation", handler as EventListener);
 
-    // Cleanup is handled by component unmount via the returned function
-    // (stored on the ref so we can remove it later)
     cleanupRef.current = () => {
       if (absSupported) {
         window.removeEventListener("deviceorientationabsolute", handler as EventListener);
-      } else {
-        window.removeEventListener("deviceorientation", handler as EventListener);
       }
+      window.removeEventListener("deviceorientation", handler as EventListener);
     };
   }, []);
 

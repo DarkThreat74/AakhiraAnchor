@@ -142,6 +142,7 @@ export async function PATCH(request: NextRequest) {
       targetCount?: number;
       timeOfDay?: string | null;
       reminderTime?: string | null;
+      sortOrder?: number;
     };
     try {
       body = await request.json();
@@ -195,6 +196,12 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "targetCount must be a positive integer" }, { status: 400 });
       }
       updates.targetCount = body.targetCount;
+    }
+    if (body.sortOrder !== undefined) {
+      if (!Number.isInteger(body.sortOrder)) {
+        return NextResponse.json({ error: "sortOrder must be an integer" }, { status: 400 });
+      }
+      updates.sortOrder = body.sortOrder;
     }
 
     if (Object.keys(updates).length === 0) {
