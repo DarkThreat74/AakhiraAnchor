@@ -13,6 +13,44 @@ interface DhikrSequence {
   sourceCitation: string;
 }
 
+// Default post-prayer adhkar — universally authenticated from
+// Sahih al-Bukhari 844 / Sahih Muslim 597 (Abu Hurayrah RA).
+// Used as a fallback when the dhikr_sequences table is empty.
+const DEFAULT_SEQUENCES: DhikrSequence[] = [
+  {
+    id: "default_subhanallah",
+    phraseArabic: "سُبْحَانَ اللَّهِ",
+    phraseTransliteration: "SubhanAllah",
+    targetCount: 33,
+    sequenceOrder: 0,
+    sourceCitation: "Sahih Muslim 597 — Abu Hurayrah (RA)",
+  },
+  {
+    id: "default_alhamdulillah",
+    phraseArabic: "الْحَمْدُ لِلَّهِ",
+    phraseTransliteration: "Alhamdulillah",
+    targetCount: 33,
+    sequenceOrder: 1,
+    sourceCitation: "Sahih Muslim 597 — Abu Hurayrah (RA)",
+  },
+  {
+    id: "default_allahuakbar",
+    phraseArabic: "اللَّهُ أَكْبَرُ",
+    phraseTransliteration: "Allahu Akbar",
+    targetCount: 34,
+    sequenceOrder: 2,
+    sourceCitation: "Sahih Muslim 597 — Abu Hurayrah (RA)",
+  },
+  {
+    id: "default_tahlil",
+    phraseArabic: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ",
+    phraseTransliteration: "La ilaha illa Allah, wahdahu la sharika lah, lahul-mulku wa lahul-hamdu, wa Huwa ala kulli shayin qadeer",
+    targetCount: 1,
+    sequenceOrder: 3,
+    sourceCitation: "Sahih al-Bukhari 844 / Sahih Muslim 597 — Abu Hurayrah (RA)",
+  },
+];
+
 export default function DhikrCounterClient() {
   const [sequences, setSequences] = useState<DhikrSequence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +62,7 @@ export default function DhikrCounterClient() {
   const ringRef = useRef<SVGCircleElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
 
-  // Load dhikr sequences
+  // Load dhikr sequences — fall back to defaults if table is empty
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -35,10 +73,14 @@ export default function DhikrCounterClient() {
           const data = await res.json().catch(() => null);
           if (data?.sequences?.length > 0) {
             setSequences(data.sequences);
+          } else {
+            setSequences(DEFAULT_SEQUENCES);
           }
+        } else {
+          setSequences(DEFAULT_SEQUENCES);
         }
       } catch {
-        /* non-critical */
+        if (!cancelled) setSequences(DEFAULT_SEQUENCES);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -112,23 +154,6 @@ export default function DhikrCounterClient() {
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: "var(--color-accent)", borderRightColor: "var(--color-accent)" }} />
           <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>Loading dhikr…</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Empty state ──
-  if (sequences.length === 0) {
-    return (
-      <div className="mx-auto max-w-md py-8 sm:py-12">
-        <div className="rounded-2xl border p-6 text-center" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-paper-2)" }}>
-            <span className="text-2xl">📿</span>
-          </div>
-          <h1 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Dhikr Counter</h1>
-          <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--color-ink-muted)" }}>
-            No dhikr sequences have been curated yet. Please check back soon.
-          </p>
         </div>
       </div>
     );
