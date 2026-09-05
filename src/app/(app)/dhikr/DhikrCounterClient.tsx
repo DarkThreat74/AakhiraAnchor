@@ -189,7 +189,7 @@ export default function DhikrCounterClient() {
   const ringCircumference = 2 * Math.PI * 48;
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center">
+    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center py-6 lg:min-h-dvh lg:py-10">
       <div className="mx-auto w-full max-w-md px-4">
         {/* ── Full-screen tap area with side nav buttons ── */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -210,7 +210,7 @@ export default function DhikrCounterClient() {
             disabled={isComplete}
             className="relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-3xl border transition-colors active:scale-[0.99] disabled:cursor-default"
             style={{
-              minHeight: "min(70vh, 480px)",
+              minHeight: "min(60vh, 440px)",
               backgroundColor: isComplete
                 ? "color-mix(in oklab, var(--color-success) 6%, var(--color-paper))"
                 : "var(--color-paper)",

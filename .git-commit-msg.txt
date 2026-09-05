@@ -1,9 +1,8 @@
-Center Dhikr counter on desktop + add visible prev/next buttons
+Center Dhikr counter vertically in full viewport
 
-- Vertically center the counter in the viewport on desktop
-- Add always-visible prev/next chevron buttons flanking the tap area
-  (was only accessible via the controls overlay)
-- Buttons are 44x44 minimum for touch accessibility
+Use min-h-dvh on desktop (accounting for no mobile header/nav) and
+min-h-[calc(100vh-4rem)] on mobile (accounting for the top header).
+Reduced tap area min-height slightly to avoid overflow on shorter screens.
 
 Generated with [Devin](https://devin.ai)
 
