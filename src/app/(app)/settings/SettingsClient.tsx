@@ -1798,6 +1798,21 @@ export default function SettingsClient({
 
         <div className="border-t" style={{ borderColor: "var(--color-paper-3)" }} />
 
+        {/* ── Reload app — useful in PWA standalone mode where pull-to-refresh is disabled ── */}
+        <div className="p-4 sm:p-6">
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper-2)]"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)" }}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Reload app
+          </button>
+          <p className="mt-2 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+            Refreshes the page and checks for updates. Use this if the app feels stale.
+          </p>
+        </div>
+
         {/* ── Logout — at the very bottom ── */}
         <div className="p-4 sm:p-6">
           <button

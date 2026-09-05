@@ -73,15 +73,16 @@ export default function GoalsTab({
 
   const updateGoal = useCallback(
     async (id: string, updates: Partial<Goal>) => {
-      if (updates.title !== undefined || updates.description !== undefined) {
-        setGoals((prev) =>
-          prev.map((g) =>
-            g.id === id
-              ? { ...g, ...(updates.title !== undefined ? { title: updates.title } : {}), ...(updates.description !== undefined ? { description: updates.description } : {}), updatedAt: new Date() }
-              : g,
-          ),
+      // Optimistic update for ALL fields — not just title/description.
+      // This ensures status toggles, targetDate edits, color changes, etc.
+      // reflect immediately in the UI, even when offline.
+      setGoals((prev) => {
+        const updated = prev.map((g) =>
+          g.id === id ? { ...g, ...updates, updatedAt: new Date() } : g,
         );
-      }
+        syncGoalsToCache(updated);
+        return updated;
+      });
       try {
         const res = await fetch("/api/goals", {
           method: "PATCH",
@@ -90,6 +91,9 @@ export default function GoalsTab({
           body: JSON.stringify({ id, ...updates }),
         });
         const data = await res.json().catch(() => ({}));
+        // Only overwrite with server response if it contains a full goal object.
+        // When offline, the SW returns a generic 202 with no `goal` field,
+        // so we keep the optimistic state as-is.
         if (res.ok && data.goal) {
           setGoals((prev) => {
             const updated = prev.map((g) => (g.id === id ? data.goal : g));
@@ -99,7 +103,7 @@ export default function GoalsTab({
           void clearApiCache();
         }
       } catch {
-        // keep optimistic state
+        // Offline or network error — keep optimistic state (already updated above)
       }
     },
     [setGoals],

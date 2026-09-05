@@ -69,10 +69,10 @@ export default function DoneTab({
   const restoreHomework = async (id: string) => {
     setHomework((prev) => prev.map((h) => (h.id === id ? { ...h, status: "pending" as const, completedAt: null } : h)));
     try {
-      await fetch("/api/homework", {
+      await fetch(`/api/homework/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status: "pending" }),
+        body: JSON.stringify({ status: "pending" }),
       });
     } catch {
       // keep state

@@ -78,9 +78,11 @@ function isOverdue(hw: HomeworkItem): boolean {
 export default function HomeworkClient({
   initialHomework,
   initialClasses,
+  onHomeworkChange,
 }: {
   initialHomework: HomeworkItem[];
   initialClasses: ClassItem[];
+  onHomeworkChange?: (homework: HomeworkItem[]) => void;
 }) {
   const [homework, setHomework] = useState<HomeworkItem[]>(initialHomework);
   const [classes, setClasses] = useState<ClassItem[]>(initialClasses);
@@ -95,6 +97,11 @@ export default function HomeworkClient({
   const [deleteHwConfirm, setDeleteHwConfirm] = useState<HomeworkItem | null>(null);
   const [completeConfirm, setCompleteConfirm] = useState<HomeworkItem | null>(null);
   const [showClasses, setShowClasses] = useState(false);
+
+  // Propagate homework state changes to parent (so Today tab stays in sync)
+  useEffect(() => {
+    if (onHomeworkChange) onHomeworkChange(homework);
+  }, [homework, onHomeworkChange]);
 
   // Add form state
   const [title, setTitle] = useState("");
@@ -256,12 +263,35 @@ export default function HomeworkClient({
           body: JSON.stringify(payload),
         });
         if (res.ok) {
-          const updatedHw = await res.json();
-          setHomework((prev) =>
-            prev.map((h) => (h.id === editingId ? updatedHw : h))
-              .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
-          );
-          upsertHomeworkToCache(updatedHw);
+          const data = await res.json().catch(() => ({}));
+          // When offline, the SW returns a generic 202 with no homework object.
+          // In that case, keep the optimistic state (the existing item with
+          // the edited fields applied) rather than overwriting with a broken object.
+          if (data && data.title && data.dueDate) {
+            // Server returned a full homework object — use it
+            setHomework((prev) =>
+              prev.map((h) => (h.id === editingId ? data : h))
+                .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+            );
+            upsertHomeworkToCache(data);
+          } else {
+            // Offline 202 or incomplete response — apply edits optimistically
+            const optimisticHw: HomeworkItem = {
+              ...homework.find((h) => h.id === editingId)!,
+              title: trimmed,
+              description: description.trim() || null,
+              classId: classId || null,
+              dueDate,
+              dueTime: dueTime ? `${dueTime}:00` : null,
+              priority,
+              kind,
+            };
+            setHomework((prev) =>
+              prev.map((h) => (h.id === editingId ? optimisticHw : h))
+                .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+            );
+            upsertHomeworkToCache(optimisticHw);
+          }
           clearApiCache();
           resetForm();
           setShowAddForm(false);
@@ -278,6 +308,8 @@ export default function HomeworkClient({
         });
         if (res.ok) {
           const newHw = await res.json();
+          // When offline, the SW returns a synthetic object with tempId and
+          // the echoed fields. This is enough to render the item in the list.
           setHomework((prev) => [...prev, newHw].sort((a, b) => a.dueDate.localeCompare(b.dueDate)));
           upsertHomeworkToCache(newHw);
           clearApiCache();

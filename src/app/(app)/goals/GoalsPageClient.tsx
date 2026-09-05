@@ -250,7 +250,7 @@ export default function GoalsPageClient({
           <GoalsTab goals={goals} setGoals={setGoals} goalType="short_term" />
         )}
         {activeTab === "homework" && (
-          <HomeworkTab homework={homework} classes={classes} />
+          <HomeworkTab homework={homework} classes={classes} onHomeworkChange={setHomework} />
         )}
         {activeTab === "habits" && (
           <HabitsTab habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} />
