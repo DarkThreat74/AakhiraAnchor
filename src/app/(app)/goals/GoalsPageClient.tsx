@@ -175,6 +175,17 @@ export default function GoalsPageClient({
     return () => window.removeEventListener("waqt:events-synced", onSynced);
   }, [refreshAll]);
 
+  // ── Refetch on mount when online ──
+  // The SW serves cached HTML first (stale-while-revalidate), which may have
+  // outdated initialGoals. Fetch fresh data immediately so newly created/edited
+  // goals appear without requiring a second reload.
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      refreshAll();
+    }
+  }, [refreshAll]);
+
   // ── Tab bar (scrollable on mobile) ──
 
   return (
