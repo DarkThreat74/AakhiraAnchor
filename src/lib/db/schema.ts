@@ -104,8 +104,26 @@ export const prayerSettings = pgTable('prayer_settings', {
   calculationMethod: integer('calculation_method').default(2).notNull(),
   // 'standard' or 'hanafi' — affects Asr calculation
   madhab: text('madhab').default('standard'),
+  // ── Friends visibility controls (privacy-preserving defaults) ──
+  // Streak is visible by default; today's detailed per-prayer status and
+  // sunnah logs are hidden by default. Users opt in to share more.
+  friendsSeeStreak: boolean('friends_see_streak').default(true).notNull(),
+  friendsSeeTodayStatus: boolean('friends_see_today_status').default(false).notNull(),
+  friendsSeeSunnah: boolean('friends_see_sunnah').default(false).notNull(),
+  friendsSeeMasjidPct: boolean('friends_see_masjid_pct').default(true).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ─── Prayer Blocks (prevent unwanted friend requests) ───
+export const prayerBlocks = pgTable('prayer_blocks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  blockedUserId: uuid('blocked_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('prayer_blocks_user_blocked_idx').on(table.userId, table.blockedUserId),
+  index('prayer_blocks_user_idx').on(table.userId),
+]);
 
 // ─── Prayer Times Cache (monthly, per user) ───
 
@@ -502,6 +520,7 @@ export type NewEvent = typeof events.$inferInsert;
 export type DhikrSequence = typeof dhikrSequences.$inferSelect;
 export type Talk = typeof talks.$inferSelect;
 export type PrayerFriend = typeof prayerFriends.$inferSelect;
+export type PrayerBlock = typeof prayerBlocks.$inferSelect;
 export type TrustedDevice = typeof trustedDevices.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;

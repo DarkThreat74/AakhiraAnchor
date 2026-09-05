@@ -56,7 +56,14 @@ export async function GET(request: NextRequest) {
         .from(schema.users)
         .where(inArray(schema.users.id, friendIds)),
       db
-        .select({ userId: schema.prayerSettings.userId, timezone: schema.prayerSettings.timezone })
+        .select({
+          userId: schema.prayerSettings.userId,
+          timezone: schema.prayerSettings.timezone,
+          friendsSeeStreak: schema.prayerSettings.friendsSeeStreak,
+          friendsSeeTodayStatus: schema.prayerSettings.friendsSeeTodayStatus,
+          friendsSeeSunnah: schema.prayerSettings.friendsSeeSunnah,
+          friendsSeeMasjidPct: schema.prayerSettings.friendsSeeMasjidPct,
+        })
         .from(schema.prayerSettings)
         .where(inArray(schema.prayerSettings.userId, friendIds)),
       db
@@ -100,8 +107,16 @@ export async function GET(request: NextRequest) {
         ),
     ]);
 
-  // Index lookups
-  const settingsByUser = new Map(friendSettingsAll.map((s) => [s.userId, s.timezone || "America/Chicago"]));
+  // Index lookups — include visibility settings
+  const settingsByUser = new Map(
+    friendSettingsAll.map((s) => [s.userId, {
+      timezone: s.timezone || "America/Chicago",
+      friendsSeeStreak: s.friendsSeeStreak ?? true,
+      friendsSeeTodayStatus: s.friendsSeeTodayStatus ?? false,
+      friendsSeeSunnah: s.friendsSeeSunnah ?? false,
+      friendsSeeMasjidPct: s.friendsSeeMasjidPct ?? true,
+    }]),
+  );
   const logsByUser = new Map<string, typeof friendLogsAll>();
   for (const log of friendLogsAll) {
     if (!logsByUser.has(log.userId)) logsByUser.set(log.userId, []);
@@ -126,11 +141,11 @@ export async function GET(request: NextRequest) {
     id: string;
     firstName: string | null;
     displayName: string | null;
-    streak: number;
-    totalCompleteDays: number;
-    totalPrayed: number;
-    masjidPct: number;
-    thisWeekPrayed: number;
+    streak: number | null;
+    totalCompleteDays: number | null;
+    totalPrayed: number | null;
+    masjidPct: number | null;
+    thisWeekPrayed: number | null;
     lastPrayedDate: string | null;
     todayLogs: Array<{ prayerName: string; status: string }>;
     todaySunnahs: string[];
@@ -138,7 +153,14 @@ export async function GET(request: NextRequest) {
   }> = [];
 
   for (const friendUser of friendUsers) {
-    const timezone = settingsByUser.get(friendUser.id) || "America/Chicago";
+    const settings = settingsByUser.get(friendUser.id) || {
+      timezone: "America/Chicago",
+      friendsSeeStreak: true,
+      friendsSeeTodayStatus: false,
+      friendsSeeSunnah: false,
+      friendsSeeMasjidPct: true,
+    };
+    const timezone = settings.timezone;
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
     const friendLogs = logsByUser.get(friendUser.id) ?? [];
 
@@ -171,19 +193,25 @@ export async function GET(request: NextRequest) {
 
     const streak = calculateStreak(logsByDate, todayStr);
 
-    const todayLogs = todayLogsByUserDate.get(friendUser.id)?.get(todayStr) ?? [];
-    const todaySunnahs = sunnahByUserDate.get(friendUser.id)?.get(todayStr) ?? [];
+    const todayLogs = settings.friendsSeeTodayStatus
+      ? (todayLogsByUserDate.get(friendUser.id)?.get(todayStr) ?? [])
+      : [];
+    const todaySunnahs = settings.friendsSeeSunnah
+      ? (sunnahByUserDate.get(friendUser.id)?.get(todayStr) ?? [])
+      : [];
 
     friends.push({
       id: friendUser.id,
       firstName: friendUser.firstName,
       displayName: friendUser.displayName,
-      streak,
-      totalCompleteDays: completeDays,
-      totalPrayed,
-      masjidPct: totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0,
-      thisWeekPrayed,
-      lastPrayedDate,
+      streak: settings.friendsSeeStreak ? streak : null,
+      totalCompleteDays: settings.friendsSeeStreak ? completeDays : null,
+      totalPrayed: settings.friendsSeeStreak ? totalPrayed : null,
+      masjidPct: settings.friendsSeeMasjidPct
+        ? (totalPrayed > 0 ? Math.round((totalMasjid / totalPrayed) * 100) : 0)
+        : null,
+      thisWeekPrayed: settings.friendsSeeStreak ? thisWeekPrayed : null,
+      lastPrayedDate: settings.friendsSeeStreak ? lastPrayedDate : null,
       todayLogs,
       todaySunnahs,
       timezone,
@@ -191,7 +219,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Sort by streak descending so the leaderboard is competitive
-  friends.sort((a, b) => b.streak - a.streak || b.thisWeekPrayed - a.thisWeekPrayed);
+  friends.sort((a, b) => (b.streak ?? -1) - (a.streak ?? -1) || (b.thisWeekPrayed ?? -1) - (a.thisWeekPrayed ?? -1));
 
   return NextResponse.json(friends);
 }

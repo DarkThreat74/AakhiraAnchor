@@ -65,11 +65,11 @@ interface Friend {
   id: string;
   firstName: string | null;
   displayName: string | null;
-  streak: number;
-  totalCompleteDays: number;
-  totalPrayed: number;
-  masjidPct: number;
-  thisWeekPrayed: number;
+  streak: number | null;
+  totalCompleteDays: number | null;
+  totalPrayed: number | null;
+  masjidPct: number | null;
+  thisWeekPrayed: number | null;
   lastPrayedDate: string | null;
   todayLogs: Array<{ prayerName: string; status: string }>;
   todaySunnahs: string[];
@@ -205,6 +205,12 @@ export default function PrayerDashboard() {
     requester: { id: string; firstName: string | null; displayName: string | null };
   }>>([]);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<{
+    friendsSeeStreak: boolean;
+    friendsSeeTodayStatus: boolean;
+    friendsSeeSunnah: boolean;
+    friendsSeeMasjidPct: boolean;
+  }>({ friendsSeeStreak: true, friendsSeeTodayStatus: false, friendsSeeSunnah: false, friendsSeeMasjidPct: true });
   const [qadaaMsg, setQadaaMsg] = useState<string | null>(null);
   const [setupFajr, setSetupFajr] = useState(0);
   const [setupDhuhr, setSetupDhuhr] = useState(0);
@@ -342,7 +348,7 @@ export default function PrayerDashboard() {
 
       // ── Step 2: Fetch from API in background ──
       try {
-        const [analyticsRes, friendsRes, codeRes, qadaaRes, logsRes, sunnahRes, timesRes, pendingRes] = await Promise.all([
+        const [analyticsRes, friendsRes, codeRes, qadaaRes, logsRes, sunnahRes, timesRes, pendingRes, visibilityRes] = await Promise.all([
           fetch(`/api/prayer-log/analytics?range=${statsRange}`).catch(() => null),
           fetch("/api/prayer-friends").catch(() => null),
           fetch("/api/prayer-friends/my-code").catch(() => null),
@@ -351,6 +357,7 @@ export default function PrayerDashboard() {
           fetch(`/api/prayer-log/sunnah?date=${todayStr}`).catch(() => null),
           fetch(`/api/prayer-times?date=${todayStr}`).catch(() => null),
           fetch("/api/prayer-friends/pending").catch(() => null),
+          fetch("/api/settings/prayer-settings").catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -375,6 +382,17 @@ export default function PrayerDashboard() {
         if (pendingRes?.ok) {
           const data = await pendingRes.json().catch(() => ({ requests: [] }));
           if (data?.requests && Array.isArray(data.requests)) setPendingRequests(data.requests);
+        }
+        if (visibilityRes?.ok) {
+          const data = await visibilityRes.json().catch(() => null);
+          if (data && typeof data.friendsSeeStreak === "boolean") {
+            setVisibility({
+              friendsSeeStreak: data.friendsSeeStreak,
+              friendsSeeTodayStatus: data.friendsSeeTodayStatus,
+              friendsSeeSunnah: data.friendsSeeSunnah,
+              friendsSeeMasjidPct: data.friendsSeeMasjidPct,
+            });
+          }
         }
         if (qadaaRes?.ok) {
           const data = await qadaaRes.json().catch(() => null);
@@ -607,6 +625,24 @@ export default function PrayerDashboard() {
       }
     } catch {
       // ignore
+    }
+  }
+
+  async function handleToggleVisibility(
+    key: keyof typeof visibility,
+    value: boolean,
+  ) {
+    const next = { ...visibility, [key]: value };
+    setVisibility(next);
+    try {
+      await fetch("/api/settings/prayer-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: value }),
+      });
+    } catch {
+      // revert on failure
+      setVisibility(visibility);
     }
   }
 
@@ -1310,7 +1346,7 @@ export default function PrayerDashboard() {
                     key={friend.id}
                     name={friend.firstName || friend.displayName || "Friend"}
                     isMe={false}
-                    streak={friend.streak}
+                    streak={friend.streak ?? 0}
                     todayLogs={friend.todayLogs}
                     todaySunnahs={friend.todaySunnahs}
                     prayerTimes={prayerTimes}
@@ -1776,6 +1812,36 @@ export default function PrayerDashboard() {
             {friendError && <p className="mb-3 text-xs" style={{ color: "var(--color-warmth)" }}>{friendError}</p>}
             {friendSuccess && <p className="mb-3 text-xs" style={{ color: "var(--color-success)" }}>{friendSuccess}</p>}
 
+            {/* ── Visibility controls ── */}
+            <div className="mb-4 rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)" }}>
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+                What friends can see
+              </p>
+              <div className="flex flex-col gap-2">
+                {([
+                  { key: "friendsSeeStreak", label: "My streak & complete days" },
+                  { key: "friendsSeeTodayStatus", label: "Today's per-prayer status" },
+                  { key: "friendsSeeSunnah", label: "Today's sunnah prayers" },
+                  { key: "friendsSeeMasjidPct", label: "My masjid percentage" },
+                ] as const).map((item) => (
+                  <label key={item.key} className="flex items-center justify-between gap-2">
+                    <span className="text-xs" style={{ color: "var(--color-ink-soft)" }}>{item.label}</span>
+                    <button
+                      onClick={() => handleToggleVisibility(item.key, !visibility[item.key])}
+                      className="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+                      style={{ backgroundColor: visibility[item.key] ? "var(--color-accent)" : "var(--color-paper-3)" }}
+                      aria-label={`Toggle ${item.label}`}
+                    >
+                      <span
+                        className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+                        style={{ left: visibility[item.key] ? "18px" : "2px" }}
+                      />
+                    </button>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             {/* ── Pending friend requests ── */}
             {pendingRequests.length > 0 && (
               <div className="mb-4 space-y-2">
@@ -1856,7 +1922,13 @@ export default function PrayerDashboard() {
                 </div>
 
                 {friends.map((friend, idx) => {
-                  const imWinning = myStreak >= friend.streak;
+                  const streakVal = friend.streak ?? null;
+                  const imWinning = streakVal !== null && myStreak >= streakVal;
+                  const streakLabel = streakVal !== null ? streakVal : "—";
+                  const subStats: string[] = [];
+                  if (friend.thisWeekPrayed !== null) subStats.push(`${friend.thisWeekPrayed} this week`);
+                  if (friend.totalCompleteDays !== null) subStats.push(`${friend.totalCompleteDays} complete`);
+                  if (friend.masjidPct !== null) subStats.push(`${friend.masjidPct}% masjid`);
                   return (
                     <div
                       key={friend.id}
@@ -1877,20 +1949,24 @@ export default function PrayerDashboard() {
                           {friend.firstName || friend.displayName || "Friend"}
                         </div>
                         <div className="truncate text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
-                          {friend.thisWeekPrayed} this week · {friend.totalCompleteDays} complete · {friend.masjidPct}% masjid
+                          {subStats.length > 0 ? subStats.join(" · ") : "Stats private"}
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="flex items-center gap-1 text-lg font-bold tabular-nums" style={{ color: imWinning ? "var(--color-ink-soft)" : "var(--color-warmth)" }}>
-                          <Flame className="h-4 w-4" /> {friend.streak}
+                          <Flame className="h-4 w-4" /> {streakLabel}
                         </div>
                         <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>day streak</div>
                       </div>
                       <button
-                        onClick={() => handleRemoveFriend(friend.id)}
-                        className="absolute right-1.5 top-1.5 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => {
+                          if (confirm(`Remove ${friend.firstName || friend.displayName || "this friend"}? They won't be able to see your stats anymore.`)) {
+                            handleRemoveFriend(friend.id);
+                          }
+                        }}
+                        className="absolute right-1.5 top-1.5 rounded-full p-1 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100"
                         aria-label="Remove friend"
-                        style={{ color: "var(--color-ink-muted)" }}
+                        style={{ color: "var(--color-ink-muted)", backgroundColor: "var(--color-paper)" }}
                       >
                         <X className="h-3 w-3" />
                       </button>

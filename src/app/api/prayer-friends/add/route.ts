@@ -7,6 +7,26 @@ import { sendPrayerPush } from "@/lib/notifications/push";
 
 export const dynamic = "force-dynamic";
 
+// Re-send cooldown: must wait 7 days after rejection before re-sending
+const RESEND_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+// Max pending outgoing requests
+const MAX_PENDING_OUTGOING = 20;
+
+// Helper: send push notification to a user
+async function notifyUser(userId: string, title: string, body: string) {
+  try {
+    const subs = await db
+      .select()
+      .from(schema.pushSubscriptions)
+      .where(eq(schema.pushSubscriptions.userId, userId));
+    for (const sub of subs) {
+      await sendPrayerPush(sub, JSON.stringify({ title, body, url: "/prayer" }));
+    }
+  } catch {
+    // Push is best-effort
+  }
+}
+
 // POST /api/prayer-friends/add — send a friend request by prayer code
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
@@ -50,6 +70,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You can't add yourself." }, { status: 400 });
   }
 
+  // ── Block check: either side may have blocked the other ──
+  const [block] = await db
+    .select({ id: schema.prayerBlocks.id })
+    .from(schema.prayerBlocks)
+    .where(
+      or(
+        and(eq(schema.prayerBlocks.userId, session.userId), eq(schema.prayerBlocks.blockedUserId, friendUser.id)),
+        and(eq(schema.prayerBlocks.userId, friendUser.id), eq(schema.prayerBlocks.blockedUserId, session.userId)),
+      ),
+    )
+    .limit(1);
+
+  if (block) {
+    // Don't reveal who blocked whom — generic message
+    return NextResponse.json({ error: "Unable to send request to this user." }, { status: 403 });
+  }
+
   // Check if a request already exists in either direction
   const [existing] = await db
     .select({
@@ -57,6 +94,7 @@ export async function POST(request: NextRequest) {
       status: schema.prayerFriends.status,
       userId: schema.prayerFriends.userId,
       friendId: schema.prayerFriends.friendId,
+      respondedAt: schema.prayerFriends.respondedAt,
     })
     .from(schema.prayerFriends)
     .where(
@@ -99,13 +137,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Friend request already sent." }, { status: 409 });
     }
     if (existing.status === "rejected") {
-      // If it was rejected before, allow re-sending by updating to pending
+      // Cooldown: enforce 7-day wait before re-sending
+      if (existing.respondedAt) {
+        const elapsed = Date.now() - new Date(existing.respondedAt).getTime();
+        if (elapsed < RESEND_COOLDOWN_MS) {
+          const daysLeft = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+          return NextResponse.json(
+            { error: `Please wait ${daysLeft} more day(s) before sending another request.` },
+            { status: 429 },
+          );
+        }
+      }
+
+      // Only the original sender can re-send (not the rejecter)
+      if (existing.userId !== session.userId) {
+        return NextResponse.json({ error: "Unable to re-send this request." }, { status: 403 });
+      }
+
+      // Re-send: update to pending, reset respondedAt
       await db
         .update(schema.prayerFriends)
         .set({ status: "pending", respondedAt: null })
         .where(eq(schema.prayerFriends.id, existing.id));
+
+      // Send push notification on re-send (was missing before)
+      const [requester] = await db
+        .select({ firstName: schema.users.firstName, displayName: schema.users.displayName })
+        .from(schema.users)
+        .where(eq(schema.users.id, session.userId))
+        .limit(1);
+      const requesterName = requester?.firstName || requester?.displayName || "Someone";
+      await notifyUser(friendUser.id, "New friend request", `${requesterName} wants to connect with you on Waqt. Tap to accept or reject.`);
+
       return NextResponse.json({ ok: true, pending: true, message: "Friend request sent." });
     }
+  }
+
+  // ── Cap on pending outgoing requests ──
+  const pendingCount = await db
+    .select({ id: schema.prayerFriends.id })
+    .from(schema.prayerFriends)
+    .where(
+      and(
+        eq(schema.prayerFriends.userId, session.userId),
+        eq(schema.prayerFriends.status, "pending"),
+      ),
+    );
+  if (pendingCount.length >= MAX_PENDING_OUTGOING) {
+    return NextResponse.json(
+      { error: `You can have at most ${MAX_PENDING_OUTGOING} pending friend requests. Wait for some to be accepted or rejected.` },
+      { status: 429 },
+    );
   }
 
   // Create a pending friend request (one row — the target must accept)
@@ -127,18 +209,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     const requesterName = requester?.firstName || requester?.displayName || "Someone";
-    const subs = await db
-      .select()
-      .from(schema.pushSubscriptions)
-      .where(eq(schema.pushSubscriptions.userId, friendUser.id));
-
-    for (const sub of subs) {
-      await sendPrayerPush(sub, JSON.stringify({
-        title: "New friend request",
-        body: `${requesterName} wants to connect with you on Waqt. Tap to accept or reject.`,
-        url: "/prayer",
-      }));
-    }
+    await notifyUser(friendUser.id, "New friend request", `${requesterName} wants to connect with you on Waqt. Tap to accept or reject.`);
   } catch {
     // Push notification is best-effort
   }
