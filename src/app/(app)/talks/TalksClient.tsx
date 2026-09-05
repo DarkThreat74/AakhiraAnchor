@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { ExternalLink, Folder, ChevronLeft, Play, Pause, SkipBack, SkipForward, Download, Trash2, Clock, Headphones } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ExternalLink, Folder, ChevronLeft, Play, Clock, Headphones, Download } from "lucide-react";
+import AdvancedAudioPlayer, { type PlayerTrack } from "@/components/advanced-audio-player";
 
 interface Folder {
   id: string;
@@ -33,13 +34,18 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds)) return "0:00";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  return `${m}:${s.toString().padStart(2, "0")}`;
+function talkToTrack(talk: Talk): PlayerTrack {
+  return {
+    id: talk.id,
+    title: talk.title,
+    speaker: talk.speaker,
+    description: talk.description,
+    streamUrl: talk.streamUrl,
+    externalUrl: talk.externalUrl,
+    fileSize: talk.fileSize,
+    duration: talk.duration,
+    folderId: talk.folderId,
+  };
 }
 
 export default function TalksClient() {
@@ -90,18 +96,47 @@ export default function TalksClient() {
     })();
   }, []);
 
-  const talksInFolder = (folderId: string | null) =>
-    talks.filter((t) => t.folderId === folderId);
+  const talksInFolder = useCallback((folderId: string | null) =>
+    talks.filter((t) => t.folderId === folderId), [talks]);
 
   const uncategorized = talksInFolder(null);
 
-  // Get the next talk in the same folder (or uncategorized) for auto-advance
+  // Build the queue for the current talk (siblings in the same folder, or uncategorized)
+  const getCurrentQueue = useCallback((): Talk[] => {
+    if (!currentTalk) return [];
+    if (currentTalk.folderId) return talksInFolder(currentTalk.folderId);
+    return uncategorized;
+  }, [currentTalk, talksInFolder, uncategorized]);
+
+  const queue = getCurrentQueue();
+
+  // Get next/prev in queue
   const getNextTalk = useCallback((talk: Talk): Talk | null => {
-    const siblings = talk.folderId ? talks.filter((t) => t.folderId === talk.folderId) : talks.filter((t) => !t.folderId);
+    const siblings = talk.folderId ? talksInFolder(talk.folderId) : uncategorized;
     const idx = siblings.findIndex((t) => t.id === talk.id);
     if (idx >= 0 && idx < siblings.length - 1) return siblings[idx + 1];
     return null;
-  }, [talks]);
+  }, [talksInFolder, uncategorized]);
+
+  const getPrevTalk = useCallback((talk: Talk): Talk | null => {
+    const siblings = talk.folderId ? talksInFolder(talk.folderId) : uncategorized;
+    const idx = siblings.findIndex((t) => t.id === talk.id);
+    if (idx > 0) return siblings[idx - 1];
+    return null;
+  }, [talksInFolder, uncategorized]);
+
+  const handleNext = useCallback(() => {
+    if (!currentTalk) return;
+    const next = getNextTalk(currentTalk);
+    if (next) setCurrentTalk(next);
+  }, [currentTalk, getNextTalk]);
+
+  const handlePrev = useCallback(() => {
+    if (!currentTalk) return;
+    // If more than 3 seconds in, restart current track
+    const prev = getPrevTalk(currentTalk);
+    if (prev) setCurrentTalk(prev);
+  }, [currentTalk, getPrevTalk]);
 
   if (loading) {
     return (
@@ -150,19 +185,21 @@ export default function TalksClient() {
                 talk={talk}
                 onPlay={() => setCurrentTalk(talk)}
                 isOffline={offlineTalks.has(talk.id)}
-                onToggleOffline={() => {/* handled in player */}}
               />
             ))}
           </div>
         )}
 
         {currentTalk && (
-          <AudioPlayer
-            talk={currentTalk}
+          <AdvancedAudioPlayer
+            track={talkToTrack(currentTalk)}
+            queue={queue.map(talkToTrack)}
             onClose={() => setCurrentTalk(null)}
-            onNext={() => {
-              const next = getNextTalk(currentTalk);
-              if (next) setCurrentTalk(next);
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onTrackChange={(t) => {
+              const full = talks.find((tk) => tk.id === t.id);
+              if (full) setCurrentTalk(full);
             }}
             onOfflineStatusChange={(talkId, isOffline) => {
               setOfflineTalks((prev) => {
@@ -238,7 +275,6 @@ export default function TalksClient() {
                     talk={talk}
                     onPlay={() => setCurrentTalk(talk)}
                     isOffline={offlineTalks.has(talk.id)}
-                    onToggleOffline={() => {}}
                   />
                 ))}
               </div>
@@ -248,12 +284,15 @@ export default function TalksClient() {
       )}
 
       {currentTalk && (
-        <AudioPlayer
-          talk={currentTalk}
+        <AdvancedAudioPlayer
+          track={talkToTrack(currentTalk)}
+          queue={queue.map(talkToTrack)}
           onClose={() => setCurrentTalk(null)}
-          onNext={() => {
-            const next = getNextTalk(currentTalk);
-            if (next) setCurrentTalk(next);
+          onNext={handleNext}
+          onPrev={handlePrev}
+          onTrackChange={(t) => {
+            const full = talks.find((tk) => tk.id === t.id);
+            if (full) setCurrentTalk(full);
           }}
           onOfflineStatusChange={(talkId, isOffline) => {
             setOfflineTalks((prev) => {
@@ -271,7 +310,7 @@ export default function TalksClient() {
 
 // ─── Talk Card ───
 
-function TalkCard({ talk, onPlay, isOffline }: { talk: Talk; onPlay: () => void; isOffline: boolean; onToggleOffline: () => void }) {
+function TalkCard({ talk, onPlay, isOffline }: { talk: Talk; onPlay: () => void; isOffline: boolean }) {
   const isExternal = !talk.streamUrl && talk.externalUrl;
   return (
     <div
@@ -314,248 +353,12 @@ function TalkCard({ talk, onPlay, isOffline }: { talk: Talk; onPlay: () => void;
             </span>
           )}
           {isOffline && (
-            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{ backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)", color: "var(--color-success)" }}>
-              Offline
+            <span className="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-medium" style={{ backgroundColor: "color-mix(in oklab, var(--color-success) 10%, transparent)", color: "var(--color-success)" }}>
+              <Download className="h-2 w-2" /> Offline
             </span>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Audio Player (bottom sheet, background-playback capable) ───
-
-function AudioPlayer({
-  talk,
-  onClose,
-  onNext,
-  onOfflineStatusChange,
-}: {
-  talk: Talk;
-  onClose: () => void;
-  onNext: () => void;
-  onOfflineStatusChange: (talkId: string, isOffline: boolean) => void;
-}) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSavingOffline, setIsSavingOffline] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
-
-  // Check if this talk is already cached
-  useEffect(() => {
-    if (!talk.streamUrl || !("caches" in window)) return;
-    (async () => {
-      try {
-        const cache = await caches.open("waqt-v31-audio");
-        const cached = await cache.match(talk.streamUrl!);
-        if (cached) setIsOffline(true);
-      } catch { /* non-critical */ }
-    })();
-  }, [talk.streamUrl]);
-
-  // Set up Media Session API for background playback controls
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: talk.title,
-      artist: talk.speaker || "Unknown speaker",
-      album: "Waqt Talks",
-    });
-    navigator.mediaSession.setActionHandler("play", () => {
-      audioRef.current?.play();
-      navigator.mediaSession.playbackState = "playing";
-    });
-    navigator.mediaSession.setActionHandler("pause", () => {
-      audioRef.current?.pause();
-      navigator.mediaSession.playbackState = "paused";
-    });
-    navigator.mediaSession.setActionHandler("nexttrack", () => onNext());
-    return () => {
-      navigator.mediaSession.setActionHandler("play", null);
-      navigator.mediaSession.setActionHandler("pause", null);
-      navigator.mediaSession.setActionHandler("nexttrack", null);
-    };
-  }, [talk, onNext]);
-
-  const handlePlayPause = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play().catch(() => { /* autoplay blocked */ });
-    }
-  }, [isPlaying]);
-
-  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const time = parseFloat(e.target.value);
-    audio.currentTime = time;
-    setCurrentTime(time);
-  }, []);
-
-  // Save for offline use — cache the audio file
-  const handleSaveOffline = useCallback(async () => {
-    if (!talk.streamUrl || isOffline) return;
-    setIsSavingOffline(true);
-    try {
-      const cache = await caches.open("waqt-v31-audio");
-      await cache.add(talk.streamUrl);
-      setIsOffline(true);
-      onOfflineStatusChange(talk.id, true);
-    } catch {
-      /* failed to cache */
-    } finally {
-      setIsSavingOffline(false);
-    }
-  }, [talk, isOffline, onOfflineStatusChange]);
-
-  // Remove offline copy
-  const handleRemoveOffline = useCallback(async () => {
-    if (!talk.streamUrl) return;
-    try {
-      const cache = await caches.open("waqt-v31-audio");
-      await cache.delete(talk.streamUrl);
-      setIsOffline(false);
-      onOfflineStatusChange(talk.id, false);
-    } catch { /* non-critical */ }
-  }, [talk, onOfflineStatusChange]);
-
-  const skipAmount = 15;
-  const skipBack = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - skipAmount);
-    }
-  };
-  const skipForward = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + skipAmount);
-    }
-  };
-
-  return (
-    <>
-      {/* Hidden audio element — controlled via ref */}
-      <audio
-        ref={audioRef}
-        src={talk.streamUrl || undefined}
-        onPlay={() => { setIsPlaying(true); if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing"; }}
-        onPause={() => { setIsPlaying(false); if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused"; }}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); setIsLoading(false); }}
-        onEnded={() => { setIsPlaying(false); onNext(); }}
-        autoPlay
-        className="hidden"
-      />
-
-      {/* Player bar (fixed at bottom) */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-md"
-        style={{
-          backgroundColor: "color-mix(in oklab, var(--color-paper) 95%, transparent)",
-          borderColor: "var(--color-paper-3)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
-      >
-        <div className="mx-auto max-w-2xl px-4 py-3">
-          {/* Title row */}
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{talk.title}</p>
-              {talk.speaker && (
-                <p className="truncate text-xs" style={{ color: "var(--color-ink-muted)" }}>{talk.speaker}</p>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {/* Offline button */}
-              {talk.streamUrl && (
-                <button
-                  onClick={isOffline ? handleRemoveOffline : handleSaveOffline}
-                  disabled={isSavingOffline}
-                  className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
-                  style={{ color: isOffline ? "var(--color-success)" : "var(--color-ink-muted)", minHeight: 40, minWidth: 40 }}
-                  aria-label={isOffline ? "Remove offline copy" : "Save for offline use"}
-                  aria-pressed={isOffline}
-                >
-                  {isSavingOffline ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-transparent" style={{ borderTopColor: "var(--color-accent)", borderRightColor: "var(--color-accent)" }} />
-                  ) : isOffline ? (
-                    <Trash2 className="h-4 w-4" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                </button>
-              )}
-              {/* Close */}
-              <button
-                onClick={onClose}
-                className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
-                style={{ color: "var(--color-ink-muted)", minHeight: 40, minWidth: 40 }}
-                aria-label="Close player"
-              >
-                <Pause className="h-4 w-4 hidden" />
-                <span className="text-xs font-medium">Close</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div className="mb-2 flex items-center gap-2">
-            <span className="w-10 shrink-0 text-right text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-              {formatTime(currentTime)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              value={currentTime}
-              onChange={handleSeek}
-              className="h-1 flex-1 cursor-pointer appearance-none rounded-full"
-              style={{
-                backgroundColor: "var(--color-paper-3)",
-                accentColor: "var(--color-accent)",
-              }}
-              aria-label="Seek"
-            />
-            <span className="w-10 shrink-0 text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-              {isLoading ? "--:--" : formatTime(duration)}
-            </span>
-          </div>
-
-          {/* Controls */}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={skipBack}
-              className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
-              style={{ color: "var(--color-ink-soft)", minHeight: 40, minWidth: 40 }}
-              aria-label="Skip back 15 seconds"
-            >
-              <SkipBack className="h-5 w-5" />
-            </button>
-            <button
-              onClick={handlePlayPause}
-              className="flex h-12 w-12 items-center justify-center rounded-full transition-transform active:scale-95"
-              style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)" }}
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 translate-x-0.5" />}
-            </button>
-            <button
-              onClick={skipForward}
-              className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
-              style={{ color: "var(--color-ink-soft)", minHeight: 40, minWidth: 40 }}
-              aria-label="Skip forward 15 seconds"
-            >
-              <SkipForward className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
   );
 }
