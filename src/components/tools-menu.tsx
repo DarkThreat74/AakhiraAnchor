@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Compass, Heart, HandHeart, BookOpen, PlayCircle, Wrench, X, Moon, Sparkles } from "lucide-react";
+import { Compass, Heart, HandHeart, BookOpen, PlayCircle, Wrench, X, Moon, Sparkles, ArrowRight } from "lucide-react";
 
 interface Tool {
   href: string;
@@ -17,7 +17,7 @@ const TOOLS: Tool[] = [
   {
     href: "/qibla",
     label: "Qibla Compass",
-    description: "Find the direction to the Kaaba",
+    description: "Direction to the Kaaba",
     icon: Compass,
     color: "var(--color-accent)",
   },
@@ -45,7 +45,7 @@ const TOOLS: Tool[] = [
   {
     href: "/hijri",
     label: "Hijri Converter",
-    description: "Convert between Gregorian and Hijri dates",
+    description: "Convert between Gregorian and Hijri",
     icon: Moon,
     color: "var(--color-ink-soft)",
   },
@@ -68,6 +68,7 @@ const TOOLS: Tool[] = [
 export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "sidebar" }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [closing, setClosing] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   // Mount guard for portal (document.body doesn't exist during SSR)
@@ -78,7 +79,7 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") dismiss();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -98,6 +99,15 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = original; };
   }, [open]);
+
+  // Smooth dismiss with exit animation
+  function dismiss() {
+    setClosing(true);
+    setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, 200);
+  }
 
   return (
     <>
@@ -122,52 +132,60 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
         </button>
       )}
 
-      {/* Bottom sheet overlay — rendered via portal to escape any
-          containing block created by backdrop-filter on ancestor headers */}
+      {/* Tool picker — rendered via portal to escape any containing block
+          created by backdrop-filter on ancestor headers */}
       {open && mounted && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center"
-          style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 40%, transparent)" }}
-          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+          style={{
+            backgroundColor: "color-mix(in oklab, var(--color-ink) 50%, transparent)",
+            animation: closing ? "tools-fade-out 0.2s ease-out forwards" : "tools-fade-in 0.2s ease-out",
+          }}
+          onClick={dismiss}
         >
           <div
             ref={sheetRef}
-            className="w-full max-w-md overflow-hidden rounded-t-3xl border sm:rounded-3xl"
+            className="w-full overflow-hidden rounded-t-3xl border sm:max-w-sm sm:rounded-3xl"
             style={{
               backgroundColor: "var(--color-paper)",
               borderColor: "var(--color-paper-3)",
               paddingBottom: "env(safe-area-inset-bottom)",
               maxHeight: "85vh",
               overflowY: "auto",
+              animation: closing
+                ? "tools-slide-down 0.2s ease-in forwards"
+                : "tools-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drag handle (mobile) */}
-            <div className="flex justify-center pt-3 sm:hidden">
-              <div className="h-1 w-10 rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }} />
+            <div className="flex justify-center pt-2.5 sm:hidden">
+              <div className="h-1 w-9 rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }} />
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center justify-between px-5 pt-3 pb-2 sm:pt-4">
               <div>
-                <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Tools</h2>
+                <h2 className="text-base font-semibold tracking-tight" style={{ color: "var(--color-ink)" }}>
+                  Tools
+                </h2>
                 <p className="mt-0.5 text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
                   Islamic utilities and resources
                 </p>
               </div>
               <button
-                onClick={() => setOpen(false)}
-                className="flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
-                style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
+                onClick={dismiss}
+                className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ color: "var(--color-ink-muted)", minHeight: 32, minWidth: 32 }}
                 aria-label="Close tools menu"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Tools grid */}
-            <div className="grid grid-cols-2 gap-2 px-4 pb-5 sm:gap-3">
-              {TOOLS.map((tool) => {
+            {/* Tools list — clean rows, not a grid */}
+            <div className="px-3 pb-4">
+              {TOOLS.map((tool, i) => {
                 const Icon = tool.icon;
                 return (
                   <Link
@@ -175,27 +193,34 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
                     href={tool.href}
                     prefetch
                     onClick={() => setOpen(false)}
-                    className="flex flex-col gap-2 rounded-2xl border p-4 transition-colors hover:bg-[var(--color-paper-2)]"
+                    className="group flex items-center gap-3.5 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--color-paper-2)]"
                     style={{
-                      borderColor: "var(--color-paper-3)",
-                      backgroundColor: "var(--color-paper)",
-                      minHeight: 96,
+                      animation: `tools-item-in 0.3s ease-out ${0.04 * i + 0.05}s both`,
                     }}
                   >
+                    {/* Icon with tinted background */}
                     <div
-                      className="flex h-9 w-9 items-center justify-center rounded-xl"
-                      style={{ backgroundColor: `color-mix(in oklab, ${tool.color} 12%, transparent)` }}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `color-mix(in oklab, ${tool.color} 14%, transparent)` }}
                     >
                       <Icon className="h-5 w-5" style={{ color: tool.color }} />
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold leading-tight sm:text-sm" style={{ color: "var(--color-ink)" }}>
+
+                    {/* Label + description */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-tight" style={{ color: "var(--color-ink)" }}>
                         {tool.label}
                       </p>
-                      <p className="mt-0.5 text-[10px] leading-tight sm:text-[11px]" style={{ color: "var(--color-ink-muted)" }}>
+                      <p className="mt-0.5 truncate text-[11px] leading-tight" style={{ color: "var(--color-ink-muted)" }}>
                         {tool.description}
                       </p>
                     </div>
+
+                    {/* Arrow that appears on hover (desktop) */}
+                    <ArrowRight
+                      className="h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                      style={{ color: "var(--color-ink-muted)" }}
+                    />
                   </Link>
                 );
               })}
@@ -204,6 +229,40 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
         </div>,
         document.body
       )}
+
+      {/* Animations */}
+      <style>{`
+        @keyframes tools-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes tools-fade-out {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+        @keyframes tools-slide-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes tools-slide-down {
+          from { transform: translateY(0); }
+          to { transform: translateY(100%); }
+        }
+        @keyframes tools-item-in {
+          from { opacity: 0; transform: translateX(-8px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @media (min-width: 640px) {
+          @keyframes tools-slide-up {
+            from { transform: translateY(20px) scale(0.98); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+          }
+          @keyframes tools-slide-down {
+            from { transform: translateY(0) scale(1); opacity: 1; }
+            to { transform: translateY(20px) scale(0.98); opacity: 0; }
+          }
+        }
+      `}</style>
     </>
   );
 }
