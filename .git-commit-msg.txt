@@ -1,10 +1,18 @@
-Seed dhikr_sequences with canonical post-prayer adhkar
+Friends privacy controls, block system, re-send cooldown
 
-The dhikr_sequences table was empty, causing the Dhikr counter to show
-the empty state. Seeded with the universally authenticated post-prayer
-adhkar from Sahih al-Bukhari 844 / Sahih Muslim 597 (Abu Hurayrah RA):
-SubhanAllah x33, Alhamdulillah x33, Allahu Akbar x34, then the
-comprehensive tahlil x1.
+- Add per-category visibility toggles (streak, today's status, sunnah, masjid %)
+  Defaults: streak + masjid visible, today's per-prayer status + sunnah hidden
+- Add prayer_blocks table + /api/prayer-friends/block endpoint (POST/DELETE)
+  Blocking also removes any existing friendship in both directions
+- Add 7-day cooldown on re-sending after rejection (was: no cooldown)
+- Send push notification on re-send (was: no notification sent)
+- Only the original sender can re-send a rejected request
+- Cap pending outgoing requests at 20
+- Block check: either side blocking prevents new requests
+- Confirm dialog on friend removal (was: instant remove on click)
+- Remove button always visible on touch devices (was: hover-only)
+- Migration 0015: adds visibility columns + prayer_blocks table
+- Handle null friend stats gracefully in UI ("Stats private" label)
 
 Generated with [Devin](https://devin.ai)
 
