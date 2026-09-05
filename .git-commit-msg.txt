@@ -1,10 +1,9 @@
-Fix Dhikr counter not showing — use default sequences as fallback
+Center Dhikr counter on desktop + add visible prev/next buttons
 
-The counter UI was hidden behind an empty state when the
-dhikr_sequences table had no rows. Now the component always
-renders the counter using built-in default sequences (the canonical
-post-prayer adhkar from Sahih al-Bukhari 844 / Sahih Muslim 597)
-when the API returns no data. Also reverts the earlier seed commit.
+- Vertically center the counter in the viewport on desktop
+- Add always-visible prev/next chevron buttons flanking the tap area
+  (was only accessible via the controls overlay)
+- Buttons are 44x44 minimum for touch accessibility
 
 Generated with [Devin](https://devin.ai)
 

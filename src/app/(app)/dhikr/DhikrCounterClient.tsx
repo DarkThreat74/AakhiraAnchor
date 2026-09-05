@@ -189,25 +189,37 @@ export default function DhikrCounterClient() {
   const ringCircumference = 2 * Math.PI * 48;
 
   return (
-    <div className="mx-auto max-w-md">
-      {/* ── Full-screen tap area ── */}
-      {/* The entire area below the header is the tap target.
-          The count IS the interface — huge, centered, with a progress ring. */}
-      <button
-        onClick={handleTap}
-        disabled={isComplete}
-        className="relative flex w-full flex-col items-center justify-center overflow-hidden rounded-3xl border transition-colors active:scale-[0.99] disabled:cursor-default"
-        style={{
-          minHeight: "min(70vh, 480px)",
-          backgroundColor: isComplete
-            ? "color-mix(in oklab, var(--color-success) 6%, var(--color-paper))"
-            : "var(--color-paper)",
-          borderColor: "var(--color-paper-3)",
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-        aria-label={`Count dhikr (${count} of ${current?.targetCount ?? 0})`}
-      >
+    <div className="flex min-h-[70vh] items-center justify-center">
+      <div className="mx-auto w-full max-w-md px-4">
+        {/* ── Full-screen tap area with side nav buttons ── */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Prev button */}
+          <button
+            onClick={handlePrev}
+            disabled={currentIndex === 0}
+            className="shrink-0 rounded-full border p-2.5 transition-colors disabled:opacity-20 sm:p-3"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)", minHeight: 44, minWidth: 44 }}
+            aria-label="Previous dhikr"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          {/* The entire tap area is the counter — huge, centered, with a progress ring */}
+          <button
+            onClick={handleTap}
+            disabled={isComplete}
+            className="relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-3xl border transition-colors active:scale-[0.99] disabled:cursor-default"
+            style={{
+              minHeight: "min(70vh, 480px)",
+              backgroundColor: isComplete
+                ? "color-mix(in oklab, var(--color-success) 6%, var(--color-paper))"
+                : "var(--color-paper)",
+              borderColor: "var(--color-paper-3)",
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            aria-label={`Count dhikr (${count} of ${current?.targetCount ?? 0})`}
+          >
         {/* ── Top bar: sequence indicator + overlay toggle ── */}
         <div className="absolute left-0 right-0 top-0 flex items-center justify-between px-4 py-3">
           <span className="text-[11px] font-medium tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
@@ -334,7 +346,19 @@ export default function DhikrCounterClient() {
             }}
           />
         )}
-      </button>
+          </button>
+
+          {/* Next button */}
+          <button
+            onClick={handleNext}
+            disabled={isLast}
+            className="shrink-0 rounded-full border p-2.5 transition-colors disabled:opacity-20 sm:p-3"
+            style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)", minHeight: 44, minWidth: 44 }}
+            aria-label="Next dhikr"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
 
       {/* ── Controls overlay (slides up when toggled) ── */}
       {showOverlay && (
@@ -436,6 +460,7 @@ export default function DhikrCounterClient() {
           100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); }
         }
       `}</style>
+      </div>
     </div>
   );
 }
