@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { count, eq, desc, sql, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { requireAdmin, AdminAuthError } from "@/lib/auth/admin";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
     if (e instanceof AdminAuthError) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
+    logError(e, { route: "admin/users" });
     return NextResponse.json({ error: "Internal error." }, { status: 500 });
   }
 }

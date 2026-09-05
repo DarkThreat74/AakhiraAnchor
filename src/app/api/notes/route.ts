@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
       .select()
       .from(schema.notes)
       .where(eq(schema.notes.userId, session.userId))
-      .orderBy(desc(schema.notes.updatedAt));
+      .orderBy(desc(schema.notes.updatedAt))
+      .limit(500);
 
     return NextResponse.json(notes);
   } catch (err) {

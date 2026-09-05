@@ -3,6 +3,8 @@ import { getSessionFromRequest } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { logError } from "@/lib/logError";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,11 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("goals-share-post", ip, 10, 15 * 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+    }
+
     const session = await getSessionFromRequest(request as never);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,13 +45,19 @@ export async function POST(request: Request) {
 
     const url = `${new URL(request.url).origin}/goals/shared/${token}`;
     return NextResponse.json({ token: row.token, url });
-  } catch {
+  } catch (err) {
+    logError(err, { route: "goals/share", method: "POST" });
     return NextResponse.json({ error: "Failed to create share link" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("goals-share-delete", ip, 10, 15 * 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+    }
+
     const session = await getSessionFromRequest(request as never);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,7 +68,8 @@ export async function DELETE(request: Request) {
       .where(eq(schema.goalShareTokens.userId, session.userId));
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    logError(err, { route: "goals/share", method: "DELETE" });
     return NextResponse.json({ error: "Failed to revoke share link" }, { status: 500 });
   }
 }

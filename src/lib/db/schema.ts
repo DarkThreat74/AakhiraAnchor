@@ -67,7 +67,10 @@ export const users = pgTable('users', {
   publicShareToken: text('public_share_token').unique(),
   // 6-character prayer share code — share with friends to let them see your prayer streaks
   prayerCode: text('prayer_code').unique(),
-});
+}, (table) => [
+  index('users_role_idx').on(table.role),
+  index('users_created_at_idx').on(table.createdAt),
+]);
 
 // ─── Prayer Friends (share streak access via code, with accept/reject flow) ───
 
@@ -88,6 +91,7 @@ export const prayerFriends = pgTable(
   },
   (table) => [
     uniqueIndex('prayer_friends_user_friend_idx').on(table.userId, table.friendId),
+    index('prayer_friends_friend_status_idx').on(table.friendId, table.status),
   ],
 );
 
@@ -425,6 +429,8 @@ export const homeworks = pgTable('homeworks', {
   userClassIdx: index('homeworks_user_class_idx').on(table.userId, table.classId),
   // Filter by status
   userStatusIdx: index('homeworks_user_status_idx').on(table.userId, table.status),
+  // Auto-prune: filter by userId + status + completedAt
+  userStatusCompletedIdx: index('homeworks_user_status_completed_idx').on(table.userId, table.status, table.completedAt),
 }));
 
 // ─── Habits (daily/weekly habit tracking with streaks) ───────────────

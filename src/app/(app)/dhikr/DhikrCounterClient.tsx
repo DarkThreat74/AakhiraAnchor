@@ -189,7 +189,7 @@ export default function DhikrCounterClient() {
   const ringCircumference = 2 * Math.PI * 48;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center py-6 lg:min-h-dvh lg:py-10">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center py-6 lg:min-h-dvh lg:py-10">
       <div className="mx-auto w-full max-w-md px-4">
         {/* ── Full-screen tap area with side nav buttons ── */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -373,6 +373,7 @@ export default function DhikrCounterClient() {
             style={{
               borderColor: "var(--color-paper-3)",
               backgroundColor: "var(--color-paper)",
+              paddingTop: "env(safe-area-inset-top)",
             }}
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }} />

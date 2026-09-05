@@ -101,7 +101,8 @@ export async function GET(request: NextRequest) {
         lte(schema.events.startAt, endWithBuffer),
       ),
     )
-    .orderBy(schema.events.startAt);
+    .orderBy(schema.events.startAt)
+    .limit(500);
 
   return NextResponse.json(events);
 }

@@ -5,6 +5,7 @@ import { db, schema } from "@/lib/db/client";
 import { setSessionCookie } from "@/lib/auth/session";
 import { isValidEmail, isHoneypotTripped, isTimeTrapTripped } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[admin/auth]", err);
+    logError(err, { route: "admin/auth" });
     return NextResponse.json(
       { error: "Could not sign in. Please try again." },
       { status: 500 },

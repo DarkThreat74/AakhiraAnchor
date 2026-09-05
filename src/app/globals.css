@@ -111,7 +111,7 @@ html {
  */
 @media (display-mode: standalone) {
   html {
-    height: 100vh;
+    height: 100dvh;
     /* Prevent iOS rubber-band overscroll */
     overscroll-behavior: none;
   }
@@ -145,6 +145,13 @@ textarea {
   textarea {
     font-size: inherit;
   }
+}
+
+/* Prevent 300ms tap delay on touch devices */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 /* Focus rings — visible, accessible, token-driven */

@@ -6,6 +6,7 @@ import { setSessionCookie } from "@/lib/auth/session";
 import { isValidEmail, isHoneypotTripped, isTimeTrapTripped, isValidFingerprintHash } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { getDeviceLabel } from "@/lib/auth/device-label";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[auth/login]", err);
+    logError(err, { route: "auth/login" });
     return NextResponse.json(
       { error: "Could not sign in. Please try again." },
       { status: 500 },

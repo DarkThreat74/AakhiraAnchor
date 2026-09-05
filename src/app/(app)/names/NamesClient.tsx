@@ -141,6 +141,7 @@ export default function NamesClient() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search names..."
+          aria-label="Search names"
           className="w-full rounded-xl border py-2.5 pl-10 pr-4 text-sm outline-none"
           style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", color: "var(--color-ink)", minHeight: 44 }}
         />

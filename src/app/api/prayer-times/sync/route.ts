@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { fetchMonthPrayerTimes, parseTime } from "@/lib/aladhan/client";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, daysCached: days.length });
   } catch (err) {
-    console.error("[prayer-times/sync]", err);
+    logError(err, { route: "prayer-times/sync" });
     return NextResponse.json(
       { error: "Could not fetch prayer times. Please try again later." },
       { status: 502 },

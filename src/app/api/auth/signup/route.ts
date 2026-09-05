@@ -7,6 +7,7 @@ import { isValidEmail, isHoneypotTripped, isTimeTrapTripped, isValidFingerprintH
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { getDeviceLabel } from "@/lib/auth/device-label";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[auth/signup]", err);
+    logError(err, { route: "auth/signup" });
     return NextResponse.json(
       { error: "Could not create your account. Please try again." },
       { status: 500 },

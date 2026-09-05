@@ -148,6 +148,7 @@ function CollapsibleSection({
       <div className="p-4 sm:p-6">
         <button
           onClick={() => setOpen(!open)}
+          aria-expanded={open}
           className="flex w-full items-center justify-between gap-2"
         >
           <div className="flex items-center gap-2">
@@ -1036,6 +1037,7 @@ export default function SettingsClient({
     try {
       if (navigator.serviceWorker?.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "CLEAR_OUTBOX" });
+        navigator.serviceWorker.controller.postMessage({ type: "CLEAR_USER_CACHE" });
       }
     } catch { /* non-critical */ }
     try {
@@ -1219,6 +1221,7 @@ export default function SettingsClient({
                   autoFocus
                   maxLength={50}
                   placeholder="Your name"
+                  aria-label="Display name"
                   className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
                   style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                   onKeyDown={(e) => {
@@ -1246,7 +1249,7 @@ export default function SettingsClient({
               </div>
             )}
             {nameMsg && (
-              <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: nameMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
+              <p aria-live="polite" className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: nameMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
                 {nameMsg.ok ? <Check className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
                 {nameMsg.text}
               </p>
@@ -1339,6 +1342,7 @@ export default function SettingsClient({
                     placeholder="Search for your city..."
                     value={cityQuery}
                     onChange={(e) => setCityQuery(e.target.value)}
+                    aria-label="Search location"
                     className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
                     style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                   />
@@ -1381,7 +1385,7 @@ export default function SettingsClient({
               </div>
             )}
             {locationMsg && (
-              <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: locationMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
+              <p aria-live="polite" className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: locationMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
                 {locationMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
                 <span>{locationMsg.text}</span>
               </p>
@@ -1417,7 +1421,7 @@ export default function SettingsClient({
               </p>
             )}
             {methodMsg && (
-              <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: methodMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
+              <p aria-live="polite" className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: methodMsg.ok ? "var(--color-success)" : "var(--color-error)" }}>
                 {methodMsg.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />}
                 <span>{methodMsg.text}</span>
               </p>
@@ -1721,7 +1725,7 @@ export default function SettingsClient({
                       onClick={() => handleRevokeDevice(device.id)}
                       disabled={revokingId === device.id}
                       className="shrink-0 rounded-md p-1.5 transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
-                      style={{ minHeight: 36, minWidth: 36 }}
+                      style={{ minHeight: 44, minWidth: 44 }}
                       aria-label="Revoke trusted device"
                       title="Revoke"
                     >

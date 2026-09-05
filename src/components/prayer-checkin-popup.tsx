@@ -196,6 +196,9 @@ export default function PrayerCheckinPopup({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={prayerLabel}
         className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-2xl border p-5 shadow-xl"
         style={{
           backgroundColor: "var(--color-paper)",

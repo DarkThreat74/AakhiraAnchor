@@ -20,7 +20,7 @@
  * - Fallback: replay on 'online' event from client
  */
 
-const CACHE_VERSION = "waqt-v30";
+const CACHE_VERSION = "waqt-v31";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -301,11 +301,25 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         } catch {
-          // Offline and no cache — return 503, not empty JS (empty JS breaks hydration)
-          return new Response("/* offline */", {
-            status: 503,
-            headers: { "Content-Type": "application/javascript" },
-          });
+          // Offline and no cache — return a 200 no-op response so the browser
+          // doesn't surface a 503 that breaks hydration. Use the correct MIME
+          // type based on the file extension.
+          if (url.pathname.endsWith(".css")) {
+            return new Response("", {
+              status: 200,
+              headers: { "Content-Type": "text/css" },
+            });
+          } else if (url.pathname.endsWith(".js")) {
+            return new Response("/* offline */", {
+              status: 200,
+              headers: { "Content-Type": "application/javascript" },
+            });
+          } else {
+            return new Response("", {
+              status: 200,
+              headers: { "Content-Type": "application/octet-stream" },
+            });
+          }
         }
       })()
     );
@@ -327,7 +341,8 @@ self.addEventListener("fetch", (event) => {
     !url.pathname.startsWith("/api/cron/") &&
     !url.pathname.startsWith("/api/goals/share") &&
     !url.pathname.startsWith("/api/goals/shared") &&
-    !url.pathname.startsWith("/api/learn/")
+    !url.pathname.startsWith("/api/learn/") &&
+    !url.pathname.startsWith("/api/prayer-times/sync")
   ) {
     // Clone the request body before consuming it
     const bodyPromise = request.clone().json().catch(() => null);
@@ -426,6 +441,7 @@ self.addEventListener("fetch", (event) => {
             } else {
               // For other API POSTs (prayer log, qadaa, etc.), echo back the body
               Object.assign(responseData, body);
+              responseData.id = tempId;
               responseData._pending = true;
             }
           }
@@ -550,9 +566,11 @@ self.addEventListener("fetch", (event) => {
 
         if (cached) return cached;
 
-        // No cache — try network (might be online but cache miss)
+        // No cache — try navigation preload response first (if available),
+        // then fall back to a regular fetch.
         try {
-          const response = await fetch(request);
+          const preloadResponse = await event.preloadResponse;
+          const response = preloadResponse || await fetch(request);
           if (response.ok) {
             const body = await response.blob();
             const headers = new Headers(response.headers);
@@ -690,6 +708,16 @@ self.addEventListener("message", (event) => {
     // Clear API cache to prevent cross-user data leakage
     event.waitUntil(caches.delete(API_CACHE).catch(() => {}));
   }
+  if (event.data && event.data.type === "CLEAR_USER_CACHE") {
+    // Clear user-specific caches on logout (keep STATIC_CACHE — shared assets)
+    event.waitUntil(
+      Promise.all([
+        caches.delete(API_CACHE).catch(() => {}),
+        caches.delete(PAGE_CACHE).catch(() => {}),
+        caches.delete(RUNTIME_CACHE).catch(() => {}),
+      ])
+    );
+  }
   if (event.data && event.data.type === "CLEAR_OUTBOX") {
     // Clear the offline outbox + all caches to prevent cross-user data leakage
     event.waitUntil(
@@ -698,7 +726,10 @@ self.addEventListener("message", (event) => {
           const db = await openDB();
           const tx = db.transaction(OUTBOX_STORE, "readwrite");
           tx.objectStore(OUTBOX_STORE).clear();
-          await tx.done;
+          await new Promise((resolve, reject) => {
+            tx.oncomplete = resolve;
+            tx.onerror = reject;
+          });
         } catch {
           // non-critical
         }

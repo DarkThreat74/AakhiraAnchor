@@ -125,7 +125,7 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
         <button
           onClick={() => setOpen(true)}
           className="flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--color-paper-2)]"
-          style={{ color: "var(--color-ink-soft)", minHeight: 36, minWidth: 36 }}
+          style={{ color: "var(--color-ink-soft)", minHeight: 44, minWidth: 44 }}
           aria-label="Open tools menu"
         >
           <Wrench className="h-4 w-4" style={{ color: "var(--color-ink-muted)" }} />
@@ -145,12 +145,16 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
         >
           <div
             ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Tools"
             className="w-full overflow-hidden rounded-t-3xl border sm:max-w-sm sm:rounded-3xl"
             style={{
               backgroundColor: "var(--color-paper)",
               borderColor: "var(--color-paper-3)",
+              paddingTop: "env(safe-area-inset-top)",
               paddingBottom: "env(safe-area-inset-bottom)",
-              maxHeight: "85vh",
+              maxHeight: "85dvh",
               overflowY: "auto",
               animation: closing
                 ? "tools-slide-down 0.2s ease-in forwards"
@@ -176,7 +180,7 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
               <button
                 onClick={dismiss}
                 className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
-                style={{ color: "var(--color-ink-muted)", minHeight: 32, minWidth: 32 }}
+                style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
                 aria-label="Close tools menu"
               >
                 <X className="h-4 w-4" />

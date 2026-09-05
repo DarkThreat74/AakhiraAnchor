@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
       .select()
       .from(schema.habits)
       .where(eq(schema.habits.userId, session.userId))
-      .orderBy(schema.habits.sortOrder, schema.habits.createdAt);
+      .orderBy(schema.habits.sortOrder, schema.habits.createdAt)
+      .limit(200);
 
     return NextResponse.json(habits);
   } catch (err) {

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { isValidEmail, isHoneypotTripped, isTimeTrapTripped } from "@/lib/validation";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (err) {
-    console.error("[auth/reset-password]", err);
+    logError(err, { route: "auth/reset-password" });
     return NextResponse.json(
       { error: "Could not reset password. Please try again." },
       { status: 500 },

@@ -3,6 +3,7 @@ import { getSessionFromRequest } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { eq, and } from "drizzle-orm";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,12 @@ export async function GET(request: NextRequest) {
       .select()
       .from(schema.goals)
       .where(eq(schema.goals.userId, session.userId))
-      .orderBy(schema.goals.sortOrder, schema.goals.createdAt);
+      .orderBy(schema.goals.sortOrder, schema.goals.createdAt)
+      .limit(500);
 
     return NextResponse.json({ goals: rows });
   } catch (err) {
-    console.error("[goals/GET]", err);
+    logError(err, { route: "goals", method: "GET" });
     return NextResponse.json({ error: "Failed to fetch goals" }, { status: 500 });
   }
 }
@@ -109,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ goal });
   } catch (err) {
-    console.error("[goals/POST]", err);
+    logError(err, { route: "goals", method: "POST" });
     return NextResponse.json({ error: "Failed to create goal" }, { status: 500 });
   }
 }
@@ -231,7 +233,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ goal: updated });
   } catch (err) {
-    console.error("[goals/PATCH]", err);
+    logError(err, { route: "goals", method: "PATCH" });
     return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
   }
 }
@@ -268,7 +270,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[goals/DELETE]", err);
+    logError(err, { route: "goals", method: "DELETE" });
     return NextResponse.json({ error: "Failed to delete goal" }, { status: 500 });
   }
 }

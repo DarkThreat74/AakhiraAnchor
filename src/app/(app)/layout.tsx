@@ -10,6 +10,7 @@ import BiometricGate from "@/components/biometric-gate";
 import DeepLinkHandler from "@/components/deep-link-handler";
 import ToolsMenu from "@/components/tools-menu";
 import FunFactPopup from "@/components/fun-fact-popup";
+import OfflineBanner from "@/components/offline-banner";
 
 // Force dynamic — prevents static prerender + CSP nonce conflicts
 export const dynamic = "force-dynamic";
@@ -121,6 +122,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         {/* Page content */}
         <main id="main-content" className="min-w-0 flex-1 overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+          <OfflineBanner />
           <BiometricGate>{children}</BiometricGate>
         </main>
       </div>
@@ -177,8 +179,8 @@ function MobileNavItem({ label, href, icon: Icon, alert }: { label: string; href
     <Link
       href={href}
       prefetch
-      className="flex min-w-0 flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium"
-      style={{ color: "var(--color-ink-muted)" }}
+      className="flex min-w-0 flex-1 flex-col items-center gap-1 py-3 text-[11px] font-medium"
+      style={{ color: "var(--color-ink-muted)", minHeight: 44 }}
     >
       <span className="relative">
         <Icon className="h-5 w-5" />

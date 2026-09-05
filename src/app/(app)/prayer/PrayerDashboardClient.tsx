@@ -1638,7 +1638,7 @@ export default function PrayerDashboard() {
                   Total: {setupFajr + setupDhuhr + setupAsr + setupMaghrib + setupIsha} prayers
                 </div>
                 {qadaaMsg && (
-                  <div className="mb-3 text-xs font-medium" style={{ color: qadaaMsg.includes("successfully") ? "var(--color-success)" : "var(--color-warmth)" }}>
+                  <div aria-live="polite" className="mb-3 text-xs font-medium" style={{ color: qadaaMsg.includes("successfully") ? "var(--color-success)" : "var(--color-warmth)" }}>
                     {qadaaMsg}
                   </div>
                 )}
@@ -1685,7 +1685,7 @@ export default function PrayerDashboard() {
                 </div>
 
                 {qadaaMsg && (
-                  <div className="mb-3 text-xs font-medium" style={{ color: "var(--color-success)" }}>
+                  <div aria-live="polite" className="mb-3 text-xs font-medium" style={{ color: "var(--color-success)" }}>
                     {qadaaMsg}
                   </div>
                 )}
@@ -1831,6 +1831,7 @@ export default function PrayerDashboard() {
                       className="relative h-5 w-9 shrink-0 rounded-full transition-colors"
                       style={{ backgroundColor: visibility[item.key] ? "var(--color-accent)" : "var(--color-paper-3)" }}
                       aria-label={`Toggle ${item.label}`}
+                      aria-pressed={visibility[item.key]}
                     >
                       <span
                         className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform"

@@ -97,7 +97,8 @@ export async function GET(request: NextRequest) {
           eq(schema.prayerLog.userId, session.userId),
           gte(schema.prayerLog.date, dbFromDate),
         ),
-      );
+      )
+      .limit(10000);
 
     // Fetch cached prayer times covering the full DB range
     const prayerTimesRows = await db

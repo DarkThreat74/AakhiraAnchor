@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db/client";
 import { verifyCronAuth } from "@/lib/cronAuth";
 import { isWindowClosed, getPrayerWindow } from "@/lib/prayer/stateMachine";
 import { sendPrayerPush } from "@/lib/notifications/push";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       notificationsSent += result.notificationsSent;
       assumedResolved += result.assumedResolved;
     } catch (batchErr) {
-      console.error("[cron:checkin-scheduler] batch failed at offset", batchStart, batchErr);
+      logError(batchErr, { route: "cron/checkin-scheduler", phase: "batch", offset: batchStart });
     }
   }
 
@@ -167,7 +168,9 @@ async function processUserBatch(
 
         for (const prayerName of prayers) {
           const window = getPrayerWindow(prayerName, yesterdayTimings);
-          if (!isWindowClosed(window, userNow)) continue;
+          // Pass yesterdayStr so isWindowClosed checks against yesterday's window,
+          // not today's. This fixes the bug where midnight cron thought windows hadn't closed.
+          if (!isWindowClosed(window, userNow, yesterdayStr)) continue;
 
           const existingLog = pendingLogsMap.get(s.userId)?.get(yesterdayStr)?.get(prayerName);
           if (existingLog) {
@@ -176,10 +179,17 @@ async function processUserBatch(
         }
 
         if (logIdsToUpdate.length > 0) {
+          // Add status='pending' guard to avoid overwriting prayers the user
+          // manually marked as prayed/missed between our read and write.
           await db
             .update(schema.prayerLog)
             .set({ status: "assumed_prayed" })
-            .where(inArray(schema.prayerLog.id, logIdsToUpdate));
+            .where(
+              and(
+                inArray(schema.prayerLog.id, logIdsToUpdate),
+                eq(schema.prayerLog.status, "pending"),
+              ),
+            );
           assumedResolved += logIdsToUpdate.length;
         }
       }
@@ -234,16 +244,16 @@ async function processUserBatch(
                 .delete(schema.pushSubscriptions)
                 .where(eq(schema.pushSubscriptions.id, sub.id));
             } catch (deleteErr) {
-              console.error("[cron:checkin-scheduler] failed to delete expired sub", sub.id, deleteErr);
+              logError(deleteErr, { route: "cron/checkin-scheduler", phase: "delete-expired-sub", subId: sub.id });
             }
           }
         } catch (err) {
           const e = err as { statusCode?: number };
-          console.error("[cron:checkin-scheduler] push failed", sub.id, e.statusCode, err);
+          logError(err, { route: "cron/checkin-scheduler", phase: "push", subId: sub.id, statusCode: e.statusCode });
         }
       }
     } catch (userErr) {
-      console.error("[cron:checkin-scheduler] user failed", s.userId, userErr);
+      logError(userErr, { route: "cron/checkin-scheduler", phase: "user", userId: s.userId });
     }
   }
 

@@ -44,7 +44,8 @@ export async function GET(request: NextRequest) {
       .select()
       .from(schema.sadaqahLogs)
       .where(and(eq(schema.sadaqahLogs.userId, session.userId), dateFilter))
-      .orderBy(desc(schema.sadaqahLogs.date), desc(schema.sadaqahLogs.createdAt));
+      .orderBy(desc(schema.sadaqahLogs.date), desc(schema.sadaqahLogs.createdAt))
+      .limit(5000);
 
     // Summary by category
     const summary = logs.reduce(

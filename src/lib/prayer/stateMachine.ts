@@ -12,6 +12,8 @@
  * "I will pray right now" → send urgent notification, stop further check-ins.
  */
 
+import { MID_THRESHOLD_PCT, CLOSING_THRESHOLD_MINUTES } from "./thresholds";
+
 export const STAGES = {
   NONE: 0,
   EARLY: 1,
@@ -19,7 +21,8 @@ export const STAGES = {
   CLOSING: 3,
 } as const;
 
-export const CLOSING_THRESHOLD_MINUTES = 20;
+// Re-export for backward compatibility
+export { CLOSING_THRESHOLD_MINUTES };
 
 export interface PrayerWindow {
   prayerName: "fajr" | "dhuhr" | "asr" | "maghrib" | "isha";
@@ -76,36 +79,36 @@ export function getCheckinStage(
   }
 
   // Mid: 50% elapsed
-  if (elapsedPct >= 0.5) {
+  if (elapsedPct >= MID_THRESHOLD_PCT) {
     return currentStage < STAGES.MID ? STAGES.MID : STAGES.NONE;
   }
 
-  // Early: window just opened
+  // Early: window just opened (at EARLY_THRESHOLD_PCT)
   return currentStage < STAGES.EARLY ? STAGES.EARLY : STAGES.NONE;
 }
 
 /**
  * Check if a prayer window has closed.
  * If so, the prayer should be marked as assumed_prayed.
+ *
+ * @param window The prayer window (start/end times as "HH:MM")
+ * @param now Current time
+ * @param targetDate Optional: the date the prayer was for (YYYY-MM-DD).
+ *   When provided, the window is computed relative to that date instead of today.
+ *   This is critical for the cron that resolves yesterday's prayers —
+ *   it must check if yesterday's window closed, not today's.
  */
-export function isWindowClosed(window: PrayerWindow, now: Date): boolean {
-  let start = parseTimeToday(window.startTime, now);
-  let end = parseTimeToday(window.endTime, now);
+export function isWindowClosed(window: PrayerWindow, now: Date, targetDate?: string): boolean {
+  // If a target date is provided, parse times relative to that date
+  const baseDate = targetDate ? new Date(targetDate + "T00:00:00") : now;
+  const start = parseTimeToday(window.startTime, baseDate);
+  let end = parseTimeToday(window.endTime, baseDate);
 
   // Handle windows that cross midnight (e.g., Isha ends at next day's Fajr).
-  // Same two-case logic as getCheckinStage above.
   const DAY_MS = 24 * 60 * 60 * 1000;
   if (end < start) {
-    if (now >= start) {
-      end = new Date(end.getTime() + DAY_MS);
-    } else if (now < end) {
-      start = new Date(start.getTime() - DAY_MS);
-    } else {
-      // now is between end and start — the window hasn't opened yet today
-      // (e.g., afternoon between Fajr-close and Isha-start). The previous
-      // night's Isha window already closed; today's hasn't opened.
-      return true;
-    }
+    // Window crosses midnight — end is on the next day
+    end = new Date(end.getTime() + DAY_MS);
   }
 
   return now >= end;

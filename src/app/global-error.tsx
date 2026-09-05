@@ -27,7 +27,7 @@ export default function GlobalError({
           color: "#1a1815",
           fontFamily: "Georgia, serif",
           display: "flex",
-          minHeight: "100vh",
+          minHeight: "100dvh",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",

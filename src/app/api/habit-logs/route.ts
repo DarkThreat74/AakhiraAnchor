@@ -57,7 +57,8 @@ export async function GET(request: NextRequest) {
       .select()
       .from(schema.habitLogs)
       .where(and(...conditions))
-      .orderBy(schema.habitLogs.date);
+      .orderBy(schema.habitLogs.date)
+      .limit(5000);
 
     return NextResponse.json(logs);
   } catch (err) {

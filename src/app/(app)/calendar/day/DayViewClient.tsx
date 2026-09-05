@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, X, MapPin, Repeat, ChevronDown, ChevronUp, Check, Bell, BellOff, BookOpen, Trash2 } from "lucide-react";
 import Link from "next/link";
 import PrayerCheckinPopup from "@/components/prayer-checkin-popup";
@@ -504,9 +504,23 @@ export default function DayViewClient({ date }: { date: string }) {
   function isoToLocalTime(iso: string): string {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "00:00";
-    const h = String(d.getHours()).padStart(2, "0");
-    const m = String(d.getMinutes()).padStart(2, "0");
-    return `${h}:${m}`;
+    // Use the user's stored timezone, not the browser timezone
+    try {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: userTimezone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).formatToParts(d);
+      const h = parts.find((p) => p.type === "hour")?.value ?? "00";
+      const m = parts.find((p) => p.type === "minute")?.value ?? "00";
+      return `${h}:${m}`;
+    } catch {
+      // Fallback to browser timezone if Intl fails
+      const h = String(d.getHours()).padStart(2, "0");
+      const m = String(d.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    }
   }
 
   function formatTime(time: string): string {
@@ -537,19 +551,95 @@ export default function DayViewClient({ date }: { date: string }) {
   const blockEvents = events.filter((e) => e.type !== "reminder");
   const reminderEvents = events.filter((e) => e.type === "reminder");
 
-  function getOverlappingEvents(event: CalendarEvent, allEvents: CalendarEvent[]): CalendarEvent[] {
-    const start = timeToMinutes(isoToLocalTime(event.startAt));
-    let end = timeToMinutes(isoToLocalTime(event.endAt));
-    // Handle events spanning midnight — if end < start, it crossed midnight
-    if (end < start) end += 24 * 60;
-    return allEvents.filter((e) => {
-      const eStart = timeToMinutes(isoToLocalTime(e.startAt));
-      let eEnd = timeToMinutes(isoToLocalTime(e.endAt));
-      if (eEnd < eStart) eEnd += 24 * 60;
-      // Normalize: shift both to comparable ranges
-      return eStart < end && eEnd > start;
+  // ── Greedy lane clustering for overlap layout ──
+  // Computes a global column index + column count for each event based on
+  // the maximum concurrent events in its connected overlap cluster.
+  // This replaces the old per-event width calculation that produced
+  // inconsistent widths for partial overlaps (A-B-C chains).
+  const overlapLayout = useMemo(() => {
+    const layout = new Map<string, { colIndex: number; colCount: number }>();
+
+    // Sort by start time for deterministic ordering
+    const sorted = [...blockEvents].sort((a, b) => {
+      const aStart = timeToMinutes(isoToLocalTime(a.startAt));
+      const bStart = timeToMinutes(isoToLocalTime(b.startAt));
+      return aStart - bStart;
     });
-  }
+
+    // Assign each event to a lane (column) using a greedy algorithm:
+    // For each event, find the first lane whose last event ends before
+    // this event starts. If none, create a new lane.
+    const lanes: Array<{ endTime: number }> = [];
+
+    for (const event of sorted) {
+      const start = timeToMinutes(isoToLocalTime(event.startAt));
+      let end = timeToMinutes(isoToLocalTime(event.endAt));
+      if (end <= start) end += 24 * 60;
+
+      let assignedLane = -1;
+      for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i].endTime <= start) {
+          assignedLane = i;
+          break;
+        }
+      }
+      if (assignedLane === -1) {
+        assignedLane = lanes.length;
+        lanes.push({ endTime: 0 });
+      }
+      lanes[assignedLane].endTime = end;
+      layout.set(event.id, { colIndex: assignedLane, colCount: 0 });
+    }
+
+    // Now compute the max concurrent events (colCount) for each event.
+    // For each event, find all events that overlap it and take the max
+    // of their lane counts + 1.
+    for (const event of sorted) {
+      const start = timeToMinutes(isoToLocalTime(event.startAt));
+      let end = timeToMinutes(isoToLocalTime(event.endAt));
+      if (end <= start) end += 24 * 60;
+
+      // Count how many events overlap this one
+      let maxCols = 1;
+      for (const other of sorted) {
+        if (other.id === event.id) continue;
+        const oStart = timeToMinutes(isoToLocalTime(other.startAt));
+        let oEnd = timeToMinutes(isoToLocalTime(other.endAt));
+        if (oEnd <= oStart) oEnd += 24 * 60;
+        if (oStart < end && oEnd > start) {
+          maxCols = Math.max(maxCols, (layout.get(other.id)?.colIndex ?? 0) + 1);
+        }
+      }
+      const entry = layout.get(event.id);
+      if (entry) {
+        entry.colCount = Math.max(entry.colCount, maxCols);
+      }
+    }
+
+    // Normalize: ensure all events in the same overlap cluster share
+    // the same colCount (the max across the cluster)
+    for (const event of sorted) {
+      const start = timeToMinutes(isoToLocalTime(event.startAt));
+      let end = timeToMinutes(isoToLocalTime(event.endAt));
+      if (end <= start) end += 24 * 60;
+
+      let clusterMax = layout.get(event.id)?.colCount ?? 1;
+      for (const other of sorted) {
+        if (other.id === event.id) continue;
+        const oStart = timeToMinutes(isoToLocalTime(other.startAt));
+        let oEnd = timeToMinutes(isoToLocalTime(other.endAt));
+        if (oEnd <= oStart) oEnd += 24 * 60;
+        if (oStart < end && oEnd > start) {
+          clusterMax = Math.max(clusterMax, layout.get(other.id)?.colCount ?? 1);
+        }
+      }
+      const entry = layout.get(event.id);
+      if (entry) entry.colCount = clusterMax;
+    }
+
+    return layout;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockEvents]);
 
   async function handleAddEvent(e: React.FormEvent) {
     e.preventDefault();
@@ -1161,7 +1251,41 @@ export default function DayViewClient({ date }: { date: string }) {
             </div>
           ))}
 
-          {/* Prayer time lines — colored line with label pill */}
+          {/* Prayer window background bands — translucent, behind events (z-0) */}
+          {prayerTimes &&
+            PRAYER_NAMES.filter((p) => p.isPrayer).map((prayer, i, arr) => {
+              const rawTime = prayerTimes[prayer.key];
+              if (!rawTime) return null;
+              const time = prayer.key === "asr" ? getDisplayAsrTime(rawTime) : rawTime;
+              const startMin = timeToMinutes(time);
+              // Window ends at the next prayer time
+              const nextPrayer = arr[i + 1];
+              const nextRaw = nextPrayer ? prayerTimes[nextPrayer.key] : null;
+              const nextTime = nextPrayer && nextRaw
+                ? (nextPrayer.key === "asr" ? getDisplayAsrTime(nextRaw) : nextRaw)
+                : null;
+              const endMin = nextTime ? timeToMinutes(nextTime) : startMin + 60;
+              if (startMin < HOURS[0] * 60 && endMin < HOURS[0] * 60) return null;
+              if (startMin > (HOURS[HOURS.length - 1] + 1) * 60) return null;
+              const top = minutesToTop(startMin);
+              const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 8);
+              return (
+                <div
+                  key={`band-${prayer.key}`}
+                  className="absolute z-0 pointer-events-none"
+                  style={{
+                    top,
+                    height,
+                    left: TIME_COL,
+                    right: 0,
+                    backgroundColor: `color-mix(in oklab, ${prayer.color} 4%, transparent)`,
+                    borderTop: `1px dashed color-mix(in oklab, ${prayer.color} 20%, transparent)`,
+                  }}
+                />
+              );
+            })}
+
+          {/* Prayer time lines — colored line with label pill (z-10, behind events at z-20) */}
           {prayerTimes &&
             PRAYER_NAMES.map((prayer) => {
               const rawTime = prayerTimes[prayer.key];
@@ -1177,13 +1301,13 @@ export default function DayViewClient({ date }: { date: string }) {
               return (
                 <div
                   key={prayer.key}
-                  className="absolute z-30 flex items-center pr-1"
+                  className="absolute z-10 flex items-center pr-1 pointer-events-none"
                   style={{ top: top - 7, left: TIME_COL, right: 0 }}
                 >
-                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.5 }} />
+                  <div className="h-px flex-1" style={{ backgroundColor: prayer.color, opacity: 0.3 }} />
                   <button
                     onClick={isClickable ? (e: React.MouseEvent) => { e.stopPropagation(); setCheckinPopup({ prayer: prayer.key as PrayerKey, label: prayer.label }); } : undefined}
-                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium transition-transform sm:px-2 sm:text-[10px]"
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium transition-transform sm:px-2 sm:text-[10px] pointer-events-auto"
                     style={{
                       backgroundColor: isPrayed ? "color-mix(in oklab, var(--color-success) 10%, var(--color-paper))" : "var(--color-paper)",
                       color: prayer.color,
@@ -1276,14 +1400,9 @@ export default function DayViewClient({ date }: { date: string }) {
             const top = minutesToTop(startMin);
             const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
 
-            const overlapping = getOverlappingEvents(event, blockEvents).sort((a, b) => {
-              const aStart = timeToMinutes(isoToLocalTime(a.startAt));
-              const bStart = timeToMinutes(isoToLocalTime(b.startAt));
-              return aStart - bStart;
-            });
-            const index = overlapping.findIndex((e) => e.id === event.id);
-            const widthPct = 100 / overlapping.length;
-            const leftPct = index * widthPct;
+            const layout = overlapLayout.get(event.id) ?? { colIndex: 0, colCount: 1 };
+            const widthPct = 100 / layout.colCount;
+            const leftPct = layout.colIndex * widthPct;
 
             const eventColor = event.color && event.color.length >= 4 ? event.color : null;
             const borderColor = eventColor || TYPE_COLORS[event.type] || "var(--color-accent)";
@@ -1375,10 +1494,13 @@ export default function DayViewClient({ date }: { date: string }) {
           onClick={closeForm}
         >
           <form
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingEvent ? "Edit event" : "New event"}
             onSubmit={editingEvent ? handleUpdateEvent : handleAddEvent}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-t-2xl border p-5 sm:rounded-2xl"
-            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", maxHeight: "90vh", overflowY: "auto", paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)", maxHeight: "90dvh", overflowY: "auto", paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
           >
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
@@ -1402,6 +1524,7 @@ export default function DayViewClient({ date }: { date: string }) {
                 onChange={(e) => setNewTitle(e.target.value)}
                 autoFocus
                 required
+                aria-label="Event title"
                 className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
                 style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
               />
@@ -1504,6 +1627,7 @@ export default function DayViewClient({ date }: { date: string }) {
                     type="time"
                     value={newStart}
                     onChange={(e) => setNewStart(e.target.value)}
+                    aria-label="Start time"
                     className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
                     style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                   />
@@ -1514,6 +1638,7 @@ export default function DayViewClient({ date }: { date: string }) {
                       type="time"
                       value={newEnd}
                       onChange={(e) => setNewEnd(e.target.value)}
+                      aria-label="End time"
                       className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-[var(--color-accent)]"
                       style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
                     />
@@ -1525,6 +1650,7 @@ export default function DayViewClient({ date }: { date: string }) {
               <button
                 type="button"
                 onClick={() => setNewNotify(!newNotify)}
+                aria-pressed={newNotify}
                 className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors"
                 style={{
                   borderColor: newNotify ? "var(--color-accent)" : "var(--color-paper-3)",
@@ -1786,6 +1912,9 @@ export default function DayViewClient({ date }: { date: string }) {
           onClick={() => setDeleteConfirm(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete event"
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-xs rounded-2xl border p-5 text-center"
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}

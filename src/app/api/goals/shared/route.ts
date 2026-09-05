@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
+import { logError } from "@/lib/logError";
+import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,11 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request) {
   try {
+    const ip = getClientIp(request.headers);
+    if (!checkRateLimit("goals-shared", ip, 10, 15 * 60 * 1000)) {
+      return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+    }
+
     const url = new URL(request.url);
     const token = url.searchParams.get("token");
     if (!token) {
@@ -45,7 +52,8 @@ export async function GET(request: Request) {
       goals: rows,
       ownerName: user?.displayName || "Someone",
     });
-  } catch {
+  } catch (err) {
+    logError(err, { route: "goals/shared" });
     return NextResponse.json({ error: "Failed to fetch shared goals" }, { status: 500 });
   }
 }

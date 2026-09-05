@@ -390,7 +390,7 @@ export default function SadaqahClient() {
                 <button
                   onClick={() => setDeleteConfirm(log)}
                   className="shrink-0 rounded-lg p-2 transition-colors hover:bg-[var(--color-paper-2)]"
-                  style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
+                  style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
                   aria-label="Delete entry"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -415,6 +415,9 @@ export default function SadaqahClient() {
           onClick={() => setDeleteConfirm(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete entry"
             className="w-full max-w-xs rounded-2xl border p-5 text-center"
             style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
             onClick={(e) => e.stopPropagation()}

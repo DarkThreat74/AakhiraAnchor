@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db/client";
 import { requireAdmin, AdminAuthError } from "@/lib/auth/admin";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(sequences);
   } catch (e) {
     if (e instanceof AdminAuthError) return NextResponse.json({ error: e.message }, { status: e.status });
+    logError(e, { route: "admin/dhikr", method: "GET" });
     return NextResponse.json({ error: "Internal error." }, { status: 500 });
   }
 }
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(seq);
   } catch (e) {
     if (e instanceof AdminAuthError) return NextResponse.json({ error: e.message }, { status: e.status });
+    logError(e, { route: "admin/dhikr", method: "POST" });
     return NextResponse.json({ error: "Internal error." }, { status: 500 });
   }
 }

@@ -3,6 +3,7 @@ import { getSessionFromRequest, clearSessionCookie } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
+import { logError } from "@/lib/logError";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
     await clearSessionCookie();
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    logError(err, { route: "auth/delete" });
     return NextResponse.json({ error: "Failed to delete account" }, { status: 500 });
   }
 }
