@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Compass, Heart, HandHeart, BookOpen, PlayCircle, Wrench, X, Moon, Sparkles } from "lucide-react";
 
@@ -66,7 +67,12 @@ const TOOLS: Tool[] = [
 
 export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "sidebar" }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Mount guard for portal (document.body doesn't exist during SSR)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setMounted(true), []);
 
   // Close on Escape
   useEffect(() => {
@@ -116,10 +122,11 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
         </button>
       )}
 
-      {/* Bottom sheet overlay */}
-      {open && (
+      {/* Bottom sheet overlay — rendered via portal to escape any
+          containing block created by backdrop-filter on ancestor headers */}
+      {open && mounted && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+          className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center"
           style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 40%, transparent)" }}
           onClick={() => setOpen(false)}
         >
@@ -194,7 +201,8 @@ export default function ToolsMenu({ variant = "icon" }: { variant?: "icon" | "si
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
