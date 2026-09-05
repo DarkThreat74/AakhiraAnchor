@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, asc, desc } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { requireAdmin, AdminAuthError } from "@/lib/auth/admin";
 import { getClientIp, checkRateLimit } from "@/lib/rateLimit";
 import { logError } from "@/lib/logError";
+import { getUploadUrl, deleteObject, makeStorageKey } from "@/lib/r2/client";
 
 export const dynamic = "force-dynamic";
+
+// ── Folders ──
 
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin(request);
-    const talks = await db.select().from(schema.talks).orderBy(schema.talks.addedAt);
-    return NextResponse.json(talks);
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get("type");
+
+    if (type === "folders") {
+      const folders = await db.select().from(schema.talkFolders).orderBy(asc(schema.talkFolders.sortOrder), asc(schema.talkFolders.name));
+      return NextResponse.json({ folders });
+    }
+
+    // Default: return folders + talks together
+    const [folders, talks] = await Promise.all([
+      db.select().from(schema.talkFolders).orderBy(asc(schema.talkFolders.sortOrder), asc(schema.talkFolders.name)),
+      db.select().from(schema.talks).orderBy(desc(schema.talks.addedAt)),
+    ]);
+    return NextResponse.json({ folders, talks });
   } catch (e) {
     if (e instanceof AdminAuthError) return NextResponse.json({ error: e.message }, { status: e.status });
     logError(e, { route: "admin/talks", method: "GET" });
@@ -18,7 +34,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST — add a talk (rate limited: 20 creates per hour per IP)
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin(request);
@@ -26,23 +41,116 @@ export async function POST(request: NextRequest) {
     if (!checkRateLimit("admin-talks-create", ip, 20, 60 * 60 * 1000)) {
       return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 });
     }
+
     const body = await request.json();
-    const { title, speaker, category, externalUrl } = body as {
-      title?: string; speaker?: string; category?: string; externalUrl?: string;
-    };
-    if (!title?.trim() || !externalUrl?.trim()) {
-      return NextResponse.json({ error: "Title and external URL are required." }, { status: 400 });
+    const { action } = body as { action?: string };
+
+    // ── Create folder ──
+    if (action === "create-folder") {
+      const { name, description } = body as { name?: string; description?: string };
+      if (!name?.trim()) {
+        return NextResponse.json({ error: "Folder name is required." }, { status: 400 });
+      }
+      const [folder] = await db.insert(schema.talkFolders).values({
+        name: name.trim().slice(0, 100),
+        description: description?.trim().slice(0, 500) || null,
+      }).returning();
+      return NextResponse.json(folder, { status: 201 });
     }
-    try { new URL(externalUrl); } catch {
-      return NextResponse.json({ error: "External URL must be a valid URL." }, { status: 400 });
+
+    // ── Delete folder ──
+    if (action === "delete-folder") {
+      const { folderId } = body as { folderId?: string };
+      if (!folderId) {
+        return NextResponse.json({ error: "Folder ID is required." }, { status: 400 });
+      }
+      // Talks in this folder will have folderId set to null (ON DELETE SET NULL)
+      await db.delete(schema.talkFolders).where(eq(schema.talkFolders.id, folderId));
+      return NextResponse.json({ success: true });
     }
-    const [talk] = await db.insert(schema.talks).values({
-      title: title.trim(),
-      speaker: speaker?.trim() || null,
-      category: category?.trim() || null,
-      externalUrl: externalUrl.trim(),
-    }).returning();
-    return NextResponse.json(talk);
+
+    // ── Get presigned upload URL ──
+    if (action === "get-upload-url") {
+      const { folderId, filename, fileSize } = body as { folderId?: string; filename?: string; fileSize?: number };
+      if (!filename?.trim()) {
+        return NextResponse.json({ error: "Filename is required." }, { status: 400 });
+      }
+
+      // Get folder name for the storage key
+      let folderName = "uncategorized";
+      if (folderId) {
+        const [folder] = await db.select().from(schema.talkFolders).where(eq(schema.talkFolders.id, folderId)).limit(1);
+        if (folder) folderName = folder.name;
+      }
+
+      const storageKey = makeStorageKey(folderName, filename);
+      const uploadUrl = await getUploadUrl(storageKey, "audio/mpeg");
+
+      return NextResponse.json({
+        uploadUrl,
+        storageKey,
+        fileSize: fileSize || null,
+      });
+    }
+
+    // ── Create talk (after upload completes) ──
+    if (action === "create-talk") {
+      const { title, speaker, description, folderId, storageKey, fileSize, duration, externalUrl } = body as {
+        title?: string; speaker?: string; description?: string;
+        folderId?: string; storageKey?: string; fileSize?: number; duration?: number;
+        externalUrl?: string;
+      };
+
+      if (!title?.trim()) {
+        return NextResponse.json({ error: "Title is required." }, { status: 400 });
+      }
+      if (!storageKey && !externalUrl?.trim()) {
+        return NextResponse.json({ error: "Either an uploaded file or external URL is required." }, { status: 400 });
+      }
+      if (externalUrl) {
+        try { new URL(externalUrl); } catch {
+          return NextResponse.json({ error: "External URL must be a valid URL." }, { status: 400 });
+        }
+      }
+
+      const [talk] = await db.insert(schema.talks).values({
+        title: title.trim().slice(0, 200),
+        speaker: speaker?.trim().slice(0, 100) || null,
+        description: description?.trim().slice(0, 1000) || null,
+        folderId: folderId || null,
+        storageKey: storageKey || null,
+        fileSize: fileSize || null,
+        duration: duration || null,
+        externalUrl: externalUrl?.trim() || null,
+      }).returning();
+
+      return NextResponse.json(talk, { status: 201 });
+    }
+
+    // ── Delete talk ──
+    if (action === "delete-talk") {
+      const { talkId } = body as { talkId?: string };
+      if (!talkId) {
+        return NextResponse.json({ error: "Talk ID is required." }, { status: 400 });
+      }
+
+      // Get the talk to find its storage key
+      const [talk] = await db.select().from(schema.talks).where(eq(schema.talks.id, talkId)).limit(1);
+      if (!talk) {
+        return NextResponse.json({ error: "Talk not found." }, { status: 404 });
+      }
+
+      // Delete from R2 if self-hosted
+      if (talk.storageKey) {
+        try { await deleteObject(talk.storageKey); } catch { /* best-effort */ }
+      }
+
+      // Delete from DB
+      await db.delete(schema.talks).where(eq(schema.talks.id, talkId));
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   } catch (e) {
     if (e instanceof AdminAuthError) return NextResponse.json({ error: e.message }, { status: e.status });
     logError(e, { route: "admin/talks", method: "POST" });

@@ -56,4 +56,10 @@ export const env = {
 
   // Cloudflare Turnstile (bot protection)
   turnstileSecretKey: required('TURNSTILE_SECRET_KEY'),
+
+  // Cloudflare R2 (talks audio storage)
+  r2AccountId: required('R2_ACCOUNT_ID'),
+  r2AccessKeyId: required('R2_ACCESS_KEY_ID'),
+  r2SecretAccessKey: required('R2_SECRET_ACCESS_KEY'),
+  r2BucketName: required('R2_BUCKET_NAME', 'waqt-talks'),
 } as const;

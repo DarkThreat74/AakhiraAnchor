@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Compass, Heart, HandHeart, BookOpen, PlayCircle, Wrench, X, Moon, Sparkles } from "lucide-react";
+import { Compass, Heart, HandHeart, BookOpen, PlayCircle, Wrench, X, Sparkles } from "lucide-react";
 
 interface Tool {
   href: string;
@@ -45,14 +45,6 @@ const TOOLS: Tool[] = [
     description: "Learn the beautiful names of Allah",
     icon: Sparkles,
     color: "var(--color-accent)",
-    span: "half",
-  },
-  {
-    href: "/hijri",
-    label: "Hijri Converter",
-    description: "Convert Gregorian to Hijri dates",
-    icon: Moon,
-    color: "var(--color-ink-soft)",
     span: "half",
   },
   {

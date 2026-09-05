@@ -147,15 +147,8 @@ export default function QiblaCompassClient() {
     // Track whether we've received absolute data — used to prefer absolute
     // over relative when both events fire.
     const hasAbsoluteRef = hasAbsoluteDataRef;
-    let lastEventTime = 0;
 
     const handler = (e: DeviceOrientationEvent) => {
-      // Deduplicate: if both deviceorientation and deviceorientationabsolute fire,
-      // only process the most recent one (within 80ms window).
-      const now = Date.now();
-      if (now - lastEventTime < 30) return;
-      lastEventTime = now;
-
       // iOS: webkitCompassHeading is already compensated and gives
       // the true compass heading (0 = North, clockwise).
       const webkitHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
@@ -165,22 +158,19 @@ export default function QiblaCompassClient() {
         return;
       }
 
-      // Android/other: check if alpha is absolute
+      // Android/other: check if alpha is available
       if (typeof e.alpha === "number" && e.alpha !== null &&
           typeof e.beta === "number" && typeof e.gamma === "number") {
-        // If the event provides absolute data, use it
-        if (e.absolute === true) {
+        // If the event provides absolute data (or doesn't specify), use it.
+        // Many Android devices report e.absolute as undefined, not true.
+        if (e.absolute !== false) {
           hasAbsoluteRef.current = true;
-          const heading = compassHeading(e.alpha, e.beta, e.gamma);
-          if (!Number.isNaN(heading)) updateHeading(heading);
-          return;
         }
-        // If we haven't received any absolute data yet, try using relative alpha
-        // as a fallback (better than nothing — user can still get approximate direction)
-        if (!hasAbsoluteRef.current) {
-          const heading = compassHeading(e.alpha, e.beta, e.gamma);
-          if (!Number.isNaN(heading)) updateHeading(heading);
-        }
+        // Always compute heading from alpha/beta/gamma — this is the only
+        // reliable source on many Android devices where deviceorientationabsolute
+        // never fires. Don't gate on hasAbsoluteRef.current.
+        const heading = compassHeading(e.alpha, e.beta, e.gamma);
+        if (!Number.isNaN(heading)) updateHeading(heading);
       }
     };
 

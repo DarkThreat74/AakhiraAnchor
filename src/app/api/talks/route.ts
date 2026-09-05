@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, asc, desc, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { logError } from "@/lib/logError";
+import { getStreamUrl } from "@/lib/r2/client";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/talks
- * Returns all talks ordered by most recently added.
- * These are external links only — never self-hosted audio.
+ * Returns folders + talks. Self-hosted talks get a presigned stream URL.
  */
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
@@ -17,12 +18,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const talks = await db
-      .select()
-      .from(schema.talks)
-      .orderBy(schema.talks.addedAt);
+    const [folders, talks] = await Promise.all([
+      db.select().from(schema.talkFolders).orderBy(asc(schema.talkFolders.sortOrder), asc(schema.talkFolders.name)),
+      db.select().from(schema.talks).orderBy(desc(schema.talks.addedAt)),
+    ]);
 
-    return NextResponse.json({ talks });
+    // Generate presigned stream URLs for self-hosted talks
+    const talksWithUrls = await Promise.all(
+      talks.map(async (talk) => {
+        if (talk.storageKey) {
+          try {
+            const streamUrl = await getStreamUrl(talk.storageKey);
+            return { ...talk, streamUrl };
+          } catch {
+            return { ...talk, streamUrl: null };
+          }
+        }
+        return { ...talk, streamUrl: null };
+      }),
+    );
+
+    return NextResponse.json({ folders, talks: talksWithUrls });
   } catch (err) {
     logError(err, { route: "talks GET" });
     return NextResponse.json(
@@ -31,3 +47,7 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// Avoid unused import warning
+void isNull;
+void eq;

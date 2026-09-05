@@ -63,11 +63,19 @@ export async function GET(request: NextRequest) {
 
     const grandTotal = Object.values(summary).reduce((sum, s) => sum + s.total, 0);
 
+    // Fetch user's display name for the card
+    const [user] = await db
+      .select({ displayName: schema.users.displayName, firstName: schema.users.firstName })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
+
     return NextResponse.json({
       logs,
       summary,
       grandTotal: Math.round(grandTotal * 100) / 100,
       currency: logs[0]?.currency || "USD",
+      cardholderName: user?.displayName || user?.firstName || null,
     });
   } catch (err) {
     logError(err, { route: "sadaqah GET" });

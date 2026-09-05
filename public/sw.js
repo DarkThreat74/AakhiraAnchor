@@ -25,6 +25,10 @@ const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
+const AUDIO_CACHE = `${CACHE_VERSION}-audio`;
+// AUDIO_CACHE is managed client-side via caches.open() for offline talks.
+// It is intentionally not cleaned on logout (talks are shared content).
+void AUDIO_CACHE;
 
 // App shell — the minimal set of files for offline boot
 const PRECACHE_URLS = [
@@ -52,7 +56,6 @@ const APP_PAGES = [
   "/dhikr",
   "/sadaqah",
   "/names",
-  "/hijri",
   "/talks",
 ];
 
@@ -710,6 +713,7 @@ self.addEventListener("message", (event) => {
   }
   if (event.data && event.data.type === "CLEAR_USER_CACHE") {
     // Clear user-specific caches on logout (keep STATIC_CACHE — shared assets)
+    // Note: AUDIO_CACHE is kept — offline talks are shared content, not user-specific
     event.waitUntil(
       Promise.all([
         caches.delete(API_CACHE).catch(() => {}),

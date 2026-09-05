@@ -1,63 +1,12 @@
-fix: comprehensive audit fixes across 10 areas
+feat: redesign Tools menu with bento grid layout
 
-Calendar:
-- Replace per-event overlap width with greedy lane clustering algorithm
-  so 3+ partially overlapping events stack correctly side-by-side
-- Use userTimezone (Intl.DateTimeFormat) for event time rendering instead
-  of browser timezone
-- Render prayer windows as translucent background bands (z-0) behind
-  events (z-20) instead of foreground lines (z-30) that block clicks
-
-Offline/PWA:
-- Fix SW generic POST response to include id=tempId so habits/notes/sadaqah
-  created offline get a usable id instead of undefined
-- Fix SW MIME type for missing _next/static files (return 200 no-op
-  instead of 503 that breaks hydration)
-- Exclude /api/prayer-times/sync from SW outbox queue
-- Fix CLEAR_OUTBOX handler: use tx.oncomplete instead of non-existent tx.done
-- Add CLEAR_USER_CACHE message handler for logout cache cleanup
-- Use navigationPreload response when available
-- Bump cache version waqt-v30 → waqt-v31
-- Add global OfflineBanner component in app layout
-- Send CLEAR_USER_CACHE on logout to prevent cross-user cache leakage
-
-Database:
-- Add missing indexes: prayer_friends(friendId,status),
-  homeworks(userId,status,completedAt), users(role), users(createdAt)
-- Add LIMIT to unbounded queries: analytics(10000), notes(500),
-  habits(200), classes(100), goals(500), sadaqah(5000), events(500),
-  habit-logs(5000)
-
-Prayer state machine:
-- Create src/lib/prayer/thresholds.ts as single source of truth
-- Fix isWindowClosed() to accept targetDate parameter so cron correctly
-  checks yesterday's prayer windows instead of today's
-- Add status='pending' guard to assumed_prayed update to prevent
-  overwriting prayers the user manually marked
-
-Error handling:
-- Replace all console.error with logError across API routes
-- Add logError to 8 silent catch blocks that returned 500 without logging
-- Add rate limiting to goals/share, goals/shared, auth/logout
-
-Mobile/PWA:
-- Replace 100vh with 100dvh in dhikr, global-error, globals.css,
-  DayViewClient modal, tools-menu sheet
-- Increase tap targets to 44x44 minimum (tools-menu, sadaqah, settings,
-  goals, mobile nav)
-- Add touch-action: manipulation globally for buttons/links
-- Add safe-area-inset-top padding to bottom sheets
-
-Accessibility:
-- Add role=dialog + aria-modal to 6 modals (goals share, event form,
-  delete confirmations, prayer checkin, tools sheet)
-- Add aria-label to icon-only close buttons and form inputs
-- Add aria-live regions for dynamic feedback messages
-- Add aria-pressed to toggle buttons
-- Add aria-expanded to collapsible sections
-
-Dead code:
-- Remove unused GoalsClient.tsx (superseded by GoalsPageClient)
+Replace the plain row-based tool list with an asymmetric bento grid:
+- Qibla Compass gets a full-width feature tile (most-used tool)
+- Remaining tools pair into half-width tiles with vertical layout
+- Each tile has a subtle color tint and top accent line
+- Tactile press feedback (active:scale-0.97)
+- Staggered entrance animation with spring easing
+- Wider sheet (max-w-md) and taller (88dvh)
 
 Generated with [Devin](https://devin.ai)
 

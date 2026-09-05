@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, RefreshCw, ShieldCheck, Mic, LayoutGrid, Users, ChevronRight, ArrowLeft, Heart } from "lucide-react";
+import { LogOut, RefreshCw, ShieldCheck, Mic, LayoutGrid, Users, ChevronRight, ArrowLeft, Heart, FolderPlus, Upload, Trash2, Folder } from "lucide-react";
 
 type Tab = "overview" | "users" | "talks" | "dhikr";
 
@@ -207,7 +207,7 @@ export default function AdminPortal() {
                 : tab === "overview" && "Platform summary."
               }
               {tab === "users" && !selectedUser && "All registered accounts. Click any user for details."}
-              {tab === "talks" && "External talk links. No self-hosted audio — curation and linking only."}
+              {tab === "talks" && "Upload MP3 talks, organize into folders, and manage the talks library."}
               {tab === "dhikr" && "Curated dhikr sequences for the tasbih counter. Human-curated from authenticated sources only."}
             </p>
           </div>
@@ -426,67 +426,321 @@ function UserDetail({ user, onBack }: { user: AdminUser; onBack: () => void }) {
   );
 }
 
-// ─── Talks Manager ───
+// ─── Talks Manager (folders + MP3 upload) ───
+
+interface AdminFolder { id: string; name: string; description: string | null; sortOrder: number; }
+interface AdminTalk {
+  id: string; title: string; speaker: string | null; description: string | null;
+  folderId: string | null; storageKey: string | null; fileSize: number | null;
+  duration: number | null; externalUrl: string | null; addedAt: string;
+}
 
 function TalksManager() {
-  const [items, setItems] = useState<Array<{ id: string; title: string; speaker: string | null; category: string | null; externalUrl: string }>>([]);
-  const [title, setTitle] = useState("");
-  const [speaker, setSpeaker] = useState("");
-  const [category, setCategory] = useState("");
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [folders, setFolders] = useState<AdminFolder[]>([]);
+  const [talks, setTalks] = useState<AdminTalk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showFolderForm, setShowFolderForm] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [folderName, setFolderName] = useState("");
+  const [folderDesc, setFolderDesc] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [talkTitle, setTalkTitle] = useState("");
+  const [talkSpeaker, setTalkSpeaker] = useState("");
+  const [talkDesc, setTalkDesc] = useState("");
+  const [talkFile, setTalkFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
 
-  const load = useCallback(() => {
-    fetch("/api/admin/talks")
-      .then(r => r.json().catch(() => []))
-      .then(setItems)
-      .catch(() => { /* ignore — loading will be cleared in finally */ })
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/talks");
+      const data = await res.json().catch(() => ({}));
+      if (data.folders) setFolders(data.folders);
+      if (data.talks) setTalks(data.talks);
+      if (data.error) setError(data.error);
+    } catch {
+      setError("Failed to load talks.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
-  async function add(e: React.FormEvent) {
+  async function createFolder(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!title.trim() || !url.trim()) { setError("Title and URL are required."); return; }
     const res = await fetch("/api/admin/talks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, speaker: speaker || undefined, category: category || undefined, externalUrl: url }),
+      body: JSON.stringify({ action: "create-folder", name: folderName, description: folderDesc }),
     });
-    if (res.ok) { setTitle(""); setSpeaker(""); setCategory(""); setUrl(""); load(); }
-    else { setError("Failed to add talk."); }
+    if (res.ok) {
+      setFolderName(""); setFolderDesc(""); setShowFolderForm(false);
+      await load();
+    } else {
+      setError("Failed to create folder.");
+    }
+  }
+
+  async function deleteFolder(folderId: string) {
+    if (!confirm("Delete this folder? Talks inside will remain but become uncategorized.")) return;
+    await fetch("/api/admin/talks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete-folder", folderId }),
+    });
+    await load();
+  }
+
+  async function deleteTalk(talkId: string) {
+    if (!confirm("Delete this talk? The MP3 file will also be removed from storage.")) return;
+    await fetch("/api/admin/talks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete-talk", talkId }),
+    });
+    await load();
+  }
+
+  async function uploadTalk(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!talkTitle.trim() || !talkFile) {
+      setError("Title and MP3 file are required.");
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress("Preparing upload…");
+
+    try {
+      // Step 1: Get presigned upload URL
+      setUploadProgress("Getting upload URL…");
+      const presignRes = await fetch("/api/admin/talks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "get-upload-url",
+          folderId: selectedFolderId,
+          filename: talkFile.name,
+          fileSize: talkFile.size,
+        }),
+      });
+      if (!presignRes.ok) {
+        setError("Failed to get upload URL.");
+        return;
+      }
+      const { uploadUrl, storageKey, fileSize } = await presignRes.json();
+
+      // Step 2: Upload file directly to R2
+      setUploadProgress(`Uploading ${talkFile.name}… (${(talkFile.size / 1024 / 1024).toFixed(1)} MB)`);
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "audio/mpeg" },
+        body: talkFile,
+      });
+      if (!uploadRes.ok) {
+        setError("Failed to upload file to storage.");
+        return;
+      }
+
+      // Step 3: Create the talk record in DB
+      setUploadProgress("Saving talk record…");
+      const createRes = await fetch("/api/admin/talks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-talk",
+          title: talkTitle,
+          speaker: talkSpeaker || undefined,
+          description: talkDesc || undefined,
+          folderId: selectedFolderId || undefined,
+          storageKey,
+          fileSize: fileSize || talkFile.size,
+        }),
+      });
+      if (createRes.ok) {
+        setTalkTitle(""); setTalkSpeaker(""); setTalkDesc(""); setTalkFile(null);
+        setShowUploadForm(false);
+        setUploadProgress("");
+        await load();
+      } else {
+        setError("Failed to create talk record.");
+      }
+    } catch {
+      setError("Upload failed.");
+    } finally {
+      setUploading(false);
+      setUploadProgress("");
+    }
+  }
+
+  const talksInFolder = (folderId: string | null) =>
+    talks.filter((t) => t.folderId === folderId);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <RefreshCw className="h-5 w-5 animate-spin" style={{ color: "var(--color-ink-muted)" }} />
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <AddForm title="Add Talk (external link)" onSubmit={add} error={error}>
-        <Field label="Title" value={title} onChange={setTitle} />
-        <Field label="Speaker (optional)" value={speaker} onChange={setSpeaker} />
-        <Field label="Category (optional)" value={category} onChange={setCategory} />
-        <Field label="External URL" value={url} onChange={setUrl} placeholder="https://youtube.com/..." />
-      </AddForm>
+    <div className="flex flex-col gap-6">
+      {error && (
+        <div className="rounded-lg border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in oklab, var(--color-error) 30%, transparent)", backgroundColor: "color-mix(in oklab, var(--color-error) 8%, transparent)", color: "var(--color-error)" }}>
+          {error}
+        </div>
+      )}
 
-      <ItemList loading={loading} items={items} empty="No talks yet.">
-        {(item) => (
-          <div className="flex flex-col gap-1">
-            <a
-              href={item.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium transition-opacity hover:opacity-80"
-              style={{ color: "var(--color-accent)" }}
-            >
-              {item.title}
-            </a>
-            <p className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
-              {item.speaker ? `${item.speaker} · ` : ""}{item.category ? `${item.category} · ` : ""}{item.externalUrl}
-            </p>
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowFolderForm(!showFolderForm)}
+          className="flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+          style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)" }}
+        >
+          <FolderPlus className="h-4 w-4" /> New Folder
+        </button>
+        <button
+          onClick={() => setShowUploadForm(!showUploadForm)}
+          className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+          style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}
+        >
+          <Upload className="h-4 w-4" /> Upload Talk
+        </button>
+      </div>
+
+      {/* Folder form */}
+      {showFolderForm && (
+        <form onSubmit={createFolder} className="flex flex-col gap-3 rounded-lg border p-5" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Create Folder</h2>
+          <Field label="Folder name" value={folderName} onChange={setFolderName} placeholder="e.g. Friday Khutbahs" />
+          <Field label="Description (optional)" value={folderDesc} onChange={setFolderDesc} placeholder="What series is this?" textarea />
+          <div className="flex gap-2">
+            <button type="submit" className="rounded-md px-4 py-2 text-sm font-medium" style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}>Create</button>
+            <button type="button" onClick={() => setShowFolderForm(false)} className="rounded-md border px-4 py-2 text-sm" style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}>Cancel</button>
           </div>
-        )}
-      </ItemList>
+        </form>
+      )}
+
+      {/* Upload form */}
+      {showUploadForm && (
+        <form onSubmit={uploadTalk} className="flex flex-col gap-3 rounded-lg border p-5" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Upload MP3 Talk</h2>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>Folder</label>
+            <select
+              value={selectedFolderId || ""}
+              onChange={(e) => setSelectedFolderId(e.target.value || null)}
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)" }}
+            >
+              <option value="">No folder (uncategorized)</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+          <Field label="Title" value={talkTitle} onChange={setTalkTitle} placeholder="e.g. Patience in Prayer" />
+          <Field label="Speaker" value={talkSpeaker} onChange={setTalkSpeaker} placeholder="e.g. Imam Malik" />
+          <Field label="Description (optional)" value={talkDesc} onChange={setTalkDesc} placeholder="What is this talk about?" textarea />
+          <div>
+            <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-muted)" }}>MP3 File</label>
+            <input
+              type="file"
+              accept="audio/mpeg,audio/mp3,.mp3"
+              onChange={(e) => setTalkFile(e.target.files?.[0] || null)}
+              required
+              className="w-full text-sm"
+              style={{ color: "var(--color-ink-soft)" }}
+            />
+            {talkFile && (
+              <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                {talkFile.name} ({(talkFile.size / 1024 / 1024).toFixed(1)} MB)
+              </p>
+            )}
+          </div>
+          {uploadProgress && (
+            <p className="text-xs" style={{ color: "var(--color-accent)" }} aria-live="polite">{uploadProgress}</p>
+          )}
+          <div className="flex gap-2">
+            <button type="submit" disabled={uploading} className="rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50" style={{ backgroundColor: "var(--color-ink)", color: "var(--color-paper)" }}>
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+            <button type="button" onClick={() => setShowUploadForm(false)} disabled={uploading} className="rounded-md border px-4 py-2 text-sm disabled:opacity-50" style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-muted)" }}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {/* Folders + talks */}
+      {folders.length === 0 && talks.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>No folders or talks yet. Create a folder and upload your first talk.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {/* Folders with talks */}
+          {folders.map((folder) => (
+            <div key={folder.id} className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+              <div className="flex items-center justify-between border-b px-5 py-3.5" style={{ borderColor: "var(--color-paper-3)" }}>
+                <div className="flex items-center gap-2">
+                  <Folder className="h-4 w-4" style={{ color: "var(--color-accent)" }} />
+                  <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{folder.name}</span>
+                  <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>{talksInFolder(folder.id).length} talks</span>
+                </div>
+                <button onClick={() => deleteFolder(folder.id)} className="rounded-md p-1.5 transition-colors hover:bg-[var(--color-paper-2)]" style={{ color: "var(--color-ink-muted)" }} aria-label="Delete folder">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {folder.description && <p className="px-5 py-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>{folder.description}</p>}
+              <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
+                {talksInFolder(folder.id).map((talk) => (
+                  <TalkRow key={talk.id} talk={talk} onDelete={deleteTalk} />
+                ))}
+                {talksInFolder(folder.id).length === 0 && (
+                  <p className="px-5 py-3 text-xs" style={{ color: "var(--color-ink-muted)" }}>No talks in this folder yet.</p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Uncategorized talks */}
+          {talksInFolder(null).length > 0 && (
+            <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+              <div className="border-b px-5 py-3.5" style={{ borderColor: "var(--color-paper-3)" }}>
+                <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Uncategorized</span>
+                <span className="ml-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>{talksInFolder(null).length} talks</span>
+              </div>
+              <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
+                {talksInFolder(null).map((talk) => (
+                  <TalkRow key={talk.id} talk={talk} onDelete={deleteTalk} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TalkRow({ talk, onDelete }: { talk: AdminTalk; onDelete: (id: string) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>{talk.title}</p>
+        <p className="mt-0.5 truncate text-xs" style={{ color: "var(--color-ink-muted)" }}>
+          {talk.speaker ? `${talk.speaker}` : "Unknown speaker"}
+          {talk.fileSize ? ` · ${(talk.fileSize / 1024 / 1024).toFixed(1)} MB` : ""}
+          {talk.externalUrl ? " · external link" : " · MP3"}
+        </p>
+      </div>
+      <button onClick={() => onDelete(talk.id)} className="shrink-0 rounded-md p-1.5 transition-colors hover:bg-[var(--color-paper-2)]" style={{ color: "var(--color-ink-muted)" }} aria-label="Delete talk">
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Trash2, Plus, TrendingUp, Eye, EyeOff } from "lucide-react";
+import { Trash2, Plus, Eye, EyeOff, HandHeart, X } from "lucide-react";
 
 interface SadaqahLog {
   id: string;
@@ -18,6 +18,7 @@ interface SadaqahData {
   summary: Record<string, { count: number; total: number }>;
   grandTotal: number;
   currency: string;
+  cardholderName: string | null;
 }
 
 const CATEGORIES = [
@@ -44,10 +45,15 @@ function formatCurrency(amount: number, currency: string): string {
 }
 
 function formatCardNumber(total: number): string {
-  // Format the total as a pseudo card number for visual flair
-  // Use the total to generate a stable "card number" feel
-  const padded = Math.round(total * 100).toString().padStart(12, "0").slice(-12);
+  // Card number = total amount in cents, padded to 16 digits
+  const cents = Math.round(total * 100);
+  const padded = cents.toString().padStart(16, "0");
   return padded.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function todayStr(): string {
@@ -146,42 +152,21 @@ export default function SadaqahClient() {
   const currency = data?.currency || "USD";
   const grandTotal = data?.grandTotal ?? 0;
   const entryCount = data?.logs.length ?? 0;
+  const cardholderName = data?.cardholderName || "Cardholder";
 
   return (
     <div className="mx-auto max-w-2xl">
-      {/* ── Header ── */}
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Akhirah Card</h1>
-          <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-muted)" }}>
-            Your investment in the hereafter
-          </p>
-        </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-          style={{
-            borderColor: showForm ? "var(--color-paper-3)" : "var(--color-accent)",
-            color: showForm ? "var(--color-ink-soft)" : "var(--color-accent)",
-            backgroundColor: showForm ? "var(--color-paper-2)" : "color-mix(in oklab, var(--color-accent) 8%, transparent)",
-            minHeight: 40,
-          }}
-        >
-          {showForm ? "Cancel" : (<><Plus className="h-4 w-4" /> Add</>)}
-        </button>
-      </div>
-
-      {/* ── The Akhirah Card (credit card design) ── */}
+      {/* ── The Akhirah Card ── */}
       <div className="mb-6" style={{ perspective: "1000px" }}>
         <div
           className="relative overflow-hidden rounded-2xl p-4 sm:p-5"
           style={{
             aspectRatio: "1.586 / 1",
-            maxWidth: "320px",
+            maxWidth: "360px",
             margin: "0 auto",
-            background: "linear-gradient(135deg, var(--color-ink) 0%, color-mix(in oklab, var(--color-ink) 85%, var(--color-accent)) 100%)",
+            background: "linear-gradient(135deg, var(--color-ink) 0%, color-mix(in oklab, var(--color-ink) 82%, var(--color-accent)) 100%)",
             color: "var(--color-paper)",
-            boxShadow: "0 12px 40px -12px color-mix(in oklab, var(--color-ink) 50%, transparent), inset 0 1px 0 color-mix(in oklab, var(--color-paper) 15%, transparent)",
+            boxShadow: "0 16px 48px -16px color-mix(in oklab, var(--color-ink) 55%, transparent), inset 0 1px 0 color-mix(in oklab, var(--color-paper) 15%, transparent)",
             border: "1px solid color-mix(in oklab, var(--color-paper) 12%, transparent)",
           }}
         >
@@ -195,19 +180,25 @@ export default function SadaqahClient() {
 
           {/* Top row: card label + balance toggle */}
           <div className="relative flex items-start justify-between">
-            <div>
-              <p className="text-[9px] font-medium uppercase tracking-[0.15em] sm:text-[10px]" style={{ color: "color-mix(in oklab, var(--color-paper) 65%, transparent)" }}>
-                Akhirah Card
-              </p>
-              <p className="mt-0.5 text-[8px] uppercase tracking-wide sm:text-[9px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
-                Investment in the Hereafter
-              </p>
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in oklab, var(--color-paper) 12%, transparent)" }}>
+                <HandHeart className="h-4 w-4" style={{ color: "color-mix(in oklab, var(--color-paper) 80%, transparent)" }} />
+              </div>
+              <div>
+                <p className="text-[9px] font-semibold uppercase tracking-[0.15em] sm:text-[10px]" style={{ color: "color-mix(in oklab, var(--color-paper) 70%, transparent)" }}>
+                  Akhirah Card
+                </p>
+                <p className="text-[7px] uppercase tracking-wide sm:text-[8px]" style={{ color: "color-mix(in oklab, var(--color-paper) 40%, transparent)" }}>
+                  Investment in the Hereafter
+                </p>
+              </div>
             </div>
             <button
               onClick={() => setShowBalance(!showBalance)}
               className="rounded-md p-1 transition-colors"
               style={{ color: "color-mix(in oklab, var(--color-paper) 60%, transparent)" }}
               aria-label={showBalance ? "Hide balance" : "Show balance"}
+              aria-pressed={showBalance}
             >
               {showBalance ? <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
             </button>
@@ -224,194 +215,305 @@ export default function SadaqahClient() {
             <div className="absolute inset-1 rounded-sm" style={{ border: "0.5px solid color-mix(in oklab, #000 20%, transparent)" }} />
           </div>
 
-          {/* Balance (the "card number" position) */}
+          {/* Card number */}
           <div className="relative mt-2 sm:mt-3">
-            {showBalance ? (
-              <p className="text-lg font-bold tabular-nums sm:text-xl" style={{ letterSpacing: "0.02em" }}>
-                {formatCurrency(grandTotal, currency)}
-              </p>
-            ) : (
-              <p className="text-lg font-bold tabular-nums sm:text-xl" style={{ letterSpacing: "0.15em" }}>
-                •••• ••••
-              </p>
-            )}
-            <p className="mt-0.5 text-[9px] uppercase tracking-wide sm:text-[10px]" style={{ color: "color-mix(in oklab, var(--color-paper) 50%, transparent)" }}>
-              Total invested in akhirah
+            <p className="font-mono text-[11px] tabular-nums tracking-[0.1em] sm:text-[13px]" style={{ color: "color-mix(in oklab, var(--color-paper) 85%, transparent)" }}>
+              {showBalance ? formatCardNumber(grandTotal) : "•••• •••• •••• ••••"}
             </p>
           </div>
 
-          {/* Bottom row: entry count + card number */}
+          {/* Bottom row: balance + cardholder name */}
           <div className="relative mt-auto flex items-end justify-between pt-2 sm:pt-3">
             <div>
-              <p className="text-[8px] uppercase tracking-wide sm:text-[9px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
-                Entries
+              <p className="text-[7px] uppercase tracking-wide sm:text-[8px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+                Balance
               </p>
-              <p className="text-xs font-semibold tabular-nums sm:text-sm">{entryCount}</p>
+              <p className="text-sm font-bold tabular-nums sm:text-base">
+                {showBalance ? formatCurrency(grandTotal, currency) : "••••••"}
+              </p>
             </div>
             <div className="text-right">
-              <p className="text-[8px] uppercase tracking-wide sm:text-[9px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
-                Card No.
+              <p className="text-[7px] uppercase tracking-wide sm:text-[8px]" style={{ color: "color-mix(in oklab, var(--color-paper) 45%, transparent)" }}>
+                Cardholder
               </p>
-              <p className="font-mono text-[10px] tabular-nums sm:text-[11px]" style={{ color: "color-mix(in oklab, var(--color-paper) 70%, transparent)" }}>
-                {showBalance ? formatCardNumber(grandTotal) : "•••• •••• •••• ••••"}
+              <p className="text-[11px] font-semibold uppercase tracking-wide sm:text-xs" style={{ color: "color-mix(in oklab, var(--color-paper) 80%, transparent)" }}>
+                {cardholderName}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Add form ── */}
-      {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 space-y-3 rounded-2xl border p-4" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-          {error && (
-            <div className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "color-mix(in oklab, var(--color-error) 10%, transparent)", color: "var(--color-error)" }}>
-              {error}
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                required
-                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
-              />
-            </div>
+      {/* ── Stats row ── */}
+      {data && entryCount > 0 && (
+        <div className="mb-5 grid grid-cols-3 gap-2">
+          <div className="rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+            <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Entries</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>{entryCount}</p>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Category</label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.value}
-                  type="button"
-                  onClick={() => setCategory(cat.value)}
-                  className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-                  style={{
-                    borderColor: category === cat.value ? cat.color : "var(--color-paper-3)",
-                    color: category === cat.value ? cat.color : "var(--color-ink-muted)",
-                    backgroundColor: category === cat.value ? `color-mix(in oklab, ${cat.color} 10%, transparent)` : "transparent",
-                    minHeight: 36,
-                  }}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
+          <div className="rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+            <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Total</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: "var(--color-accent)" }}>
+              {showBalance ? formatCurrency(grandTotal, currency) : "••••"}
+            </p>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Note (optional)</label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="What was it for?"
-              maxLength={500}
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 44 }}
-            />
+          <div className="rounded-xl border p-3" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+            <p className="text-[10px] uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>Avg</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>
+              {showBalance ? formatCurrency(grandTotal / entryCount, currency) : "••••"}
+            </p>
           </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg py-2.5 text-sm font-semibold transition-colors disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)", minHeight: 44 }}
-          >
-            {submitting ? "Saving…" : "Add to Akhirah Card"}
-          </button>
-        </form>
+        </div>
       )}
 
       {/* ── Category breakdown ── */}
       {data && entryCount > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+        <div className="mb-5 flex flex-wrap gap-2">
           {CATEGORIES.map((cat) => {
             const s = data.summary[cat.value];
             if (!s || s.count === 0) return null;
             return (
-              <div key={cat.value} className="rounded-xl border p-3 sm:p-4" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-                <div className="mb-1.5 flex items-center gap-1.5" style={{ color: cat.color }}>
-                  <TrendingUp className="h-4 w-4" />
-                  <span className="text-[11px] font-medium uppercase tracking-wide">{cat.label}</span>
-                </div>
-                <div className="text-lg font-bold tabular-nums sm:text-xl" style={{ color: "var(--color-ink)" }}>
-                  {formatCurrency(s.total, currency)}
-                </div>
-                <div className="text-[11px]" style={{ color: "var(--color-ink-muted)" }}>{s.count} {s.count === 1 ? "entry" : "entries"}</div>
+              <div
+                key={cat.value}
+                className="flex items-center gap-1.5 rounded-full border px-3 py-1.5"
+                style={{ borderColor: `color-mix(in oklab, ${cat.color} 20%, transparent)`, backgroundColor: `color-mix(in oklab, ${cat.color} 6%, transparent)` }}
+              >
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                <span className="text-[11px] font-medium" style={{ color: "var(--color-ink)" }}>{cat.label}</span>
+                <span className="text-[11px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                  {showBalance ? formatCurrency(s.total, currency) : "••••"}
+                </span>
               </div>
             );
           })}
         </div>
       )}
 
-      {/* ── Log entries ── */}
+      {/* ── History ── */}
       {data && data.logs.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-          <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--color-paper-3)" }}>
-            <h2 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>History</h2>
-          </div>
-          <div className="divide-y" style={{ borderColor: "var(--color-paper-3)" }}>
+        <div className="mb-5">
+          <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-muted)" }}>
+            History
+          </h2>
+          <div className="space-y-2">
             {data.logs.map((log) => (
-              <div key={log.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
-                <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: getCategoryColor(log.category) }} />
+              <div
+                key={log.id}
+                className="group flex items-center gap-3 rounded-xl border px-3.5 py-3 transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+              >
+                {/* Category dot */}
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `color-mix(in oklab, ${getCategoryColor(log.category)} 10%, transparent)` }}
+                >
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getCategoryColor(log.category) }} />
+                </div>
+
+                {/* Content */}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-bold tabular-nums" style={{ color: "var(--color-ink)" }}>
-                      {formatCurrency(parseFloat(log.amount), log.currency)}
+                      {showBalance ? formatCurrency(parseFloat(log.amount), log.currency) : "••••"}
                     </span>
-                    <span className="text-xs" style={{ color: getCategoryColor(log.category) }}>
-                      {getCategoryLabel(log.category)}
+                    <span className="shrink-0 text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
+                      {formatDate(log.date)}
                     </span>
                   </div>
-                  {log.note && (
-                    <p className="mt-0.5 truncate text-xs" style={{ color: "var(--color-ink-muted)" }}>{log.note}</p>
-                  )}
-                  <p className="mt-0.5 text-[10px] tabular-nums" style={{ color: "var(--color-ink-muted)" }}>
-                    {new Date(log.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className="text-[11px] font-medium" style={{ color: getCategoryColor(log.category) }}>
+                      {getCategoryLabel(log.category)}
+                    </span>
+                    {log.note && (
+                      <>
+                        <span className="text-[10px]" style={{ color: "var(--color-paper-3)" }}>·</span>
+                        <p className="truncate text-[11px]" style={{ color: "var(--color-ink-muted)" }}>{log.note}</p>
+                      </>
+                    )}
+                  </div>
                 </div>
+
+                {/* Delete */}
                 <button
                   onClick={() => setDeleteConfirm(log)}
-                  className="shrink-0 rounded-lg p-2 transition-colors hover:bg-[var(--color-paper-2)]"
-                  style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
+                  className="shrink-0 rounded-lg p-2 opacity-60 transition-opacity hover:opacity-100"
+                  style={{ color: "var(--color-ink-muted)", minHeight: 36, minWidth: 36 }}
                   aria-label="Delete entry"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border p-6 text-center" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
-          <p className="text-sm" style={{ color: "var(--color-ink-muted)" }}>
-            No entries yet. Tap &ldquo;Add&rdquo; to start investing in your akhirah.
+        <div className="mb-5 rounded-2xl border p-8 text-center" style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}>
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-paper-2)" }}>
+            <HandHeart className="h-6 w-6" style={{ color: "var(--color-ink-muted)" }} />
+          </div>
+          <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>No entries yet</p>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-ink-muted)" }}>
+            Start investing in your akhirah by logging your first sadaqah.
           </p>
+        </div>
+      )}
+
+      {/* ── Add button (floating) ── */}
+      <button
+        onClick={() => setShowForm(true)}
+        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform active:scale-95 lg:bottom-8 lg:right-8"
+        style={{
+          backgroundColor: "var(--color-accent)",
+          color: "var(--color-paper)",
+          boxShadow: "0 8px 24px -8px color-mix(in oklab, var(--color-accent) 60%, transparent)",
+        }}
+        aria-label="Add sadaqah entry"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
+      {/* ── Add form (bottom sheet on mobile, dialog on desktop) ── */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+          style={{
+            backgroundColor: "color-mix(in oklab, var(--color-ink) 50%, transparent)",
+            animation: "sadaqah-fade-in 0.2s ease-out",
+          }}
+          onClick={() => setShowForm(false)}
+        >
+          <form
+            onSubmit={handleSubmit}
+            className="w-full overflow-hidden rounded-t-3xl border sm:max-w-md sm:rounded-3xl"
+            style={{
+              backgroundColor: "var(--color-paper)",
+              borderColor: "var(--color-paper-3)",
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+              maxHeight: "90dvh",
+              overflowY: "auto",
+              animation: "sadaqah-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drag handle (mobile) */}
+            <div className="flex justify-center pt-2.5 sm:hidden">
+              <div className="h-1 w-9 rounded-full" style={{ backgroundColor: "var(--color-paper-3)" }} />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-3 pb-3 sm:pt-4">
+              <h2 className="text-base font-semibold" style={{ color: "var(--color-ink)" }}>Add Entry</h2>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="flex items-center justify-center rounded-full transition-colors hover:bg-[var(--color-paper-2)]"
+                style={{ color: "var(--color-ink-muted)", minHeight: 44, minWidth: 44 }}
+                aria-label="Close form"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Form body */}
+            <div className="space-y-4 px-5 pb-5">
+              {error && (
+                <div className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "color-mix(in oklab, var(--color-error) 10%, transparent)", color: "var(--color-error)" }} aria-live="polite">
+                  {error}
+                </div>
+              )}
+
+              {/* Amount */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  required
+                  autoFocus
+                  className="w-full rounded-xl border px-4 py-3 text-base outline-none"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 48 }}
+                />
+              </div>
+
+              {/* Date + Category */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 48 }}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Category</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => setCategory(cat.value)}
+                      className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors"
+                      style={{
+                        borderColor: category === cat.value ? cat.color : "var(--color-paper-3)",
+                        color: category === cat.value ? cat.color : "var(--color-ink-muted)",
+                        backgroundColor: category === cat.value ? `color-mix(in oklab, ${cat.color} 8%, transparent)` : "transparent",
+                        minHeight: 44,
+                      }}
+                      aria-pressed={category === cat.value}
+                    >
+                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Note (optional)</label>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="What was it for?"
+                  maxLength={500}
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper-2)", color: "var(--color-ink)", minHeight: 48 }}
+                />
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full rounded-xl py-3 text-sm font-semibold transition-transform active:scale-[0.98] disabled:opacity-50"
+                style={{ backgroundColor: "var(--color-accent)", color: "var(--color-paper)", minHeight: 48 }}
+              >
+                {submitting ? "Saving…" : "Add to Akhirah Card"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* ── Delete confirmation ── */}
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm"
-          style={{ backgroundColor: "color-mix(in oklab, var(--color-ink) 40%, transparent)" }}
+          className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+          style={{
+            backgroundColor: "color-mix(in oklab, var(--color-ink) 50%, transparent)",
+            animation: "sadaqah-fade-in 0.2s ease-out",
+          }}
           onClick={() => setDeleteConfirm(null)}
         >
           <div
@@ -419,9 +521,16 @@ export default function SadaqahClient() {
             aria-modal="true"
             aria-label="Delete entry"
             className="w-full max-w-xs rounded-2xl border p-5 text-center"
-            style={{ borderColor: "var(--color-paper-3)", backgroundColor: "var(--color-paper)" }}
+            style={{
+              backgroundColor: "var(--color-paper)",
+              borderColor: "var(--color-paper-3)",
+              animation: "sadaqah-pop-in 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: "color-mix(in oklab, var(--color-error) 10%, transparent)" }}>
+              <Trash2 className="h-5 w-5" style={{ color: "var(--color-error)" }} />
+            </div>
             <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Delete entry?</h3>
             <p className="mt-2 text-xs" style={{ color: "var(--color-ink-muted)" }}>
               {formatCurrency(parseFloat(deleteConfirm.amount), deleteConfirm.currency)} · {getCategoryLabel(deleteConfirm.category)}
@@ -429,14 +538,14 @@ export default function SadaqahClient() {
             <div className="mt-5 flex gap-2">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors"
+                className="flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors"
                 style={{ borderColor: "var(--color-paper-3)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper-2)", minHeight: 44 }}
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 rounded-lg py-2.5 text-sm font-semibold transition-colors"
+                className="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-colors"
                 style={{ backgroundColor: "var(--color-error)", color: "var(--color-paper)", minHeight: 44 }}
               >
                 Delete
@@ -445,6 +554,28 @@ export default function SadaqahClient() {
           </div>
         </div>
       )}
+
+      {/* Animations */}
+      <style>{`
+        @keyframes sadaqah-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes sadaqah-slide-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes sadaqah-pop-in {
+          from { transform: scale(0.92); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        @media (min-width: 640px) {
+          @keyframes sadaqah-slide-up {
+            from { transform: translateY(20px) scale(0.96); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+          }
+        }
+      `}</style>
     </div>
   );
 }

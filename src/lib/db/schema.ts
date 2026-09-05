@@ -313,16 +313,34 @@ export const dhikrSequences = pgTable('dhikr_sequences', {
   sourceCitation: text('source_citation').notNull(),
 });
 
-// ─── Talks Library (external links only, never self-hosted) ───
+// ─── Talks Library (self-hosted MP3s on Cloudflare R2 + external links) ───
+
+export const talkFolders = pgTable('talk_folders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description'),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const talks = pgTable('talks', {
   id: uuid('id').primaryKey().defaultRandom(),
+  folderId: uuid('folder_id').references(() => talkFolders.id, { onDelete: 'set null' }),
   title: text('title').notNull(),
   speaker: text('speaker'),
-  category: text('category'),
-  externalUrl: text('external_url').notNull(),
+  description: text('description'),
+  // R2 storage key for self-hosted MP3 (e.g. "talks/folder-name/filename.mp3")
+  storageKey: text('storage_key'),
+  // File size in bytes (for display + offline storage management)
+  fileSize: integer('file_size'),
+  // Duration in seconds
+  duration: integer('duration'),
+  // External URL fallback (for legacy talks or external links)
+  externalUrl: text('external_url'),
   addedAt: timestamp('added_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => ({
+  folderIdx: index('talks_folder_idx').on(t.folderId),
+}));
 
 // ─── Trusted Devices (FingerprintJS) ───
 
@@ -525,6 +543,7 @@ export type Event = typeof events.$inferSelect;
 export type NewEvent = typeof events.$inferInsert;
 export type DhikrSequence = typeof dhikrSequences.$inferSelect;
 export type Talk = typeof talks.$inferSelect;
+export type TalkFolder = typeof talkFolders.$inferSelect;
 export type PrayerFriend = typeof prayerFriends.$inferSelect;
 export type PrayerBlock = typeof prayerBlocks.$inferSelect;
 export type TrustedDevice = typeof trustedDevices.$inferSelect;

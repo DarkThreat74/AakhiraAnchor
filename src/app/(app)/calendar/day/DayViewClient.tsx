@@ -1278,8 +1278,8 @@ export default function DayViewClient({ date }: { date: string }) {
                     height,
                     left: TIME_COL,
                     right: 0,
-                    backgroundColor: `color-mix(in oklab, ${prayer.color} 4%, transparent)`,
-                    borderTop: `1px dashed color-mix(in oklab, ${prayer.color} 20%, transparent)`,
+                    backgroundColor: `color-mix(in oklab, ${prayer.color} 2%, transparent)`,
+                    borderTop: `1px dashed color-mix(in oklab, ${prayer.color} 12%, transparent)`,
                   }}
                 />
               );
